@@ -1,0 +1,702 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Market Price Chart{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+
+<script>
+$(document).ready(function () {
+    $('.datatable').each(function () {
+        let $table = $(this);
+
+        let pageLength = $table.data('page-length') || 5;
+
+        $table.DataTable({
+            pageLength: pageLength,
+            lengthMenu: [5, 10, 25, 50],
+            responsive: true,
+
+            // FIXED DOM
+           dom:
+            '<"row mb-3"' +
+              '<"col-md-6 d-flex align-items-center gap-2"l>' +
+              '<"col-md-6 d-flex justify-content-end gap-2"f>' +
+            '>' +
+            'rt' +
+            '<"row mt-3"' +
+              '<"col-md-6 d-flex align-items-center gap-2"i>' +
+              '<"col-md-6 d-flex justify-content-end gap-2"p>' +
+            '>'
+
+        });
+    });
+});
+</script>
+
+{% endblock page_js %}
+
+{% block content %}
+
+<style>
+
+.section {
+  width: 100%;
+}
+
+.table-scroll-wrapper {
+    width: 100% !important;
+}
+
+.table-container {
+    width: 100%;
+    height: 350px;
+    overflow-y: auto;   /* 🔥 force vertical scroll */
+    overflow-x: auto;   /* optional horizontal */
+    border: 1px solid #ddd;
+}
+
+/* IMPORTANT: force horizontal scroll */
+.table-container table {
+    width: max-content;
+    min-width: 100%;
+    height: 378px;
+    border-collapse: separate;
+}
+
+/* prevent wrapping */
+.table-container th,
+.table-container td {
+    white-space: nowrap;
+}
+
+.sticky_table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.sticky_table th,
+.sticky_table td {
+    white-space: nowrap;
+    min-width: 150px;     /* balanced */
+    padding: 6px;
+}
+
+
+.sticky_table thead th {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    z-index: 10; /* 50 is fine, but 10 is enough */
+    text-align: center;
+    vertical-align: middle;
+}
+
+
+.sticky_table th.sticky-col-1 {
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 60;
+    width: 200px;
+}
+
+.sticky_table td.sticky-col-1 {
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 10;
+}
+
+.sticky_table th.sticky-col-2 {
+    position: sticky;
+    left: 200px;  /* must match col width */
+    background: #fff;
+    z-index: 60;
+    width: 200px;
+}
+
+.sticky_table td.sticky-col-2 {
+    position: sticky;
+    left: 200px;
+    background: #fff;
+    z-index: 10;
+}
+
+.sticky_table tbody tr:hover td {
+    background-color: #e3f2fd;
+    transition: 0.2s ease-in-out;
+}
+
+.current-row td {
+    background-color: #fff3cd !important;
+}
+
+</style>
+
+<div class="card mb-2">
+    <div class="card-body d-flex justify-content-between align-items-center">
+      <div class="d-flex flex-column">
+        <div>
+            <h4 class="mb-1">
+            <i class="ri-line-chart-line me-2 text-primary"></i>
+                Market Price Index
+            </h4>
+        </div>
+        <div>
+            <label class="text-light fw-semibold fs-7">
+                Check real-time regional agricultural buying pricing indices and past monthly trends.
+            </label>
+        </div>
+      </div>
+      <div class="ms-auto">
+       <div class="ms-auto me-2 d-flex align-items-center">
+      <button class="btn btn-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#new_terminal_modal">Register New</button>
+    </div>
+      </div>
+    </div>
+</div>
+
+
+
+<div class="card mb-2">
+    <div class="card-body p-2 px-3">
+        <ul class="nav nav-pills" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-price-trend" type="button" role="tab">
+                    <i class="ri-line-chart-line me-1"></i> Price Analysis
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-sourcing-report" type="button" role="tab">
+                    <i class="ri-list-check me-1"></i> Sourcing Report
+                </button>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<div class="tab-content">
+  <div class="tab-pane fade show active" id="tab-price-trend" role="tabpanel">
+    <!-- Filter Card -->
+    <div class="card mb-2">
+      <div class="card-body d-flex flex-wrap gap-3 align-items-end p-3">
+          <div style="flex: 1; min-width: 150px;">
+              <label class="form-label small text-muted mb-1">Crop</label>
+              <select class="form-select text-secondary" id="analysisCrop">
+                  <option value="All">All Crops</option>
+                  {% for crop in crops %}
+                  <option value="{{ crop.crop_name }}" {% if crop.crop_name == 'Organic Corn' %}selected{% endif %}>{{ crop.crop_name }}</option>
+                  {% endfor %}
+              </select>
+          </div>
+          <div style="flex: 1; min-width: 150px;">
+              <label class="form-label small text-muted mb-1">Market</label>
+              <select class="form-select text-secondary" id="analysisMarket">
+                  <option value="All">All Markets</option>
+                  {% for term in terminals %}
+                  <option value="{{ term.name }}">{{ term.name }}</option>
+                  {% endfor %}
+              </select>
+          </div>
+          <div style="flex: 1; min-width: 150px;">
+              <label class="form-label small text-muted mb-1">From Date</label>
+              <input type="date" class="form-control text-secondary" id="analysisFromDate">
+          </div>
+          <div style="flex: 1; min-width: 150px;">
+              <label class="form-label small text-muted mb-1">To Date</label>
+              <input type="date" class="form-control text-secondary" id="analysisToDate">
+          </div>
+          <div>
+              <button type="button" class="btn btn-primary px-4" onclick="loadPriceAnalysisChart()">Go</button>
+          </div>
+      </div>
+    </div>
+
+    <!-- Chart Card -->
+    <div class="card">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h5 class="mb-1" id="chartTitle">Organic Corn Price Trend</h5>
+                    <div class="text-muted small" id="chartSubtitle">Punjab State Grain Mandi</div>
+                </div>
+                <div>
+                    <span class="badge bg-success text-white">Updated Today</span>
+                </div>
+            </div>
+            <div id="priceChart"></div>
+        </div>
+    </div>
+  </div>
+
+  <div class="tab-pane fade" id="tab-sourcing-report" role="tabpanel">
+    <div class="card p-2">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <label class="text-muted fw-semibold fs-8 mb-0">
+          REGIONAL DISTRIBUTORS & CO-OPS SOURCING REPORT
+        </label>
+        <div class="d-flex gap-2">
+            <div class="btn-group" role="group">
+                <input type="radio" class="btn-check" name="view-options" id="list-view-btn" checked>
+                <label class="btn btn-outline-secondary btn-sm" for="list-view-btn" title="List View"><i class="ri-list-check"></i></label>
+                <input type="radio" class="btn-check" name="view-options" id="grid-view-btn">
+                <label class="btn btn-outline-secondary btn-sm" for="grid-view-btn" title="Grid View"><i class="ri-grid-fill"></i></label>
+            </div>
+            <div class="input-group" style="max-width: 200px;">
+            <span class="input-group-text bg-white">
+                <i class="ri-search-line"></i>
+            </span>
+            <input class="form-control" type="text" id="searchInput" placeholder="Search terminal...">
+            </div>
+        </div>
+      </div>
+      <div class="row g-3" id="pricing-container">
+          {% for pricing in pricings %}
+          <div class="col-12 pricing-card-col">
+          <div class="border rounded p-3 mb-3 h-100">
+            <div class="d-flex justify-content-between align-items-center gap-3 pricing-card-inner flex-row">
+              <div class="pricing-info" style="width: 250px;">
+                <label class="text-muted fw-semibold">{{ pricing.depot.name }} ({{ pricing.crop_index.crop_name }})</label>
+                <div class="px-2 mt-1">
+                  <span class="badge bg-secondary-subtle text-dark border rounded px-2">ID: {{ pricing.depot.terminal_id }}</span>
+                </div>
+                <div class="d-flex align-items-center mt-1">
+                  <i class="ri-map-pin-line text-muted"></i>
+                  <span class="text-muted ms-2">{{ pricing.depot.location }} • {{ pricing.depot.distance_km }} km away</span>
+                </div>
+                <div class="mt-2">
+                  <span class="badge {% if pricing.depot.demand_level == 'High' %}bg-danger-subtle text-danger{% elif pricing.depot.demand_level == 'Medium' %}bg-warning-subtle text-warning{% else %}bg-info-subtle text-info{% endif %} border rounded mb-2">Demand: {{ pricing.depot.demand_level }}</span>
+                  <span class="badge bg-secondary-subtle text-secondary border rounded">
+                    {% if pricing.depot.sourcing_active %}Sourcing Open{% else %}<i class="ri-time-line me-1"></i> Out of Sourcing{% endif %}
+                  </span>
+                </div>
+              </div>
+
+              <div class="border rounded p-2 pricing-stats" style="width: 440px;">
+                <div class="d-flex gap-4 text-center justify-content-around">
+                  <div>
+                    <span class="text-muted small">Base Price</span>
+                    <div class="fw-semibold">₹{{ pricing.crop_index.base_price }}</div>
+                  </div>
+                  <div>
+                    <span class="text-muted small">Terminal Rate</span>
+                    <div class="fw-semibold">₹{{ pricing.terminal_rate }} <span class="text-primary small"></span></div>
+                  </div>
+                  <div>
+                    <span class="text-muted small">Markup Offset</span>
+                    <div class="fw-semibold">₹{{ pricing.markup_offset }}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="text-end pricing-actions" style="min-width: 150px;">
+                <div class="d-flex justify-content-end mb-2 gap-2 action-icons">
+                  <i class="ri-pencil-line text-muted cursor-pointer" data-bs-toggle="modal" data-bs-target="#update_terminal_modal_{{ pricing.id }}" style="font-size: 20px;" title="Edit Terminal Pricing"></i>
+                  <i class="ri-delete-bin-line text-danger cursor-pointer" data-bs-toggle="modal" data-bs-target="#delete_terminal_modal_{{ pricing.id }}" style="font-size: 20px;" title="Delete Terminal"></i>
+                </div>
+                {% if pricing.trading_restricted %}
+                  <span class="text-danger small fw-bold">Inactive</span>
+                  <form method="POST" action="{% url 'manage_market_price' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="toggle_trading">
+                    <input type="hidden" name="pricing_id" value="{{ pricing.id }}">
+                    <button type="submit" class="btn btn-sm bg-success-subtle text-success mt-2">Make Active</button>
+                  </form>
+                {% else %}
+                  <span class="text-success small fw-bold">Active</span> <span class="text-muted small">(+{{ pricing.markup_offset }})</span>
+                  <form method="POST" action="{% url 'manage_market_price' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="toggle_trading">
+                    <input type="hidden" name="pricing_id" value="{{ pricing.id }}">
+                    <button type="submit" class="btn btn-sm bg-danger-subtle text-danger mt-2">Make Inactive</button>
+                  </form>
+                {% endif %}
+              </div>
+            </div>
+            </div>
+          </div>
+          {% empty %}
+          <div class="text-muted">No pricing data available.</div>
+          {% endfor %}
+        </div>
+
+
+
+        </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.getElementById('grid-view-btn').addEventListener('click', function() {
+    document.querySelectorAll('.pricing-card-col').forEach(col => {
+      col.classList.remove('col-12');
+      col.classList.add('col-xl-4', 'col-lg-6', 'col-md-6');
+    });
+    document.querySelectorAll('.pricing-card-inner').forEach(inner => {
+      inner.classList.remove('flex-row', 'align-items-center');
+      inner.classList.add('flex-column', 'align-items-start');
+    });
+    document.querySelectorAll('.pricing-info').forEach(info => {
+      info.style.width = '100%';
+    });
+    document.querySelectorAll('.pricing-stats').forEach(stats => {
+      stats.style.width = '100%';
+    });
+    document.querySelectorAll('.pricing-actions').forEach(actions => {
+      actions.classList.remove('text-end');
+      actions.classList.add('text-start');
+      actions.style.width = '100%';
+    });
+    document.querySelectorAll('.action-icons').forEach(icons => {
+      icons.classList.remove('justify-content-end');
+      icons.classList.add('justify-content-start');
+    });
+  });
+
+  document.getElementById('list-view-btn').addEventListener('click', function() {
+    document.querySelectorAll('.pricing-card-col').forEach(col => {
+      col.classList.remove('col-xl-4', 'col-lg-6', 'col-md-6');
+      col.classList.add('col-12');
+    });
+    document.querySelectorAll('.pricing-card-inner').forEach(inner => {
+      inner.classList.remove('flex-column', 'align-items-start');
+      inner.classList.add('flex-row', 'align-items-center');
+    });
+    document.querySelectorAll('.pricing-info').forEach(info => {
+      info.style.width = '250px';
+    });
+    document.querySelectorAll('.pricing-stats').forEach(stats => {
+      stats.style.width = '440px';
+    });
+    document.querySelectorAll('.pricing-actions').forEach(actions => {
+      actions.classList.remove('text-start');
+      actions.classList.add('text-end');
+      actions.style.width = 'auto';
+    });
+    document.querySelectorAll('.action-icons').forEach(icons => {
+      icons.classList.remove('justify-content-start');
+      icons.classList.add('justify-content-end');
+    });
+  });
+
+  document.querySelectorAll('.role-filter').forEach(item => {
+    item.addEventListener('click', function (e) {
+      e.preventDefault();
+
+      const selectedText = this.innerText;
+      const role = this.getAttribute('data-role');
+
+      document.getElementById('roleDropdown').innerText = selectedText;
+
+      console.log("Selected Role:", role);
+
+    });
+  });
+
+  // Live Search functionality
+  document.getElementById('searchInput').addEventListener('keyup', function() {
+    let filter = this.value.toLowerCase();
+    let cards = document.querySelectorAll('.pricing-card-col');
+    
+    cards.forEach(card => {
+      let textContent = card.innerText.toLowerCase();
+      if (textContent.includes(filter)) {
+        card.style.display = '';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  });
+</script>
+
+
+<!-- Register Terminal Modal -->
+<div class="modal fade" id="new_terminal_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Register New Terminal</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{% url 'manage_market_price' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create_market_price">
+        <div class="modal-body row g-3">
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Crop Name</label>
+                <input type="text" class="form-control" name="crop_name" required>
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Base Price (₹)</label>
+                <input type="number" step="0.01" class="form-control" name="base_price" required>
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Terminal Rate (₹)</label>
+                <input type="number" step="0.01" class="form-control" name="terminal_rate">
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Terminal Name</label>
+                <input type="text" class="form-control" name="terminal_name" required>
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Location</label>
+                <input type="text" class="form-control" name="location" required>
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Distance (km)</label>
+                <input type="number" step="0.1" class="form-control" name="distance" value="0">
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">DEMAND LEVEL</label>
+                <select class="form-select" name="demand_level" required>
+                <option value="High">High</option>
+                <option value="Medium" selected>Medium</option>
+                <option value="Low">Low</option>
+                </select>
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Contact Person</label>
+                <input type="text" class="form-control" name="contact_person">
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Contact Number</label>
+                <input type="text" class="form-control" name="contact_phone">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">REGISTER DEPOT</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+
+{% for pricing in pricings %}
+<!-- Update Terminal Modal -->
+<div class="modal fade" id="update_terminal_modal_{{ pricing.id }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+        <div class="modal-header">
+        <h5 class="modal-title">Update Terminal Pricing ({{ pricing.depot.name }})</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form method="POST" action="{% url 'manage_market_price' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update_terminal">
+        <input type="hidden" name="depot_id" value="{{ pricing.depot.id }}">
+        <input type="hidden" name="crop_id" value="{{ pricing.crop_index.id }}">
+        <div class="modal-body row g-3 text-start">
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Crop Name</label>
+                <input type="text" class="form-control" name="crop_name" value="{{ pricing.crop_index.crop_name }}" required>
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Base Price (₹)</label>
+                <input type="number" step="0.01" class="form-control" name="base_price" value="{{ pricing.crop_index.base_price }}" required>
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Terminal Rate (₹)</label>
+                <input type="number" step="0.01" class="form-control" name="terminal_rate" value="{{ pricing.terminal_rate }}">
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Markup offset (₹)</label>
+                <input type="number" step="0.01" class="form-control" name="markup_offset" value="{{ pricing.markup_offset }}">
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Terminal Name</label>
+                <input type="text" class="form-control" name="terminal_name" value="{{ pricing.depot.name }}" required>
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Location</label>
+                <input type="text" class="form-control" name="location" value="{{ pricing.depot.location }}" required>
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Distance (km)</label>
+                <input type="number" step="0.1" class="form-control" name="distance" value="{{ pricing.depot.distance_km }}">
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">DEMAND LEVEL</label>
+                <select class="form-select" name="demand_level" required>
+                <option value="High" {% if pricing.depot.demand_level == 'High' %}selected{% endif %}>High</option>
+                <option value="Medium" {% if pricing.depot.demand_level == 'Medium' %}selected{% endif %}>Medium</option>
+                <option value="Low" {% if pricing.depot.demand_level == 'Low' %}selected{% endif %}>Low</option>
+                </select>
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Contact Person</label>
+                <input type="text" class="form-control" name="contact_person" value="{{ pricing.depot.contact_person }}">
+            </div>
+            <div class="col-lg-6">
+                <label class="form-label small text-muted">Contact Number</label>
+                <input type="text" class="form-control" name="contact_phone" value="{{ pricing.depot.contact_phone }}">
+            </div>
+            <div class="col-12">
+                <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="sourcing_{{ pricing.id }}" name="sourcing_active" {% if pricing.depot.sourcing_active %}checked{% endif %}>
+                <label class="form-check-label small" for="sourcing_{{ pricing.id }}">Sourcing Active status</label>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">SAVE METRICS</button>
+        </div>
+        </form>
+    </div>
+    </div>
+</div>
+
+<!-- Delete Terminal Modal -->
+<div class="modal fade" id="delete_terminal_modal_{{ pricing.id }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-danger">
+        <div class="modal-header">
+        <h5 class="modal-title text-danger">Delete Terminal</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form method="POST" action="{% url 'manage_market_price' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete_terminal">
+        <input type="hidden" name="pricing_id" value="{{ pricing.id }}">
+        <div class="modal-body text-start">
+            <p>Are you sure you want to completely delete the terminal <strong>{{ pricing.depot.name }}</strong>?</p>
+            <p class="text-muted small">This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-danger">Delete Terminal</button>
+        </div>
+        </form>
+    </div>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+  // Reset any modal form when it is closed
+  $(document).ready(function() {
+    $('.modal').on('hidden.bs.modal', function () {
+      const form = $(this).find('form');
+      if (form.length > 0) {
+        form[0].reset();
+      }
+    });
+    
+    // Initialize chart
+    if (document.getElementById('priceChart')) {
+        loadPriceAnalysisChart();
+    }
+  });
+  
+  let priceAnalysisChart;
+
+  function loadPriceAnalysisChart() {
+      let crop = document.getElementById('analysisCrop').value;
+      let market = document.getElementById('analysisMarket').value;
+      
+      let displayCrop = crop !== 'All' ? crop : 'Organic Corn';
+      let displayMarket = market !== 'All' ? market : 'Punjab State Grain Mandi';
+      
+      document.getElementById('chartTitle').innerText = displayCrop + ' Price Trend';
+      document.getElementById('chartSubtitle').innerText = displayMarket;
+      
+      let dates = [];
+      let prices = [];
+      let currentDate = new Date();
+      
+      let basePrice = 710 + Math.floor(Math.random() * 50);
+      for (let i = 9; i >= 0; i--) {
+          let d = new Date(currentDate);
+          d.setDate(d.getDate() - i);
+          let dateStr = d.getDate() + ' ' + d.toLocaleString('en-US', { month: 'short' });
+          dates.push(dateStr);
+          
+          let change = Math.floor(Math.random() * 20) - 5;
+          basePrice += change;
+          prices.push(basePrice);
+      }
+      
+      if (priceAnalysisChart) {
+          priceAnalysisChart.destroy();
+      }
+      
+      var options = {
+          series: [{
+              name: "Price",
+              data: prices
+          }],
+          chart: {
+              height: 400,
+              type: 'line',
+              zoom: { enabled: false },
+              toolbar: { show: false }
+          },
+          dataLabels: { enabled: false },
+          stroke: { curve: 'smooth', width: 3, colors: ['#0d6efd'] },
+          markers: {
+              size: 5,
+              colors: ['#0d6efd'],
+              strokeColors: '#fff',
+              strokeWidth: 2,
+              hover: { size: 7 }
+          },
+          xaxis: {
+              categories: dates,
+              labels: { style: { colors: '#6c757d' } }
+          },
+          yaxis: {
+              title: { text: 'Price (₹/Quintal)' },
+              labels: { style: { colors: '#6c757d' } }
+          },
+          tooltip: {
+              theme: 'light',
+              y: {
+                  formatter: function (val) {
+                      return "Price: " + val;
+                  }
+              }
+          },
+          grid: {
+              borderColor: '#e9ecef',
+              strokeDashArray: 4
+          }
+      };
+      
+      priceAnalysisChart = new ApexCharts(document.querySelector("#priceChart"), options);
+      priceAnalysisChart.render();
+  }
+</script>
+
+{% endblock %}

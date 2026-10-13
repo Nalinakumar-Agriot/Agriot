@@ -1,0 +1,2001 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Task{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/fullcalendar/fullcalendar.css' %}" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/fullcalendar/fullcalendar.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<style>
+.swal2-container { z-index: 20000 !important; }
+.modal[id^="quick_add_"] {
+    z-index: 10700 !important;
+    background-color: rgba(15, 23, 42, 0.45) !important;
+    backdrop-filter: blur(2px);
+}
+.modal[id^="quick_add_"] .modal-dialog {
+    z-index: 10701 !important;
+}
+/* FullCalendar Button Styling Fix */
+.fc .fc-button {
+  color: #5d596c !important;
+  background-color: #fff !important;
+  border-color: #dbdade !important;
+  font-weight: 500 !important;
+  text-transform: capitalize !important;
+}
+.fc .fc-button:hover {
+  background-color: #f1f0f2 !important;
+  border-color: #dbdade !important;
+}
+.fc .fc-button-active, 
+.fc .fc-button-active:hover {
+  color: #fff !important;
+  background-color: #7367f0 !important;
+  border-color: #7367f0 !important;
+}
+.fc .fc-button:disabled {
+  color: #a8a7af !important;
+  background-color: #f1f0f2 !important;
+  border-color: #dbdade !important;
+}
+
+/* Prevent vertical text wrapping & add interactive hover expand effect for calendar events */
+.fc-v-event .fc-event-main-frame {
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+.fc-v-event .fc-event-time,
+.fc-v-event .fc-event-title,
+.fc-v-event .fc-event-main {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  display: inline-block !important;
+}
+.fc-v-event:hover {
+  z-index: 999 !important;
+  width: auto !important;
+  min-width: 180px !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15) !important;
+  overflow: visible !important;
+}
+.fc-v-event:hover .fc-event-time,
+.fc-v-event:hover .fc-event-title,
+.fc-v-event:hover .fc-event-main {
+  white-space: normal !important;
+  overflow: visible !important;
+}
+
+/* Select2 Multiple Placeholder Fix */
+.select2-container .select2-search--inline:first-child {
+  display: block !important;
+  width: 100% !important;
+}
+.select2-container .select2-search--inline:first-child .select2-search__field {
+  width: 100% !important;
+  margin-top: 0 !important;
+}
+.select2-container--open {
+  z-index: 10600 !important;
+}
+
+
+/* Task Card */
+.task-card {
+  border: 1.5px solid #ebedf0;
+  border-radius: 16px;
+  padding: 20px;
+  background: #fff;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+.task-card:hover {
+  box-shadow: 0 10px 24px rgba(0,0,0,0.06);
+  transform: translateY(-2px);
+  border-color: #d1d5db;
+}
+
+/* Metadata badges */
+.task-meta-icon {
+  font-size: 11.5px;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f3f4f6;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+.task-meta-icon i {
+  font-size: 13.5px;
+}
+
+/* Worker Avatar */
+.worker-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+/* Assigned typography */
+.assigned-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: #9ca3af;
+  letter-spacing: 0.8px;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+.assigned-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+/* Collapsible Search styling */
+.search-collapse-wrapper {
+  position: relative;
+  height: 38px;
+  display: flex;
+  align-items: center;
+}
+.search-input-group {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 280px;
+  z-index: 10;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  opacity: 0;
+  transform: translateX(-10px);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+.search-input-group.expanded {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+// Tab filtering
+function filterByTab(status, btn) {
+    document.querySelectorAll('.task-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    localStorage.setItem('task_active_tab', status);
+    applyFilters();
+}
+
+// Collapsible Search
+function toggleSearchBox() {
+    var group = document.getElementById('search_input_group');
+    if (group.classList.contains('expanded')) {
+        closeSearchBox();
+    } else {
+        group.classList.remove('d-none');
+        setTimeout(function () {
+            group.classList.add('expanded');
+            document.getElementById('searchInput').focus();
+        }, 10);
+    }
+}
+
+function closeSearchBox() {
+    var group = document.getElementById('search_input_group');
+    var input = document.getElementById('searchInput');
+    group.classList.remove('expanded');
+    input.value = '';
+    applyFilters();
+    setTimeout(function () {
+        group.classList.add('d-none');
+    }, 250);
+}
+
+document.addEventListener('click', function (e) {
+    var wrapper = document.getElementById('search_collapse_wrapper');
+    var group = document.getElementById('search_input_group');
+    if (wrapper && group && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+        closeSearchBox();
+    }
+});
+
+let taskDataTable = null;
+
+function initTaskDataTable() {
+    if ($.fn.DataTable.isDataTable('#taskDataTable')) {
+        $('#taskDataTable').DataTable().destroy();
+    }
+    if ($('#taskDataTable tbody tr td[colspan]').length) {
+        return;
+    }
+
+    taskDataTable = $('#taskDataTable').DataTable({
+        pageLength: 5,
+        lengthMenu: [5, 10, 25, 50],
+        responsive: true,
+        ordering: true,
+        order: [],
+        columnDefs: [
+            { orderable: false, targets: [6] }
+        ],
+        dom:
+            '<"row px-3 pt-3 mb-2"' +
+              '<"col-md-6 d-flex align-items-center gap-2"l>' +
+              '<"col-md-6 d-flex justify-content-end gap-2">' +
+            '>' +
+            'rt' +
+            '<"row px-3 py-3 border-top mt-2"' +
+              '<"col-md-6 d-flex align-items-center gap-2"i>' +
+              '<"col-md-6 d-flex justify-content-end gap-2"p>' +
+            '>',
+        language: {
+            lengthMenu: "Show _MENU_ tasks",
+            info: "Showing _START_ to _END_ of _TOTAL_ tasks",
+            infoEmpty: "No tasks found",
+            infoFiltered: "(filtered from _MAX_ total)",
+            zeroRecords: "No matching tasks found",
+            paginate: {
+                previous: '<i class="ri-arrow-left-s-line"></i>',
+                next: '<i class="ri-arrow-right-s-line"></i>'
+            }
+        }
+    });
+}
+
+// Custom DataTable search hook
+if ($.fn.dataTable && $.fn.dataTable.ext) {
+    $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+        if (settings.nTable.id !== 'taskDataTable') {
+            return true;
+        }
+        const row = settings.aoData[dataIndex].nTr;
+        if (!row) return true;
+
+        const rowStatus   = row.getAttribute('data-status');
+        const rowPriority = row.getAttribute('data-priority') || '';
+        const rowWorker   = row.getAttribute('data-worker') || '';
+        const searchData  = (row.getAttribute('data-search') || '').toLowerCase();
+
+        const status   = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '';
+        const priority = document.getElementById('filterPriority') ? document.getElementById('filterPriority').value : '';
+        const worker   = document.getElementById('filterWorker') ? document.getElementById('filterWorker').value : '';
+        const queryEl  = document.getElementById('searchInput');
+        const query    = queryEl ? queryEl.value.toLowerCase().trim() : '';
+
+        const activeTabBtn = document.querySelector('.task-tab.active');
+        const activeTab = activeTabBtn ? activeTabBtn.getAttribute('data-tab-id') : 'all';
+
+        const okStatus   = !status   || rowStatus === status;
+        const okPriority = !priority || rowPriority.includes(priority);
+        const okWorker   = !worker   || rowWorker.includes(worker);
+        const okTab      = activeTab === 'all' || rowStatus === activeTab;
+        const okSearch   = !query    || searchData.includes(query);
+
+        return okStatus && okPriority && okWorker && okTab && okSearch;
+    });
+}
+
+// Dropdown & Search filters
+function applyFilters() {
+    const status   = document.getElementById('filterStatus').value;
+    const priority = document.getElementById('filterPriority').value;
+    const worker   = document.getElementById('filterWorker').value;
+    const queryEl  = document.getElementById('searchInput');
+    const query    = queryEl ? queryEl.value.toLowerCase().trim() : '';
+
+    const activeTabBtn = document.querySelector('.task-tab.active');
+    const activeTab = activeTabBtn ? activeTabBtn.getAttribute('data-tab-id') : 'all';
+
+    // Filter Cards
+    let visibleCards = 0;
+    document.querySelectorAll('.task-card-wrapper').forEach(card => {
+        const cardStatus   = card.getAttribute('data-status');
+        const cardPriority = card.getAttribute('data-priority') || '';
+        const cardWorker   = card.getAttribute('data-worker') || '';
+
+        const titleText    = card.querySelector('h5')?.textContent.toLowerCase() || '';
+        const descText     = card.querySelector('p')?.textContent.toLowerCase() || '';
+
+        const okStatus   = !status   || cardStatus === status;
+        const okPriority = !priority || cardPriority.includes(priority);
+        const okWorker   = !worker   || cardWorker.includes(worker);
+        const okTab      = activeTab === 'all' || cardStatus === activeTab;
+        const okSearch   = !query    || titleText.includes(query) || descText.includes(query);
+
+        if (okStatus && okPriority && okWorker && okTab && okSearch) {
+            card.style.display = '';
+            visibleCards++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+
+    // Redraw DataTable for dynamic pagination
+    if (taskDataTable) {
+        taskDataTable.draw();
+    }
+
+    if (typeof calendar !== 'undefined' && calendar) {
+        calendar.refetchEvents();
+    }
+}
+
+// CSRF helper
+function getCsrf() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+
+// Inline validation helper
+function validateField(el, msg) {
+    if (!el.value || el.value.trim() === '') {
+        el.classList.add('is-invalid');
+        let fb = el.nextElementSibling;
+        if (!fb || !fb.classList.contains('invalid-feedback')) {
+            fb = document.createElement('div');
+            fb.className = 'invalid-feedback';
+            el.parentNode.insertBefore(fb, el.nextSibling);
+        }
+        fb.textContent = msg;
+        return false;
+    }
+    el.classList.remove('is-invalid');
+    const fb = el.nextElementSibling;
+    if (fb && fb.classList.contains('invalid-feedback')) fb.textContent = '';
+    return true;
+}
+
+function clearValidation(formId) {
+    document.querySelectorAll('#' + formId + ' .is-invalid').forEach(el => {
+        el.classList.remove('is-invalid');
+    });
+    document.querySelectorAll('#' + formId + ' .invalid-feedback').forEach(el => {
+        el.textContent = '';
+    });
+}
+
+// Live clear on input
+document.addEventListener('DOMContentLoaded', function() {
+    ['addTaskForm', 'editTaskForm'].forEach(formId => {
+        const form = document.getElementById(formId);
+        if (!form) return;
+        form.querySelectorAll('input, select, textarea').forEach(el => {
+            el.addEventListener('input', function() {
+                this.classList.remove('is-invalid');
+                const fb = this.nextElementSibling;
+                if (fb && fb.classList.contains('invalid-feedback')) fb.textContent = '';
+            });
+            el.addEventListener('change', function() {
+                this.classList.remove('is-invalid');
+                const fb = this.nextElementSibling;
+                if (fb && fb.classList.contains('invalid-feedback')) fb.textContent = '';
+            });
+        });
+    });
+
+    let activeTab = localStorage.getItem('task_active_tab');
+    if(activeTab) {
+        let btn = document.querySelector(`.task-tab[data-tab-id="${activeTab}"]`);
+        if(btn) { filterByTab(activeTab, btn); }
+    }
+
+    initTaskDataTable();
+
+    let savedView = localStorage.getItem('task_view_mode') || 'cards';
+    setViewMode(savedView);
+
+    // Initialize Select2 on Worker Select dropdowns
+    $('#add_worker_id').select2({
+        placeholder: "Select Workers",
+        allowClear: true
+    });
+
+    $('#edit_worker_id').select2({
+        placeholder: "Select Workers",
+        allowClear: true
+    });
+
+    // Reset Add Task Modal Select2 on show
+    var addTaskModal = document.getElementById('addTaskModal');
+    if (addTaskModal) {
+        addTaskModal.addEventListener('show.bs.modal', function() {
+            $('#add_worker_id').val([]).trigger('change');
+        });
+    }
+});
+
+// Calculate total hours from start/end date & time
+function calculateTotalHours(formId) {
+    var form = document.getElementById(formId);
+    if (!form) return;
+    
+    var startDateVal = form.querySelector('[name="start_date"]').value;
+    var endDateVal = form.querySelector('[name="end_date"]').value;
+    var startTimeVal = form.querySelector('[name="start_time"]').value;
+    var endTimeVal = form.querySelector('[name="end_time"]').value;
+    
+    var totalHoursInput = form.querySelector('[name="total_hours"]');
+    if (!totalHoursInput) return;
+    
+    if (startDateVal && endDateVal && startTimeVal && endTimeVal) {
+        // 1. Calculate hours per single day
+        var startDayStr = "2026-01-01"; // arbitrary baseline date
+        var start = new Date(startDayStr + 'T' + startTimeVal);
+        var end = new Date(startDayStr + 'T' + endTimeVal);
+        
+        var diffMs = end - start;
+        // If end time is before start time, assume it rolls over to the next morning (add 24 hours)
+        if (endTimeVal < startTimeVal) {
+            diffMs += 24 * 60 * 60 * 1000;
+        }
+        
+        var hoursPerDay = diffMs / (1000 * 60 * 60);
+        if (hoursPerDay < 0) hoursPerDay = 0;
+        
+        // 2. Calculate number of days in range inclusive
+        var dateStart = new Date(startDateVal + 'T00:00:00');
+        var dateEnd = new Date(endDateVal + 'T00:00:00');
+        var diffDaysMs = dateEnd - dateStart;
+        var daysCount = Math.floor(diffDaysMs / (1000 * 60 * 60 * 24)) + 1;
+        
+        if (daysCount < 1) daysCount = 1;
+        
+        // 3. Compute total hours
+        var totalHrs = hoursPerDay * daysCount;
+        totalHoursInput.value = totalHrs.toFixed(2);
+    } else {
+        totalHoursInput.value = '';
+    }
+}
+
+// Update UI indicator and validation context for category-specific required fields
+function updateRequiredFields(catSelect) {
+    var form = catSelect.closest('form');
+    if (!form) return;
+    
+    var opt = catSelect.options[catSelect.selectedIndex];
+    var farmRequired = opt ? (opt.getAttribute('data-farm-required') === 'true') : false;
+    var cropRequired = opt ? (opt.getAttribute('data-crop-required') === 'true') : false;
+    
+    // Update Farm label and style
+    var farmSelect = form.querySelector('[name="farm_id"]');
+    if (farmSelect) {
+        var label = farmSelect.previousElementSibling;
+        if (label && label.tagName === 'LABEL') {
+            if (farmRequired) {
+                label.innerHTML = 'Farm <span class="text-danger">*</span>';
+            } else {
+                label.innerHTML = 'Farm';
+            }
+        }
+    }
+    
+    // Update Crop label and style
+    var cropSelect = form.querySelector('[name="split_id"]');
+    if (cropSelect) {
+        var label = cropSelect.previousElementSibling;
+        if (label && label.tagName === 'LABEL') {
+            if (cropRequired) {
+                label.innerHTML = 'Crop <span class="text-danger">*</span>';
+            } else {
+                label.innerHTML = 'Crop';
+            }
+        }
+    }
+}
+
+// Add task via AJAX
+function submitAddTask() {
+    const form = document.getElementById('addTaskForm');
+    const titleEl  = form.querySelector('[name="title"]');
+
+    let valid = true;
+    if (!validateField(titleEl,  'Task Title is required.'))  valid = false;
+
+    // Check dynamic requirements
+    const catSelect = form.querySelector('[name="task_category"]');
+    if (catSelect) {
+        const opt = catSelect.options[catSelect.selectedIndex];
+        const farmRequired = opt ? (opt.getAttribute('data-farm-required') === 'true') : false;
+        const cropRequired = opt ? (opt.getAttribute('data-crop-required') === 'true') : false;
+
+        const farmSelect = form.querySelector('[name="farm_id"]');
+        if (farmRequired && farmSelect && !farmSelect.value) {
+            if (!validateField(farmSelect, 'Farm Field is required for this category.')) valid = false;
+        }
+
+        const cropSelect = form.querySelector('[name="split_id"]');
+        if (cropRequired && cropSelect && !cropSelect.value) {
+            if (!validateField(cropSelect, 'Crop split is required for this category.')) valid = false;
+        }
+    }
+
+    if (!valid) return;
+
+    const data = new FormData(form);
+    fetch("{% url 'add_farm_task' %}", { method: 'POST', body: data })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) { location.reload(); }
+            else { alert('Error: ' + (res.error || 'Unknown error')); }
+        })
+        .catch(err => alert('Network error: ' + err));
+}
+
+// Open edit modal
+function openEditModal(taskId, title, description, priority, workTimeline, splitId, workerIdsStr, status, taskDate, categoryId, priorityId, startDate, endDate, startTime, endTime, totalHours, actualHours, farmId) {
+    if (status === 'Completed') {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'info',
+                title: 'Task Completed',
+                text: 'Completed tasks cannot be edited.',
+                confirmButtonColor: '#28a745'
+            });
+        } else {
+            alert('Completed tasks cannot be edited.');
+        }
+        return;
+    }
+    clearValidation('editTaskForm');
+    document.getElementById('edit_task_id').value      = taskId;
+    document.getElementById('edit_title').value        = title;
+    document.getElementById('edit_description').value  = description;
+    
+    // Set task category and priority level
+    var catSelect = document.getElementById('edit_task_category');
+    if (catSelect) {
+        catSelect.value = categoryId || '';
+        // Dynamically update label requirement asterisks immediately!
+        updateRequiredFields(catSelect);
+    }
+    
+    var priSelect = document.getElementById('edit_priority');
+    if (priSelect) priSelect.value = priorityId || '';
+    
+    document.getElementById('edit_work_timeline').value = workTimeline;
+    document.getElementById('edit_task_date').value     = taskDate || '';
+    
+    // Set Farm and dynamic Crop splits selection
+    var farmSelect = document.getElementById('edit_farm_id');
+    if (farmSelect) {
+        farmSelect.value = farmId || '';
+        loadEditSplits(farmId || '');
+    }
+    var cropSelect = document.getElementById('edit_splitSelect');
+    if (cropSelect) {
+        cropSelect.value = splitId || '';
+    }
+
+    var workerIds = workerIdsStr ? workerIdsStr.split(',').map(Number) : [];
+    $('#edit_worker_id').val(workerIds).trigger('change');
+    document.getElementById('edit_status').value       = status;
+
+    document.getElementById('edit_start_date').value = startDate || '';
+    document.getElementById('edit_end_date').value = endDate || '';
+    document.getElementById('edit_start_time').value = startTime || '';
+    document.getElementById('edit_end_time').value = endTime || '';
+    document.getElementById('edit_total_hours').value = totalHours || '';
+    document.getElementById('edit_actual_hours').value = actualHours || '';
+
+    var modal = new bootstrap.Modal(document.getElementById('editTaskModal'));
+    modal.show();
+}
+
+// Quick Add Categories and Priorities
+function loadQuickMasterItemsList(itemType, containerId, countBadgeId, selectSelectors) {
+    var container = document.getElementById(containerId);
+    var badge = countBadgeId ? document.getElementById(countBadgeId) : null;
+    if (!container) return;
+
+    container.innerHTML = '<div class="text-center text-muted small py-2"><span class="spinner-border spinner-border-sm me-1"></span> Loading...</div>';
+
+    fetch("/farmer/quick_list_master_items/?item_type=" + encodeURIComponent(itemType))
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.items) {
+                if (badge) badge.textContent = data.items.length + ' item' + (data.items.length === 1 ? '' : 's');
+                if (data.items.length === 0) {
+                    container.innerHTML = '<div class="text-center text-muted small py-2 fst-italic">No existing options added yet</div>';
+                    return;
+                }
+                var html = '<div class="d-flex flex-column gap-1">';
+                data.items.forEach(function(item) {
+                    var safeName = (item.name || '').replace(/"/g, '&quot;');
+                    html += '<div class="d-flex align-items-center justify-content-between p-1.5 px-2 bg-white rounded border shadow-xs" id="master_item_' + itemType + '_' + item.id + '" style="font-size: 12px;">' +
+                        '<span class="text-dark fw-medium text-truncate me-2" title="' + safeName + '">' + safeName + '</span>' +
+                        '<button type="button" class="btn btn-sm btn-outline-danger p-0 px-1 rounded d-inline-flex align-items-center justify-content-center" style="height: 22px; min-width: 22px;" title="Delete this option" onclick="deleteQuickMasterItem(\'' + itemType + '\', ' + item.id + ', \'' + safeName + '\', \'' + containerId + '\', \'' + (countBadgeId || '') + '\', ' + JSON.stringify(selectSelectors || []).replace(/"/g, '&quot;') + ')">' +
+                            '<i class="ri-delete-bin-line" style="font-size: 11px;"></i>' +
+                        '</button>' +
+                    '</div>';
+                });
+                html += '</div>';
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<div class="text-center text-danger small py-1">' + (data.error || 'Failed to load') + '</div>';
+            }
+        })
+        .catch(err => {
+            container.innerHTML = '<div class="text-center text-muted small py-1">Error loading items</div>';
+        });
+}
+
+function confirmQuickDelete(itemName, callback) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '<span style="font-size: 19px; font-weight: 700; color: #1e293b;">Confirm Delete</span>',
+            html: '<div class="text-muted fs-6 mb-1">Are you sure you want to delete <strong class="text-danger">"' + (itemName || '').replace(/</g, '&lt;') + '"</strong>?</div><div class="text-muted small" style="font-size: 12px;">This option will be removed from your master options list.</div>',
+            icon: 'warning',
+            iconColor: '#f59e0b',
+            showCancelButton: true,
+            confirmButtonText: '<i class="ri-delete-bin-line me-1"></i> Yes, Delete',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#94a3b8',
+            reverseButtons: true,
+            focusCancel: true,
+            customClass: {
+                popup: 'rounded-4 shadow-lg border-0 p-3',
+                confirmButton: 'btn btn-danger btn-sm px-3 py-2 rounded-3 fw-semibold shadow-sm',
+                cancelButton: 'btn btn-light btn-sm px-3 py-2 rounded-3 fw-medium text-secondary me-2 border',
+                actions: 'gap-2 mt-3'
+            },
+            buttonsStyling: false
+        }).then((result) => {
+            if (result.isConfirmed) {
+                callback();
+            }
+        });
+    } else {
+        if (confirm('Are you sure you want to delete "' + itemName + '"?')) {
+            callback();
+        }
+    }
+}
+
+function deleteQuickMasterItem(itemType, itemId, itemName, containerId, countBadgeId, selectSelectors) {
+    confirmQuickDelete(itemName, function() {
+        var formData = new FormData();
+        formData.append('item_type', itemType);
+        formData.append('item_id', itemId);
+
+        fetch("/farmer/quick_delete_master_item/", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCsrf(),
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                var itemEl = document.getElementById('master_item_' + itemType + '_' + itemId);
+                if (itemEl) itemEl.remove();
+
+                if (Array.isArray(selectSelectors)) {
+                    selectSelectors.forEach(function(selQuery) {
+                        document.querySelectorAll(selQuery).forEach(function(sel) {
+                            Array.from(sel.options).forEach(function(opt) {
+                                if (opt.value == itemId || (opt.text && opt.text.trim().toLowerCase() === (itemName || '').trim().toLowerCase())) {
+                                    opt.remove();
+                                }
+                            });
+                        });
+                    });
+                }
+
+                if (window.Toastify) {
+                    Toastify({
+                        text: '🗑️ Deleted "' + itemName + '" successfully!',
+                        backgroundColor: '#dc2626',
+                        duration: 2500
+                    }).showToast();
+                }
+
+                loadQuickMasterItemsList(itemType, containerId, countBadgeId, selectSelectors);
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.error || 'Failed to delete option',
+                        customClass: { popup: 'rounded-4' }
+                    });
+                } else {
+                    alert(data.error || 'Failed to delete option');
+                }
+            }
+        })
+        .catch(err => {
+            alert('Network error while deleting');
+        });
+    });
+}
+
+function openQuickAddTaskCategory() {
+    var modalEl = document.getElementById('quick_add_task_category_modal');
+    var myModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    myModal.show();
+    loadQuickMasterItemsList('task_category', 'quick_task_category_items_list', 'quick_task_category_count_badge', ['select[name="task_category"]', '#edit_task_category']);
+}
+
+function submitQuickAddTaskCategory() {
+    var nameInput = document.getElementById('quick_task_category_name');
+    var descInput = document.getElementById('quick_task_category_desc');
+    var name = nameInput.value.trim ? nameInput.value.trim() : nameInput.value;
+    var desc = descInput.value;
+    
+    var isFarm = document.getElementById('quick_is_farm_required').checked;
+    var isCrop = document.getElementById('quick_is_crop_required').checked;
+
+    if (!name) {
+        alert('Category name is required');
+        return;
+    }
+
+    fetch("{% url 'quick_add_task_category' %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCsrf()
+        },
+        body: 'name=' + encodeURIComponent(name) + '&description=' + encodeURIComponent(desc) +
+              '&is_farm_required=' + (isFarm ? 'on' : '') + '&is_crop_required=' + (isCrop ? 'on' : '')
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            // Append to all category select dropdowns
+            var targetSelects = ['select[name="task_category"]', '#edit_task_category'];
+            targetSelects.forEach(function(selQuery) {
+                document.querySelectorAll(selQuery).forEach(function(sel) {
+                    var existing = Array.from(sel.options).find(o => o.text.toLowerCase() === res.name.toLowerCase());
+                    if (!existing) {
+                        var opt = document.createElement('option');
+                        opt.value = res.id;
+                        opt.textContent = res.name;
+                        opt.setAttribute('data-farm-required', isFarm ? 'true' : 'false');
+                        opt.setAttribute('data-crop-required', isCrop ? 'true' : 'false');
+                        sel.appendChild(opt);
+                    }
+                    sel.value = res.id;
+                    if (typeof updateRequiredFields === 'function') updateRequiredFields(sel);
+                });
+            });
+
+            // Reset inputs
+            nameInput.value = '';
+            descInput.value = '';
+            document.getElementById('quick_is_farm_required').checked = false;
+            document.getElementById('quick_is_crop_required').checked = false;
+
+            loadQuickMasterItemsList('task_category', 'quick_task_category_items_list', 'quick_task_category_count_badge', targetSelects);
+
+            if (window.Toastify) {
+                Toastify({ text: 'Category "' + res.name + '" saved!', backgroundColor: '#28a745', duration: 2500 }).showToast();
+            }
+        } else {
+            alert('Error: ' + res.error);
+        }
+    })
+    .catch(err => alert('Network error: ' + err));
+}
+
+function openQuickAddPriority() {
+    var modalEl = document.getElementById('quick_add_task_priority_modal');
+    var myModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    myModal.show();
+    loadQuickMasterItemsList('task_priority', 'quick_task_priority_items_list', 'quick_task_priority_count_badge', ['select[name="priority"]', '#edit_priority']);
+}
+
+function submitQuickAddTaskPriority() {
+    var nameInput = document.getElementById('quick_task_priority_name');
+    var descInput = document.getElementById('quick_task_priority_desc');
+    var name = nameInput.value.trim ? nameInput.value.trim() : nameInput.value;
+    var desc = descInput.value;
+
+    if (!name) {
+        alert('Priority name is required');
+        return;
+    }
+
+    fetch("{% url 'quick_add_task_priority' %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCsrf()
+        },
+        body: 'name=' + encodeURIComponent(name) + '&description=' + encodeURIComponent(desc)
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            var targetSelects = ['select[name="priority"]', '#edit_priority'];
+            targetSelects.forEach(function(selQuery) {
+                document.querySelectorAll(selQuery).forEach(function(sel) {
+                    var existing = Array.from(sel.options).find(o => o.text.toLowerCase() === res.name.toLowerCase());
+                    if (!existing) {
+                        var opt = document.createElement('option');
+                        opt.value = res.id;
+                        opt.textContent = res.name;
+                        sel.appendChild(opt);
+                    }
+                    sel.value = res.id;
+                });
+            });
+
+            // Reset input
+            nameInput.value = '';
+            descInput.value = '';
+
+            loadQuickMasterItemsList('task_priority', 'quick_task_priority_items_list', 'quick_task_priority_count_badge', targetSelects);
+
+            if (window.Toastify) {
+                Toastify({ text: 'Priority "' + res.name + '" saved!', backgroundColor: '#28a745', duration: 2500 }).showToast();
+            }
+        } else {
+            alert('Error: ' + res.error);
+        }
+    })
+    .catch(err => alert('Network error: ' + err));
+}
+
+// Submit edit
+function submitEditTask() {
+    const form = document.getElementById('editTaskForm');
+    const titleEl = form.querySelector('[name="title"]');
+    
+    let valid = true;
+    if (!validateField(titleEl, 'Task Title is required.')) valid = false;
+
+    // Check dynamic requirements
+    const catSelect = form.querySelector('[name="task_category"]');
+    if (catSelect) {
+        const opt = catSelect.options[catSelect.selectedIndex];
+        const farmRequired = opt ? (opt.getAttribute('data-farm-required') === 'true') : false;
+        const cropRequired = opt ? (opt.getAttribute('data-crop-required') === 'true') : false;
+
+        const farmSelect = form.querySelector('[name="farm_id"]');
+        if (farmRequired && farmSelect && !farmSelect.value) {
+            if (!validateField(farmSelect, 'Farm Field is required for this category.')) valid = false;
+        }
+
+        const cropSelect = form.querySelector('[name="split_id"]');
+        if (cropRequired && cropSelect && !cropSelect.value) {
+            if (!validateField(cropSelect, 'Crop split is required for this category.')) valid = false;
+        }
+    }
+
+    if (!valid) return;
+
+    const data = new FormData(form);
+    fetch("{% url 'edit_farm_task' %}", { method: 'POST', body: data })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) { location.reload(); }
+            else { alert('Error: ' + (res.error || 'Unknown error')); }
+        })
+        .catch(err => alert('Network error: ' + err));
+}
+
+// Delete task
+function deleteTask(taskId) {
+    if (!confirm('Delete this task?')) return;
+    fetch("{% url 'delete_task' %}", {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'task_id=' + taskId
+    }).then(() => location.reload());
+}
+
+// Status update
+function updateStatus(taskId, status) {
+    fetch("{% url 'update_farm_task_status' %}", {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'task_id=' + taskId + '&status=' + encodeURIComponent(status)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.error || 'Failed to update task status.');
+        }
+    })
+    .catch(err => alert('Network error: ' + err));
+}
+</script>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+
+<!-- Header -->
+<div class="card mb-3">
+  <div class="card-body d-flex justify-content-between align-items-center">
+    <div>
+      <h4 class="mb-1 mt-1 fw-bold text-dark d-flex align-items-center gap-2">
+        <i class="ri-checkbox-circle-line text-success"></i>
+        {% trans "Task" %}
+      </h4>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <div class="btn-group" role="group">
+        <button type="button" class="btn btn-outline-secondary px-3 active" id="btnCardView" onclick="setViewMode('cards')">
+          <i class="ri-grid-fill me-1"></i> Cards
+        </button>
+        <button type="button" class="btn btn-outline-secondary px-3" id="btnTableView" onclick="setViewMode('table')">
+          <i class="ri-table-line me-1"></i> List
+        </button>
+        <button type="button" class="btn btn-outline-secondary px-3" id="btnCalendarView" onclick="setViewMode('calendar')">
+          <i class="ri-calendar-line me-1"></i> Calendar
+        </button>
+      </div>
+      <button class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#addTaskModal">
+        <i class="ri-add-line me-1"></i> Add Task
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="row g-3 mb-4">
+  <!-- Total Tasks -->
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+      <div class="card-body d-flex align-items-center gap-3 p-3">
+        <div class="avatar avatar-md flex-shrink-0" style="background:rgba(13,110,253,0.10); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+          <i class="ri-clipboard-line fs-3" style="color:#0d6efd;"></i>
+        </div>
+        <div>
+          <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Total Tasks</small>
+          <div class="fw-bold fs-5 text-dark mb-0">{{ total_tasks }}</div>
+          <small class="text-muted" style="font-size:11px;">Overall tracking</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pending Queue -->
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+      <div class="card-body d-flex align-items-center gap-3 p-3">
+        <div class="avatar avatar-md flex-shrink-0" style="background:rgba(255,193,7,0.12); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+          <i class="ri-time-line fs-3" style="color:#ffc107;"></i>
+        </div>
+        <div>
+          <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Pending Queue</small>
+          <div class="fw-bold fs-5 text-dark mb-0">{{ pending_tasks }}</div>
+          <small class="text-muted" style="font-size:11px;">Awaiting start</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Progress -->
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+      <div class="card-body d-flex align-items-center gap-3 p-3">
+        <div class="avatar avatar-md flex-shrink-0" style="background:rgba(246,156,85,0.12); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+          <i class="ri-loader-4-line fs-3" style="color:#f69c55;"></i>
+        </div>
+        <div>
+          <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Active Progress</small>
+          <div class="fw-bold fs-5 text-dark mb-0">{{ active_tasks }}</div>
+          <small class="text-muted" style="font-size:11px;">Work underway</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Completed Chores -->
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+      <div class="card-body d-flex align-items-center gap-3 p-3">
+        <div class="avatar avatar-md flex-shrink-0" style="background:rgba(25,135,84,0.12); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+          <i class="ri-checkbox-circle-line fs-3" style="color:#198754;"></i>
+        </div>
+        <div>
+          <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Completed Chores</small>
+          <div class="fw-bold fs-5 text-dark mb-0">{{ completed_tasks }}</div>
+          <small class="text-muted" style="font-size:11px;">Finished chores</small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Filter & Search Bar -->
+<div class="card mb-3 border-0 shadow-sm rounded-4">
+  <div class="card-body d-flex gap-2 align-items-center justify-content-between flex-wrap p-3">
+    <div class="d-flex align-items-center gap-2">
+      <!-- Collapsible Search -->
+      <div class="d-flex align-items-center search-collapse-wrapper" id="search_collapse_wrapper">
+        <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="search_toggle_btn" onclick="toggleSearchBox()" style="width: 38px; height: 38px;">
+          <i class="ri-search-line"></i>
+        </button>
+        <div class="input-group search-input-group d-none" id="search_input_group">
+          <span class="input-group-text bg-white border-end-0">
+            <i class="ri-search-line text-muted"></i>
+          </span>
+          <input type="text"
+              id="searchInput"
+              onkeyup="applyFilters()"
+              class="form-control border-start-0"
+              placeholder="Search tasks...">
+          <button class="btn btn-outline-secondary border-start-0" type="button" id="search_close_btn" onclick="closeSearchBox()">
+            <i class="ri-close-line"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+      <select class="form-select form-select-sm w-auto" id="filterStatus" onchange="applyFilters()">
+        <option value="">All Statuses</option>
+        <option value="Pending">Pending</option>
+        <option value="In Progress">In Progress</option>
+        <option value="Completed">Completed</option>
+        <option value="Scheduled">Scheduled</option>
+      </select>
+
+      <select class="form-select form-select-sm w-auto" id="filterPriority" onchange="applyFilters()">
+        <option value="">All Priorities</option>
+        <option value="High">High Priority</option>
+        <option value="Medium">Medium Priority</option>
+        <option value="Low">Low Priority</option>
+      </select>
+
+      <select class="form-select form-select-sm w-auto" id="filterWorker" onchange="applyFilters()">
+        <option value="">All Workers</option>
+        {% for w in workers %}
+        <option value="{{ w.name }}">{{ w.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+</div>
+
+<div id="cardViewContainer">
+<!-- Task Cards Grid -->
+<div class="row g-3">
+  {% for task in tasks %}
+  <div class="col-12 col-md-6 col-lg-4 task-card-wrapper"
+       data-status="{{ task.status }}"
+       data-priority="{{ task.priority }}"
+       data-worker="{% for w in task.assigned_workers.all %}{{ w.name }}{% if not forloop.last %},{% endif %}{% endfor %}">
+    <div class="task-card">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex gap-1 flex-wrap">
+          <!-- Priority badge -->
+          <span class="badge rounded-pill
+            {% if 'High' in task.priority %}bg-label-danger
+            {% elif 'Low' in task.priority %}bg-label-success
+            {% else %}bg-label-warning{% endif %}">
+            <i class="ri-alert-line me-1" style="font-size: 11px;"></i>
+            {{ task.priority }}
+          </span>
+          <!-- Category badge -->
+          {% if task.task_category %}
+          <span class="badge rounded-pill bg-label-info">
+            <i class="ri-price-tag-3-line me-1" style="font-size: 11px;"></i>
+            {{ task.task_category.name }}
+          </span>
+          {% endif %}
+        </div>
+        <!-- Status badge -->
+        <span class="badge rounded-pill
+          {% if task.status == 'Completed' %}bg-label-success
+          {% elif task.status == 'In Progress' %}bg-label-primary
+          {% elif task.status == 'Scheduled' %}bg-label-info
+          {% else %}bg-label-warning{% endif %}">
+          {{ task.status }}
+        </span>
+      </div>
+
+      <!-- Title & Description -->
+      <h5 class="fw-bold text-dark mb-1" style="font-size:16px;">{{ task.title }}</h5>
+      {% if task.description %}
+      <p class="text-muted mb-3" style="font-size:12.5px; line-height:1.5;">{{ task.description|truncatechars:80 }}</p>
+      {% endif %}
+
+      <!-- Meta row -->
+      <div class="d-flex gap-2 flex-wrap mb-4">
+        {% if task.farm %}
+        <span class="task-meta-icon"><i class="ri-map-pin-line"></i> {{ task.farm.land_name }}</span>
+        {% endif %}
+        {% if task.associated_split and task.associated_split.crop %}
+        <span class="task-meta-icon"><i class="ri-plant-line"></i> {{ task.associated_split.crop.name }}</span>
+        {% endif %}
+        {% if task.task_date %}
+        <span class="task-meta-icon"><i class="ri-calendar-line"></i> {{ task.task_date|date:"Y-m-d" }}</span>
+        {% elif task.created_at %}
+        <span class="task-meta-icon"><i class="ri-calendar-line"></i> {{ task.created_at|date:"Y-m-d" }}</span>
+        {% endif %}
+        {% if task.actual_hours %}
+        <span class="task-meta-icon" title="Actual Hours"><i class="ri-time-line"></i> {{ task.actual_hours }} hrs</span>
+        {% elif task.total_hours %}
+        <span class="task-meta-icon" title="Estimated Hours"><i class="ri-time-line"></i> {{ task.total_hours }} hrs</span>
+        {% endif %}
+      </div>
+
+      <!-- Assigned To + Actions -->
+      <div class="d-flex justify-content-between align-items-center mt-auto">
+        <div class="d-flex align-items-center gap-2">
+          <div class="worker-avatar d-flex align-items-center justify-content-center rounded-circle {% if task.assigned_workers.all %}bg-label-primary text-primary{% else %}bg-label-secondary text-secondary{% endif %}">
+            {% if task.assigned_workers.all %}
+              {{ task.assigned_workers.first.name|slice:":1"|upper }}
+            {% else %}
+              <i class="ri-user-unfollow-line" style="font-size: 14px;"></i>
+            {% endif %}
+          </div>
+          <div>
+            <div class="assigned-label">Assigned To</div>
+            <div class="assigned-name">
+              {% if task.assigned_workers.all %}
+                {% if task.assigned_workers.count > 1 %}
+                  {{ task.assigned_workers.first.name }} +{{ task.assigned_workers.count|add:"-1" }} others
+                {% else %}
+                  {{ task.assigned_workers.first.name }}
+                {% endif %}
+              {% else %}
+                <span class="text-muted">Unassigned</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <!-- Status update dropdown / badge -->
+          {% if task.status == 'Completed' %}
+          <span class="btn btn-sm btn-label-success rounded-pill d-inline-flex align-items-center" style="font-size:11.5px; font-weight: 500; padding: 5px 12px; cursor: default;" title="Task completed and locked">
+            <i class="ri-checkbox-circle-fill me-1" style="font-size: 13px;"></i> Completed
+          </span>
+          {% else %}
+          <div class="dropdown">
+            <button class="btn btn-sm btn-label-{% if task.status == 'In Progress' %}primary{% elif task.status == 'Scheduled' %}info{% else %}warning{% endif %} dropdown-toggle rounded-pill" 
+                    style="font-size:11.5px; font-weight: 500; padding: 5px 12px;" type="button" 
+                    data-bs-toggle="dropdown">
+              {% if task.status == 'In Progress' %}
+                <span class="spinner-grow spinner-grow-sm me-1" role="status" style="width: 8px; height: 8px;"></span>
+              {% elif task.status == 'Scheduled' %}
+                <i class="ri-calendar-event-line me-1" style="font-size: 13px;"></i>
+              {% else %}
+                <i class="ri-time-line me-1" style="font-size: 13px;"></i>
+              {% endif %}
+              {{ task.status }}
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+              <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'Pending')"><i class="ri-time-line text-warning"></i> Pending</button></li>
+              <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'In Progress')"><span class="spinner-grow spinner-grow-sm text-primary" style="width:8px; height:8px;"></span> In Progress</button></li>
+              <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'Completed')"><i class="ri-checkbox-circle-fill text-success"></i> Completed</button></li>
+              <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'Scheduled')"><i class="ri-calendar-event-line text-info"></i> Scheduled</button></li>
+            </ul>
+          </div>
+          {% endif %}
+          {% if task.status == 'Completed' %}
+          <button class="btn btn-icon btn-label-secondary rounded-circle btn-sm" disabled title="Completed tasks cannot be edited" style="opacity: 0.45; cursor: not-allowed;">
+            <i class="ri-pencil-line fs-5"></i>
+          </button>
+          {% else %}
+          <button class="btn btn-icon btn-label-secondary rounded-circle btn-sm"
+            onclick="openEditModal(
+              {{ task.id }},
+              '{{ task.title|escapejs }}',
+              '{{ task.description|default:''|escapejs }}',
+              '{{ task.priority|escapejs }}',
+              '{{ task.work_timeline|escapejs }}',
+              '{{ task.associated_split.id|default:'' }}',
+              '{% for w in task.assigned_workers.all %}{{ w.id }}{% if not forloop.last %},{% endif %}{% endfor %}',
+              '{{ task.status|escapejs }}',
+              '{{ task.task_date|date:"Y-m-d" }}',
+              '{{ task.task_category.id|default:'' }}',
+              '{{ task.priority_level.id|default:'' }}',
+              '{{ task.start_date|date:"Y-m-d" }}',
+              '{{ task.end_date|date:"Y-m-d" }}',
+              '{{ task.start_time|time:"H:i" }}',
+              '{{ task.end_time|time:"H:i" }}',
+              '{{ task.total_hours|default:'' }}',
+              '{{ task.actual_hours|default:'' }}',
+              '{{ task.farm.id|default:'' }}'
+            )" title="Edit">
+            <i class="ri-pencil-line fs-5"></i>
+          </button>
+          {% endif %}
+          <button class="btn btn-icon btn-label-danger rounded-circle btn-sm" onclick="deleteTask({{ task.id }})" title="Delete">
+            <i class="ri-delete-bin-line fs-5"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12">
+    <div class="text-center text-muted py-5">
+      <i class="ri-task-line" style="font-size:48px;opacity:0.2;"></i>
+      <p class="mt-3">No tasks yet. Click <strong>+ Add New Task</strong> to get started!</p>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+</div>
+
+<!-- Table View Container -->
+<div id="tableViewContainer" class="d-none">
+  <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" id="taskDataTable">
+        <thead class="bg-light">
+          <tr>
+            <th class="py-3 px-4 text-uppercase text-muted small fw-bold" style="letter-spacing: 0.5px;">Task & Details</th>
+            <th class="py-3 px-3 text-uppercase text-muted small fw-bold" style="letter-spacing: 0.5px;">Priority</th>
+            <th class="py-3 px-3 text-uppercase text-muted small fw-bold" style="letter-spacing: 0.5px;">Farm / Crop</th>
+            <th class="py-3 px-3 text-uppercase text-muted small fw-bold" style="letter-spacing: 0.5px;">Timeline</th>
+            <th class="py-3 px-3 text-uppercase text-muted small fw-bold" style="letter-spacing: 0.5px;">Assigned To</th>
+            <th class="py-3 px-3 text-uppercase text-muted small fw-bold" style="letter-spacing: 0.5px;">Status</th>
+            <th class="py-3 px-4 text-uppercase text-muted small fw-bold text-end" style="letter-spacing: 0.5px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="border-top-0">
+          {% for task in tasks %}
+          <tr class="task-table-row"
+              data-status="{{ task.status }}"
+              data-priority="{{ task.priority }}"
+              data-worker="{% for w in task.assigned_workers.all %}{{ w.name }}{% if not forloop.last %},{% endif %}{% endfor %}"
+              data-search="{{ task.title|lower }} {{ task.description|default:''|lower }} {{ task.farm.land_name|default:''|lower }} {{ task.task_category.name|default:''|lower }} {% for w in task.assigned_workers.all %}{{ w.name|lower }} {% endfor %}">
+            <!-- Task & Details -->
+            <td class="py-3 px-4" style="max-width: 280px;">
+              <div class="d-flex flex-column">
+                <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                  <span class="fw-bold text-dark fs-6">{{ task.title }}</span>
+                  {% if task.task_category %}
+                  <span class="badge rounded-pill bg-label-info" style="font-size: 10.5px;">
+                    {{ task.task_category.name }}
+                  </span>
+                  {% endif %}
+                </div>
+                {% if task.description %}
+                <small class="text-muted text-truncate d-inline-block" style="max-width: 260px;" title="{{ task.description }}">
+                  {{ task.description }}
+                </small>
+                {% endif %}
+              </div>
+            </td>
+
+            <!-- Priority -->
+            <td class="py-3 px-3">
+              <span class="badge rounded-pill
+                {% if 'High' in task.priority %}bg-label-danger
+                {% elif 'Low' in task.priority %}bg-label-success
+                {% else %}bg-label-warning{% endif %}" style="font-size: 11.5px;">
+                <i class="ri-alert-line me-1" style="font-size: 11px;"></i>
+                {{ task.priority }}
+              </span>
+            </td>
+
+            <!-- Farm / Crop -->
+            <td class="py-3 px-3">
+              <div class="d-flex flex-column gap-1">
+                {% if task.farm %}
+                <span class="task-meta-icon text-dark" style="font-size: 11px; padding: 2px 8px; width: fit-content;">
+                  <i class="ri-map-pin-line text-primary"></i> {{ task.farm.land_name }}
+                </span>
+                {% endif %}
+                {% if task.associated_split and task.associated_split.crop %}
+                <span class="task-meta-icon text-dark" style="font-size: 11px; padding: 2px 8px; width: fit-content;">
+                  <i class="ri-plant-line text-success"></i> {{ task.associated_split.crop.name }}
+                </span>
+                {% endif %}
+                {% if not task.farm and not task.associated_split %}
+                <span class="text-muted small">-</span>
+                {% endif %}
+              </div>
+            </td>
+
+            <!-- Timeline -->
+            <td class="py-3 px-3">
+              <div class="d-flex flex-column">
+                {% if task.task_date %}
+                <span class="fw-semibold text-dark small"><i class="ri-calendar-line text-muted me-1"></i>{{ task.task_date|date:"Y-m-d" }}</span>
+                {% elif task.start_date %}
+                <span class="fw-semibold text-dark small"><i class="ri-calendar-line text-muted me-1"></i>{{ task.start_date|date:"M d" }} - {{ task.end_date|date:"M d, Y" }}</span>
+                {% elif task.created_at %}
+                <span class="fw-semibold text-dark small"><i class="ri-calendar-line text-muted me-1"></i>{{ task.created_at|date:"Y-m-d" }}</span>
+                {% else %}
+                <span class="text-muted small">-</span>
+                {% endif %}
+                {% if task.actual_hours %}
+                <small class="text-muted" title="Actual Hours"><i class="ri-time-line me-1"></i>{{ task.actual_hours }} hrs</small>
+                {% elif task.total_hours %}
+                <small class="text-muted" title="Estimated Hours"><i class="ri-time-line me-1"></i>{{ task.total_hours }} hrs</small>
+                {% endif %}
+              </div>
+            </td>
+
+            <!-- Assigned Workers -->
+            <td class="py-3 px-3">
+              <div class="d-flex align-items-center gap-2">
+                <div class="worker-avatar d-flex align-items-center justify-content-center rounded-circle {% if task.assigned_workers.all %}bg-label-primary text-primary{% else %}bg-label-secondary text-secondary{% endif %}" style="width: 32px; height: 32px; font-size: 12px;">
+                  {% if task.assigned_workers.all %}
+                    {{ task.assigned_workers.first.name|slice:":1"|upper }}
+                  {% else %}
+                    <i class="ri-user-unfollow-line" style="font-size: 12px;"></i>
+                  {% endif %}
+                </div>
+                <div>
+                  <span class="fw-semibold text-dark small d-block">
+                    {% if task.assigned_workers.all %}
+                      {% if task.assigned_workers.count > 1 %}
+                        {{ task.assigned_workers.first.name }} <span class="badge bg-light text-muted border ms-1">+{{ task.assigned_workers.count|add:"-1" }}</span>
+                      {% else %}
+                        {{ task.assigned_workers.first.name }}
+                      {% endif %}
+                    {% else %}
+                      <span class="text-muted">Unassigned</span>
+                    {% endif %}
+                  </span>
+                </div>
+              </div>
+            </td>
+
+            <!-- Status -->
+            <td class="py-3 px-3">
+              {% if task.status == 'Completed' %}
+              <span class="btn btn-sm btn-label-success rounded-pill d-inline-flex align-items-center" style="font-size:11.5px; font-weight: 500; padding: 4px 10px; cursor: default;" title="Task completed and locked">
+                <i class="ri-checkbox-circle-fill me-1" style="font-size: 12px;"></i> Completed
+              </span>
+              {% else %}
+              <div class="dropdown">
+                <button class="btn btn-sm btn-label-{% if task.status == 'In Progress' %}primary{% elif task.status == 'Scheduled' %}info{% else %}warning{% endif %} dropdown-toggle rounded-pill" 
+                        style="font-size:11.5px; font-weight: 500; padding: 4px 10px;" type="button" 
+                        data-bs-toggle="dropdown">
+                  {% if task.status == 'In Progress' %}
+                    <span class="spinner-grow spinner-grow-sm me-1" role="status" style="width: 7px; height: 7px;"></span>
+                  {% elif task.status == 'Scheduled' %}
+                    <i class="ri-calendar-event-line me-1" style="font-size: 12px;"></i>
+                  {% else %}
+                    <i class="ri-time-line me-1" style="font-size: 12px;"></i>
+                  {% endif %}
+                  {{ task.status }}
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                  <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'Pending')"><i class="ri-time-line text-warning"></i> Pending</button></li>
+                  <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'In Progress')"><span class="spinner-grow spinner-grow-sm text-primary" style="width:8px; height:8px;"></span> In Progress</button></li>
+                  <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'Completed')"><i class="ri-checkbox-circle-fill text-success"></i> Completed</button></li>
+                  <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'Scheduled')"><i class="ri-calendar-event-line text-info"></i> Scheduled</button></li>
+                </ul>
+              </div>
+              {% endif %}
+            </td>
+
+            <!-- Actions -->
+            <td class="py-3 px-4 text-end">
+              <div class="d-inline-flex gap-1 align-items-center">
+                {% if task.status == 'Completed' %}
+                <button class="btn btn-icon btn-label-secondary rounded-circle btn-sm" disabled title="Completed tasks cannot be edited" style="opacity: 0.45; cursor: not-allowed;">
+                  <i class="ri-pencil-line fs-5"></i>
+                </button>
+                {% else %}
+                <button class="btn btn-icon btn-label-secondary rounded-circle btn-sm"
+                  onclick="openEditModal(
+                    {{ task.id }},
+                    '{{ task.title|escapejs }}',
+                    '{{ task.description|default:''|escapejs }}',
+                    '{{ task.priority|escapejs }}',
+                    '{{ task.work_timeline|escapejs }}',
+                    '{{ task.associated_split.id|default:'' }}',
+                    '{% for w in task.assigned_workers.all %}{{ w.id }}{% if not forloop.last %},{% endif %}{% endfor %}',
+                    '{{ task.status|escapejs }}',
+                    '{{ task.task_date|date:"Y-m-d" }}',
+                    '{{ task.task_category.id|default:'' }}',
+                    '{{ task.priority_level.id|default:'' }}',
+                    '{{ task.start_date|date:"Y-m-d" }}',
+                    '{{ task.end_date|date:"Y-m-d" }}',
+                    '{{ task.start_time|time:"H:i" }}',
+                    '{{ task.end_time|time:"H:i" }}',
+                    '{{ task.total_hours|default:'' }}',
+                    '{{ task.actual_hours|default:'' }}',
+                    '{{ task.farm.id|default:'' }}'
+                  )" title="Edit">
+                  <i class="ri-pencil-line fs-5"></i>
+                </button>
+                {% endif %}
+                <button class="btn btn-icon btn-label-danger rounded-circle btn-sm" onclick="deleteTask({{ task.id }})" title="Delete">
+                  <i class="ri-delete-bin-line fs-5"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr id="emptyTableRow">
+            <td colspan="7" class="text-center text-muted py-5">
+              <i class="ri-task-line" style="font-size:40px;opacity:0.2;"></i>
+              <p class="mt-2 mb-0">No tasks found.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Calendar View Container -->
+<div id="calendarViewContainer" class="d-none">
+  <div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+      <div id="taskCalendar"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Add New Task Modal -->
+<div class="modal fade" id="addTaskModal" data-bs-backdrop="static" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <form id="addTaskForm">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title fw-semibold">Add Task</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-6">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label mb-0">Task Category</label>
+                <a href="javascript:void(0);" class="text-primary fw-semibold small" onclick="openQuickAddTaskCategory()"><i class="ri-add-line"></i> Quick Add</a>
+              </div>
+              <select name="task_category" class="form-select" onchange="updateRequiredFields(this)">
+                <option value="">None / Select Category</option>
+                {% for cat in task_categories %}
+                <option value="{{ cat.id }}" data-farm-required="{{ cat.is_farm_required|yesno:'true,false' }}" data-crop-required="{{ cat.is_crop_required|yesno:'true,false' }}">{{ cat.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+              <div class="col-6">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label mb-0">Priority Level</label>
+                <a href="javascript:void(0);" class="text-primary fw-semibold small" onclick="openQuickAddPriority()"><i class="ri-add-line"></i> Quick Add</a>
+              </div>
+              <select name="priority" class="form-select">
+                {% for pri in task_priorities %}
+                <option value="{{ pri.id }}" {% if pri.name == "Medium Priority" %}selected{% endif %}>{{ pri.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+             <div class="col-6">
+              <label class="form-label">Farm</label>
+              <select name="farm_id" class="form-select" id="farmSelect" onchange="loadSplits(this.value)">
+                <option value="">Select Farm Field</option>
+                {% for farm in farms %}
+                <option value="{{ farm.id }}">{{ farm.land_name }}</option>
+                {% endfor %}
+              </select>
+              <div class="invalid-feedback"></div>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Crop</label>
+              <select name="split_id" class="form-select" id="splitSelect">
+                <option value="">None / Select Farm First</option>
+                {% for split in crop_splits %}
+                <option value="{{ split.id }}" data-farm="{{ split.farm.id }}">
+                  {{ split.crop.name|default:"Unknown" }} ({{ split.farm.land_name }})
+                </option>
+                {% endfor %}
+              </select>
+              <select class="split-option-template d-none" style="display: none;">
+                {% for split in crop_splits %}
+                <option value="{{ split.id }}" data-farm="{{ split.farm.id }}">
+                  {{ split.crop.name|default:"Unknown" }} ({{ split.farm.land_name }})
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+          
+            <div class="col-12">
+              <label class="form-label">Task Title <span class="text-danger">*</span></label>
+              <input type="text" name="title" class="form-control" placeholder="e.g. Clean Drip Filters Sector 3">
+              <div class="invalid-feedback"></div>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Task Description</label>
+              <textarea name="description" class="form-control" rows="3"
+                placeholder="Describe exact coordinates, instruction checklists, or necessary Safety wear..."></textarea>
+            </div>
+            
+           
+            <div class="col-6">
+              <label class="form-label">Start Date <span class="text-danger">*</span></label>
+              <input type="date" name="start_date" id="add_start_date" class="form-control" value="{% now 'Y-m-d' %}" onchange="calculateTotalHours('addTaskForm')" required>
+              <div class="invalid-feedback"></div>
+            </div>
+
+            <div class="col-6">
+              <label class="form-label">End Date <span class="text-danger">*</span></label>
+              <input type="date" name="end_date" id="add_end_date" class="form-control" value="{% now 'Y-m-d' %}" onchange="calculateTotalHours('addTaskForm')" required>
+              <div class="invalid-feedback"></div>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Start Time <span class="text-danger">*</span></label>
+              <input type="time" name="start_time" id="add_start_time" class="form-control" value="09:00" onchange="calculateTotalHours('addTaskForm')" required>
+              <div class="invalid-feedback"></div>
+            </div>
+            <div class="col-6">
+              <label class="form-label">End Time <span class="text-danger">*</span></label>
+              <input type="time" name="end_time" id="add_end_time" class="form-control" value="18:00" onchange="calculateTotalHours('addTaskForm')" required>
+              <div class="invalid-feedback"></div>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Total Hours (Auto)</label>
+              <input type="number" step="0.01" name="total_hours" id="add_total_hours" class="form-control" readonly placeholder="0.0">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Actual Hours</label>
+              <input type="number" step="0.01" name="actual_hours" id="add_actual_hours" class="form-control" placeholder="Enter actual hours">
+            </div>
+           
+            <div class="col-12">
+              <label class="form-label">Assign Worker</label>
+              <select name="worker_id" id="add_worker_id" class="form-select select2-multi" multiple="multiple" data-placeholder="Select Workers" style="width: 100%;">
+                {% for w in workers %}
+                <option value="{{ w.id }}">{{ w.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer d-flex justify-content-between">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary px-4" onclick="submitAddTask()">
+            <i class="ri-check-line me-1"></i> Confirm Assignment
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+// Filter crop splits by selected farm
+function loadSplits(farmId) {
+    const sel = document.getElementById('splitSelect');
+    sel.innerHTML = '<option value="">None</option>';
+    const allSplits = document.querySelectorAll('.split-option-template option');
+    allSplits.forEach(opt => {
+        if (!farmId || opt.getAttribute('data-farm') === farmId) {
+            sel.appendChild(opt.cloneNode(true));
+        }
+    });
+}
+
+function loadEditSplits(farmId) {
+    const sel = document.getElementById('edit_splitSelect');
+    sel.innerHTML = '<option value="">None</option>';
+    const allSplits = document.querySelectorAll('.split-option-template option');
+    allSplits.forEach(opt => {
+        if (!farmId || opt.getAttribute('data-farm') === farmId) {
+            sel.appendChild(opt.cloneNode(true));
+        }
+    });
+}
+
+var calendar = null;
+var allEvents = [
+    {% for task in tasks %}
+    {
+        id: "{{ task.id }}",
+        title: "{{ task.title|escapejs }}",
+        start: "{{ task.start_date|date:'Y-m-d' }}{% if task.start_time %}T{{ task.start_time|time:'H:i:s' }}{% endif %}",
+        end: "{{ task.end_date|date:'Y-m-d' }}{% if task.end_time %}T{{ task.end_time|time:'H:i:s' }}{% endif %}",
+        color: "{% if task.status == 'Completed' %}#28a745{% elif task.status == 'In Progress' %}#007bff{% elif task.status == 'Scheduled' %}#17a2b8{% else %}#ffc107{% endif %}",
+        extendedProps: {
+            description: "{{ task.description|default:''|escapejs }}",
+            priority: "{{ task.priority|escapejs }}",
+            workTimeline: "{{ task.work_timeline|escapejs }}",
+            splitId: "{{ task.associated_split.id|default:'' }}",
+            workerIdsStr: "{% for w in task.assigned_workers.all %}{{ w.id }}{% if not forloop.last %},{% endif %}{% endfor %}",
+            workerNamesStr: "{% for w in task.assigned_workers.all %}{{ w.name|escapejs }}{% if not forloop.last %},{% endif %}{% endfor %}",
+            status: "{{ task.status|escapejs }}",
+            taskDate: "{{ task.task_date|date:'Y-m-d' }}",
+            categoryId: "{{ task.task_category.id|default:'' }}",
+            priorityId: "{{ task.priority_level.id|default:'' }}",
+            startDate: "{{ task.start_date|date:'Y-m-d' }}",
+            endDate: "{{ task.end_date|date:'Y-m-d' }}",
+            startTime: "{{ task.start_time|time:'H:i' }}",
+            endTime: "{{ task.end_time|time:'H:i' }}",
+            totalHours: "{{ task.total_hours|default:'' }}",
+            actualHours: "{{ task.actual_hours|default:'' }}",
+            farmId: "{{ task.farm.id|default:'' }}"
+        }
+    },
+    {% endfor %}
+];
+
+function initCalendar() {
+    var calendarEl = document.getElementById('taskCalendar');
+    if (!calendarEl) return;
+
+    calendar = new Calendar(calendarEl, {
+        plugins: [ dayGridPlugin, timegridPlugin, interactionPlugin, listPlugin ],
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,listMonth'
+        },
+        events: function(info, successCallback, failureCallback) {
+            const status   = document.getElementById('filterStatus').value;
+            const priority = document.getElementById('filterPriority').value;
+            const worker   = document.getElementById('filterWorker').value;
+            const queryEl  = document.getElementById('searchInput');
+            const query    = queryEl ? queryEl.value.toLowerCase().trim() : '';
+
+            const activeTabBtn = document.querySelector('.task-tab.active');
+            const activeTab = activeTabBtn ? activeTabBtn.getAttribute('data-tab-id') : 'all';
+
+            var filtered = allEvents.filter(event => {
+                const props = event.extendedProps;
+                
+                const okStatus   = !status   || props.status === status;
+                const okPriority = !priority || props.priority.includes(priority);
+                const okWorker   = !worker   || props.workerNamesStr.split(',').includes(worker);
+                const okTab      = activeTab === 'all' || props.status === activeTab;
+                const okSearch   = !query    || event.title.toLowerCase().includes(query) || (props.description && props.description.toLowerCase().includes(query));
+
+                return okStatus && okPriority && okWorker && okTab && okSearch;
+            });
+            successCallback(filtered);
+        },
+        eventClick: function(info) {
+            var props = info.event.extendedProps;
+            if (props.status === 'Completed') {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Task Completed',
+                        text: 'Completed tasks cannot be edited.',
+                        confirmButtonColor: '#28a745'
+                    });
+                } else {
+                    alert('Completed tasks cannot be edited.');
+                }
+                return;
+            }
+            openEditModal(
+                info.event.id,
+                info.event.title,
+                props.description,
+                props.priority,
+                props.workTimeline,
+                props.splitId,
+                props.workerIdsStr,
+                props.status,
+                props.taskDate,
+                props.categoryId,
+                props.priorityId,
+                props.startDate,
+                props.endDate,
+                props.startTime,
+                props.endTime,
+                props.totalHours,
+                props.actualHours,
+                props.farmId
+            );
+        },
+        dateClick: function(info) {
+            // Open Add Task modal with clicked date auto-filled
+            var modal = new bootstrap.Modal(document.getElementById('addTaskModal'));
+            document.getElementById('add_start_date').value = info.dateStr;
+            document.getElementById('add_end_date').value = info.dateStr;
+            calculateTotalHours('addTaskForm');
+            modal.show();
+        }
+    });
+    calendar.render();
+}
+
+function setViewMode(mode) {
+    localStorage.setItem('task_view_mode', mode);
+    const btnCard = document.getElementById('btnCardView');
+    const btnTable = document.getElementById('btnTableView');
+    const btnCalendar = document.getElementById('btnCalendarView');
+    const cardCont = document.getElementById('cardViewContainer');
+    const tableCont = document.getElementById('tableViewContainer');
+    const calCont = document.getElementById('calendarViewContainer');
+
+    [btnCard, btnTable, btnCalendar].forEach(b => { if(b) b.classList.remove('active'); });
+    [cardCont, tableCont, calCont].forEach(c => { if(c) c.classList.add('d-none'); });
+
+    if (mode === 'calendar') {
+        if (btnCalendar) btnCalendar.classList.add('active');
+        if (calCont) calCont.classList.remove('d-none');
+        
+        if (!calendar) {
+            initCalendar();
+        } else {
+            calendar.refetchEvents();
+            calendar.updateSize();
+        }
+    } else if (mode === 'table' || mode === 'list') {
+        if (btnTable) btnTable.classList.add('active');
+        if (tableCont) tableCont.classList.remove('d-none');
+        if (!taskDataTable) {
+            initTaskDataTable();
+        } else {
+            taskDataTable.columns.adjust().responsive.recalc();
+        }
+    } else { // default 'cards'
+        if (btnCard) btnCard.classList.add('active');
+        if (cardCont) cardCont.classList.remove('d-none');
+    }
+}
+</script>
+
+<!-- Edit Task Modal -->
+<div class="modal fade" id="editTaskModal" data-bs-backdrop="static" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <form id="editTaskForm">
+        {% csrf_token %}
+        <input type="hidden" name="task_id" id="edit_task_id">
+        <div class="modal-header">
+          <h5 class="modal-title fw-semibold">Edit Operations Task</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-6">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label mb-0">Task Category</label>
+                <a href="javascript:void(0);" class="text-primary fw-semibold small" onclick="openQuickAddTaskCategory()"><i class="ri-add-line"></i> Quick Add</a>
+              </div>
+              <select name="task_category" id="edit_task_category" class="form-select" onchange="updateRequiredFields(this)">
+                <option value="">None / Select Category</option>
+                {% for cat in task_categories %}
+                <option value="{{ cat.id }}" data-farm-required="{{ cat.is_farm_required|yesno:'true,false' }}" data-crop-required="{{ cat.is_crop_required|yesno:'true,false' }}">{{ cat.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            
+            <div class="col-6">
+              <label class="form-label">Farm</label>
+              <select name="farm_id" class="form-select" id="edit_farm_id" onchange="loadEditSplits(this.value)">
+                <option value="">Select Farm Field</option>
+                {% for farm in farms %}
+                <option value="{{ farm.id }}">{{ farm.land_name }}</option>
+                {% endfor %}
+              </select>
+              <div class="invalid-feedback"></div>
+            </div>
+
+            <div class="col-6">
+              <label class="form-label">Crop</label>
+              <select name="split_id" class="form-select" id="edit_splitSelect">
+                <option value="">None / Select Farm First</option>
+                {% for split in crop_splits %}
+                <option value="{{ split.id }}" data-farm="{{ split.farm.id }}">
+                  {{ split.crop.name|default:"Unknown" }} ({{ split.farm.land_name }})
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-6">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label mb-0">Priority Level</label>
+                <a href="javascript:void(0);" class="text-primary fw-semibold small" onclick="openQuickAddPriority()"><i class="ri-add-line"></i> Quick Add</a>
+              </div>
+              <select name="priority" id="edit_priority" class="form-select">
+                {% for pri in task_priorities %}
+                <option value="{{ pri.id }}">{{ pri.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Task Title <span class="text-danger">*</span></label>
+              <input type="text" name="title" id="edit_title" class="form-control">
+              <div class="invalid-feedback"></div>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Task Description</label>
+              <textarea name="description" id="edit_description" class="form-control" rows="3"></textarea>
+            </div>
+
+            <input type="hidden" name="work_timeline" id="edit_work_timeline" value="Full Day">
+            <input type="hidden" name="task_date" id="edit_task_date">
+
+            <div class="col-6">
+              <label class="form-label">Start Date <span class="text-danger">*</span></label>
+              <input type="date" name="start_date" id="edit_start_date" class="form-control" onchange="calculateTotalHours('editTaskForm')" required>
+              <div class="invalid-feedback"></div>
+            </div>
+            <div class="col-6">
+              <label class="form-label">End Date <span class="text-danger">*</span></label>
+              <input type="date" name="end_date" id="edit_end_date" class="form-control" onchange="calculateTotalHours('editTaskForm')" required>
+              <div class="invalid-feedback"></div>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Start Time <span class="text-danger">*</span></label>
+              <input type="time" name="start_time" id="edit_start_time" class="form-control" onchange="calculateTotalHours('editTaskForm')" required>
+              <div class="invalid-feedback"></div>
+            </div>
+            <div class="col-6">
+              <label class="form-label">End Time <span class="text-danger">*</span></label>
+              <input type="time" name="end_time" id="edit_end_time" class="form-control" onchange="calculateTotalHours('editTaskForm')" required>
+              <div class="invalid-feedback"></div>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Total Hours (Auto)</label>
+              <input type="number" step="0.01" name="total_hours" id="edit_total_hours" class="form-control" readonly placeholder="0.0">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Actual Hours</label>
+              <input type="number" step="0.01" name="actual_hours" id="edit_actual_hours" class="form-control" placeholder="Enter actual hours">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Assign Worker</label>
+              <select name="worker_id" id="edit_worker_id" class="form-select select2-multi" multiple="multiple" data-placeholder="Select Workers" style="width: 100%;">
+                {% for w in workers %}
+                <option value="{{ w.id }}">{{ w.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Status</label>
+              <select name="status" id="edit_status" class="form-select">
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="Scheduled">Scheduled</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer d-flex justify-content-between">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary px-4" onclick="submitEditTask()">
+            <i class="ri-check-line me-1"></i> Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Add Task Category Modal -->
+<div class="modal fade" id="quick_add_task_category_modal" tabindex="-1" style="z-index: 10700 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header bg-light py-2.5 px-3 border-bottom">
+        <h6 class="modal-title fw-bold mb-0 text-dark"><i class="ri-add-line me-1 text-primary"></i>Quick Add Category</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="mb-2">
+          <label class="form-label small fw-medium">Category Name <span class="text-danger">*</span></label>
+          <input type="text" id="quick_task_category_name" class="form-control form-control-sm" placeholder="e.g. Irrigation, Harvesting">
+        </div>
+        <div class="d-flex gap-3 mb-2">
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="quick_is_farm_required">
+            <label class="form-check-label small fw-medium" for="quick_is_farm_required">Require Farm?</label>
+          </div>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="quick_is_crop_required">
+            <label class="form-check-label small fw-medium" for="quick_is_crop_required">Require Crop?</label>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-medium">Description</label>
+          <textarea id="quick_task_category_desc" class="form-control form-control-sm" rows="1" placeholder="Brief description..."></textarea>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold mb-3" onclick="submitQuickAddTaskCategory()">
+          <i class="ri-add-line me-1"></i> Save Category
+        </button>
+
+        <div class="border-top pt-2.5">
+          <div class="d-flex align-items-center justify-content-between mb-1.5">
+            <span class="fw-bold text-muted text-uppercase" style="font-size: 11px; letter-spacing: 0.5px;">Existing Categories</span>
+            <span class="badge bg-light text-secondary border count-badge" id="quick_task_category_count_badge">Loading...</span>
+          </div>
+          <div class="quick-master-items-list overflow-auto rounded-2 p-1.5 border bg-light" id="quick_task_category_items_list" style="max-height: 160px; min-height: 50px;"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2 px-3 bg-light d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Add Task Priority Modal -->
+<div class="modal fade" id="quick_add_task_priority_modal" tabindex="-1" style="z-index: 10700 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header bg-light py-2.5 px-3 border-bottom">
+        <h6 class="modal-title fw-bold mb-0 text-dark"><i class="ri-add-line me-1 text-primary"></i>Quick Add Priority</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="mb-2">
+          <label class="form-label small fw-medium">Priority Name <span class="text-danger">*</span></label>
+          <input type="text" id="quick_task_priority_name" class="form-control form-control-sm" placeholder="e.g. Critical, Urgent">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-medium">Description</label>
+          <textarea id="quick_task_priority_desc" class="form-control form-control-sm" rows="1" placeholder="Brief description..."></textarea>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold mb-3" onclick="submitQuickAddTaskPriority()">
+          <i class="ri-add-line me-1"></i> Save Priority
+        </button>
+
+        <div class="border-top pt-2.5">
+          <div class="d-flex align-items-center justify-content-between mb-1.5">
+            <span class="fw-bold text-muted text-uppercase" style="font-size: 11px; letter-spacing: 0.5px;">Existing Priorities</span>
+            <span class="badge bg-light text-secondary border count-badge" id="quick_task_priority_count_badge">Loading...</span>
+          </div>
+          <div class="quick-master-items-list overflow-auto rounded-2 p-1.5 border bg-light" id="quick_task_priority_items_list" style="max-height: 160px; min-height: 50px;"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2 px-3 bg-light d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden split options template -->
+<select class="split-option-template d-none">
+  {% for split in crop_splits %}
+  <option value="{{ split.id }}" data-farm="{{ split.farm.id }}">
+    {{ split.crop.name|default:"Unknown" }} ({{ split.farm.land_name }})
+  </option>
+  {% endfor %}
+</select>
+
+{% endblock %}

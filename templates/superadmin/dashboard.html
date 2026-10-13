@@ -1,0 +1,598 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+
+{% block title %}Dashboard | Superadmin{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<style>
+  .kpi-card {
+    border-radius: 16px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    background: #ffffff;
+    transition: all 0.25s ease;
+    overflow: hidden;
+  }
+  .kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
+  }
+  .kpi-icon-box {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .welcome-banner {
+    background: linear-gradient(135deg, #103b2b 0%, #1e5e45 60%, #2f855a 100%);
+    border-radius: 20px;
+    color: #ffffff;
+    position: relative;
+    overflow: hidden;
+  }
+  .welcome-banner::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(246, 156, 85, 0.2) 0%, rgba(255,255,255,0) 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .quick-tile {
+    border-radius: 14px;
+    border: 1.5px solid #f1f3f6;
+    background: #ffffff;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s ease;
+  }
+  .quick-tile:hover {
+    border-color: #F69C55;
+    background: #fffdfb;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(246, 156, 85, 0.12);
+  }
+  .avatar-initial-circle {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .chart-card {
+    border-radius: 16px;
+    border: 1px solid rgba(0,0,0,0.05);
+    background: #ffffff;
+  }
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // 1. Farmer Growth & Subscriptions Area Chart
+  const growthEl = document.querySelector('#growthChart');
+  if (growthEl && typeof ApexCharts !== 'undefined') {
+    const months = {{ months_json|safe }};
+    const farmerData = {{ farmer_trend_json|safe }};
+    const subData = {{ sub_trend_json|safe }};
+
+    const growthOptions = {
+      chart: {
+        type: 'area',
+        height: 280,
+        toolbar: { show: false },
+        parentHeightOffset: 0
+      },
+      series: [
+        { name: 'Farmers Enrolled', data: farmerData },
+        { name: 'Active Subscriptions', data: subData }
+      ],
+      colors: ['#0c9e6d', '#F69C55'],
+      stroke: { curve: 'smooth', width: 2.5 },
+      fill: {
+        type: 'gradient',
+        gradient: {
+          shadeIntensity: 1,
+          opacityFrom: 0.35,
+          opacityTo: 0.05,
+          stops: [0, 95, 100]
+        }
+      },
+      xaxis: {
+        categories: months,
+        labels: { style: { colors: '#94a3b8', fontSize: '11px' } },
+        axisBorder: { show: false },
+        axisTicks: { show: false }
+      },
+      yaxis: {
+        labels: { style: { colors: '#94a3b8', fontSize: '11px' } }
+      },
+      grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
+      legend: { position: 'top', horizontalAlign: 'right', fontSize: '12px' },
+      dataLabels: { enabled: false }
+    };
+    new ApexCharts(growthEl, growthOptions).render();
+  }
+
+  // 2. Package Distribution Donut Chart
+  const pkgEl = document.querySelector('#packageDonutChart');
+  if (pkgEl && typeof ApexCharts !== 'undefined') {
+    const pkgLabels = {{ pkg_labels_json|safe }};
+    const pkgSeries = {{ pkg_series_json|safe }};
+
+    const pkgOptions = {
+      chart: { type: 'donut', height: 260 },
+      labels: pkgLabels,
+      series: pkgSeries,
+      colors: ['#F69C55', '#0c9e6d', '#3b82f6', '#8b5cf6', '#ec4899'],
+      legend: { position: 'bottom', fontSize: '12px' },
+      dataLabels: { enabled: true, formatter: (val) => val.toFixed(0) + '%' },
+      plotOptions: {
+        pie: {
+          donut: {
+            size: '68%',
+            labels: {
+              show: true,
+              total: {
+                show: true,
+                label: 'Total Plans',
+                fontSize: '12px',
+                color: '#64748b',
+                formatter: () => '{{ total_subscriptions }}'
+              }
+            }
+          }
+        }
+      }
+    };
+    new ApexCharts(pkgEl, pkgOptions).render();
+  }
+
+  // 3. Crop Acreage Horizontal Bar
+  const cropEl = document.querySelector('#cropBarChart');
+  if (cropEl && typeof ApexCharts !== 'undefined') {
+    const cropLabels = {{ crop_labels_json|safe }};
+    const cropSeries = {{ crop_series_json|safe }};
+
+    const cropOptions = {
+      chart: { type: 'bar', height: 260, toolbar: { show: false } },
+      plotOptions: {
+        bar: {
+          borderRadius: 6,
+          horizontal: true,
+          barHeight: '55%',
+          distributed: true
+        }
+      },
+      colors: ['#0c9e6d', '#F69C55', '#3b82f6', '#eab308', '#ec4899'],
+      series: [{ name: 'Acres', data: cropSeries }],
+      xaxis: {
+        categories: cropLabels,
+        labels: { style: { colors: '#94a3b8', fontSize: '11px' } }
+      },
+      yaxis: {
+        labels: { style: { colors: '#475569', fontSize: '12px', fontWeight: 600 } }
+      },
+      legend: { show: false },
+      dataLabels: { enabled: true, formatter: (val) => val + ' Ac' },
+      grid: { borderColor: '#f1f5f9' }
+    };
+    new ApexCharts(cropEl, cropOptions).render();
+  }
+});
+</script>
+{% endblock page_js %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <!-- ── Welcome Executive Header ── -->
+  <div class="welcome-banner p-4 p-md-5 mb-4 shadow-sm">
+    <div class="row align-items-center position-relative" style="z-index: 1;">
+      <div class="col-lg-8 mb-3 mb-lg-0">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="badge bg-warning text-dark fw-bold px-2 py-1 rounded-pill" style="font-size: 11px;">
+            <i class="ri-shield-star-line me-1"></i>Superadmin Control
+          </span>
+          <span class="badge bg-white bg-opacity-20 text-white rounded-pill px-2 py-1" style="font-size: 11px;">
+            <i class="ri-check-double-line me-1 text-success"></i>System Online
+          </span>
+        </div>
+        <h2 class="text-white fw-bold mb-1">AgriOT Enterprise Dashboard</h2>
+        <p class="text-white-50 mb-0" style="max-width: 620px; font-size: 14px;">
+          Comprehensive oversight of registered farmers, farm acreage, commercial transactions, subscription revenues, and agricultural operations.
+        </p>
+      </div>
+      <div class="col-lg-4 text-lg-end">
+        <div class="d-flex flex-wrap justify-content-lg-end gap-2">
+          <a href="{% url 'manage_farmer' %}" class="btn btn-warning text-dark fw-bold rounded-pill px-3 shadow-sm">
+            <i class="ri-user-add-line me-1"></i> Add Farmer
+          </a>
+          <a href="{% url 'superadmin_reports' %}" class="btn btn-outline-light rounded-pill px-3">
+            <i class="ri-file-chart-line me-1"></i> Reports Hub
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Top 4 KPI Executive Metrics ── -->
+  <div class="row g-3 mb-4">
+    <!-- Total Farmers -->
+    <div class="col-sm-6 col-xl-3">
+      <div class="card kpi-card h-100 shadow-sm">
+        <div class="card-body p-3 p-md-4">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="text-muted fw-semibold" style="font-size: 13px;">Registered Farmers</span>
+            <div class="kpi-icon-box bg-primary-subtle text-primary">
+              <i class="ri-group-line"></i>
+            </div>
+          </div>
+          <div class="d-flex align-items-baseline gap-2 mb-2">
+            <h3 class="fw-bold mb-0 text-dark">{{ total_farmers }}</h3>
+            <span class="badge bg-success-subtle text-success rounded-pill fw-semibold" style="font-size: 11px;">
+              <i class="ri-check-line me-0.5"></i>{{ active_farmers }} Active
+            </span>
+          </div>
+          <div class="d-flex align-items-center justify-content-between pt-2 border-top">
+            <small class="text-muted"><i class="ri-map-pin-line me-1"></i>{{ active_states }} States Covered</small>
+            <a href="{% url 'manage_farmer' %}" class="text-primary fw-semibold text-decoration-none" style="font-size: 12px;">View &rarr;</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Farm Landholdings -->
+    <div class="col-sm-6 col-xl-3">
+      <div class="card kpi-card h-100 shadow-sm">
+        <div class="card-body p-3 p-md-4">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="text-muted fw-semibold" style="font-size: 13px;">Cultivated Farmlands</span>
+            <div class="kpi-icon-box bg-success-subtle text-success">
+              <i class="ri-landscape-line"></i>
+            </div>
+          </div>
+          <div class="d-flex align-items-baseline gap-2 mb-2">
+            <h3 class="fw-bold mb-0 text-dark">{{ total_acreage }} <span class="fs-6 fw-normal text-muted">Acres</span></h3>
+          </div>
+          <div class="d-flex align-items-center justify-content-between pt-2 border-top">
+            <small class="text-muted"><i class="ri-plant-line me-1"></i>{{ total_farms }} Farm Parcels</small>
+            <a href="{% url 'land_report' %}" class="text-success fw-semibold text-decoration-none" style="font-size: 12px;">Land Report &rarr;</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Subscriptions & MRR -->
+    <div class="col-sm-6 col-xl-3">
+      <div class="card kpi-card h-100 shadow-sm">
+        <div class="card-body p-3 p-md-4">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="text-muted fw-semibold" style="font-size: 13px;">Active Subscriptions</span>
+            <div class="kpi-icon-box" style="background-color: #fff4ea; color: #F69C55;">
+              <i class="ri-money-dollar-circle-line"></i>
+            </div>
+          </div>
+          <div class="d-flex align-items-baseline gap-2 mb-2">
+            <h3 class="fw-bold mb-0 text-dark">{{ total_subscriptions }} <span class="fs-6 fw-normal text-muted">Plans</span></h3>
+            <span class="badge bg-warning-subtle text-warning rounded-pill fw-semibold" style="font-size: 11px;">
+              ₹{{ total_mrr|stringformat:".0f" }} MRR
+            </span>
+          </div>
+          <div class="d-flex align-items-center justify-content-between pt-2 border-top">
+            <small class="text-muted"><i class="ri-box-3-line me-1"></i>{{ total_packages }} Package Types</small>
+            <a href="{% url 'manage_package' %}" class="fw-semibold text-decoration-none" style="color: #F69C55; font-size: 12px;">Plans &rarr;</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Commercial Network & Workforce -->
+    <div class="col-sm-6 col-xl-3">
+      <div class="card kpi-card h-100 shadow-sm">
+        <div class="card-body p-3 p-md-4">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="text-muted fw-semibold" style="font-size: 13px;">Enterprise Network</span>
+            <div class="kpi-icon-box bg-info-subtle text-info">
+              <i class="ri-community-line"></i>
+            </div>
+          </div>
+          <div class="d-flex align-items-baseline gap-2 mb-2">
+            <h3 class="fw-bold mb-0 text-dark">{{ total_staff|add:total_customers|add:total_vendors }}</h3>
+            <span class="badge bg-info-subtle text-info rounded-pill fw-semibold" style="font-size: 11px;">
+              {{ total_staff }} Staff
+            </span>
+          </div>
+          <div class="d-flex align-items-center justify-content-between pt-2 border-top">
+            <small class="text-muted"><i class="ri-store-2-line me-1"></i>{{ total_vendors }} Vendors &bull; {{ total_customers }} Clients</small>
+            <a href="{% url 'superadmin_reports' %}" class="text-info fw-semibold text-decoration-none" style="font-size: 12px;">Reports &rarr;</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Visual Analytics Row (ApexCharts) ── -->
+  <div class="row g-3 mb-4">
+    <!-- Growth Trends (Area Chart) -->
+    <div class="col-lg-8">
+      <div class="card chart-card shadow-sm h-100">
+        <div class="card-header bg-transparent border-bottom py-3 d-flex align-items-center justify-content-between">
+          <div>
+            <h5 class="card-title mb-0 fw-bold text-dark">Ecosystem Growth & Trajectory</h5>
+            <small class="text-muted">Monthly trend of farmer enrollments and active subscription packages</small>
+          </div>
+          <span class="badge bg-light text-muted border">Annual 2026</span>
+        </div>
+        <div class="card-body p-3">
+          <div id="growthChart"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Package Distribution (Donut Chart) -->
+    <div class="col-lg-4">
+      <div class="card chart-card shadow-sm h-100">
+        <div class="card-header bg-transparent border-bottom py-3 d-flex align-items-center justify-content-between">
+          <div>
+            <h5 class="card-title mb-0 fw-bold text-dark">Plan Subscriptions</h5>
+            <small class="text-muted">Breakdown by package tier</small>
+          </div>
+          <a href="{% url 'manage_package' %}" class="btn btn-sm btn-light border px-2 py-1" style="font-size: 11px;">Manage</a>
+        </div>
+        <div class="card-body p-3 d-flex flex-column justify-content-center">
+          <div id="packageDonutChart"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Quick Command Navigation Hub ── -->
+  <div class="mb-4">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h5 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+        <i class="ri-dashboard-2-line text-warning"></i> Platform Management Modules
+      </h5>
+      <span class="text-muted" style="font-size: 12px;">Quick Access Center</span>
+    </div>
+    <div class="row g-3">
+      <div class="col-6 col-md-4 col-xl-2">
+        <a href="{% url 'manage_farmer' %}" class="quick-tile shadow-sm">
+          <div class="kpi-icon-box bg-primary-subtle text-primary" style="width: 40px; height: 40px; font-size: 18px;">
+            <i class="ri-group-line"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="fw-bold text-dark text-truncate" style="font-size: 13px;">Farmers</div>
+            <small class="text-muted">{{ total_farmers }} Registered</small>
+          </div>
+        </a>
+      </div>
+
+      <div class="col-6 col-md-4 col-xl-2">
+        <a href="{% url 'manage_package' %}" class="quick-tile shadow-sm">
+          <div class="kpi-icon-box" style="width: 40px; height: 40px; font-size: 18px; background: #fff4ea; color: #F69C55;">
+            <i class="ri-box-3-line"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="fw-bold text-dark text-truncate" style="font-size: 13px;">Packages</div>
+            <small class="text-muted">{{ total_packages }} Active Tiers</small>
+          </div>
+        </a>
+      </div>
+
+      <div class="col-6 col-md-4 col-xl-2">
+        <a href="{% url 'manage_market' %}" class="quick-tile shadow-sm">
+          <div class="kpi-icon-box bg-success-subtle text-success" style="width: 40px; height: 40px; font-size: 18px;">
+            <i class="ri-building-2-line"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="fw-bold text-dark text-truncate" style="font-size: 13px;">Market & Mandi</div>
+            <small class="text-muted">Live Rates</small>
+          </div>
+        </a>
+      </div>
+
+      <div class="col-6 col-md-4 col-xl-2">
+        <a href="{% url 'superadmin_reports' %}" class="quick-tile shadow-sm">
+          <div class="kpi-icon-box bg-info-subtle text-info" style="width: 40px; height: 40px; font-size: 18px;">
+            <i class="ri-file-chart-line"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="fw-bold text-dark text-truncate" style="font-size: 13px;">Reports Hub</div>
+            <small class="text-muted">7 Analytics</small>
+          </div>
+        </a>
+      </div>
+
+      <div class="col-6 col-md-4 col-xl-2">
+        <a href="{% url 'superadmin-documents' %}" class="quick-tile shadow-sm">
+          <div class="kpi-icon-box bg-secondary-subtle text-secondary" style="width: 40px; height: 40px; font-size: 18px;">
+            <i class="ri-folder-shield-2-line"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="fw-bold text-dark text-truncate" style="font-size: 13px;">Documents</div>
+            <small class="text-muted">Compliance</small>
+          </div>
+        </a>
+      </div>
+
+      <div class="col-6 col-md-4 col-xl-2">
+        <a href="{% url 'general_settings' %}" class="quick-tile shadow-sm">
+          <div class="kpi-icon-box bg-dark-subtle text-dark" style="width: 40px; height: 40px; font-size: 18px;">
+            <i class="ri-settings-line"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="fw-bold text-dark text-truncate" style="font-size: 13px;">Settings</div>
+            <small class="text-muted">Master Config</small>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Live Tables Row ── -->
+  <div class="row g-3">
+    <!-- Recent Farmers Onboarded -->
+    <div class="col-lg-7">
+      <div class="card chart-card shadow-sm h-100">
+        <div class="card-header bg-transparent border-bottom py-3 d-flex align-items-center justify-content-between">
+          <div>
+            <h5 class="card-title mb-0 fw-bold text-dark">Recent Farmers Enrolled</h5>
+            <small class="text-muted">Latest farmers onboarded to the platform</small>
+          </div>
+          <a href="{% url 'manage_farmer' %}" class="btn btn-sm btn-light border px-2 py-1" style="font-size: 12px;">
+            View All ({{ total_farmers }})
+          </a>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light text-muted" style="font-size: 11.5px; text-transform: uppercase;">
+              <tr>
+                <th>Farmer Profile</th>
+                <th>Contact</th>
+                <th>Location</th>
+                <th>Status</th>
+                <th class="text-end">Joined</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in recent_farmers %}
+              <tr>
+                <td>
+                  <div class="d-flex align-items-center gap-2">
+                    <div class="avatar-initial-circle bg-primary-subtle text-primary">
+                      {{ p.user.first_name|default:p.user.username|slice:":1"|upper }}
+                    </div>
+                    <div>
+                      <div class="fw-bold text-dark" style="font-size: 13px;">
+                        {{ p.user.first_name|default:p.user.username }}
+                      </div>
+                      <small class="text-muted">{{ p.user.email|default:"No email registered" }}</small>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class="text-dark fw-medium" style="font-size: 12.5px;">{{ p.mobile_number|default:"-" }}</span>
+                </td>
+                <td>
+                  <span class="text-muted" style="font-size: 12px;">
+                    <i class="ri-map-pin-line text-secondary me-0.5"></i>{% if p.district %}{{ p.district.name }}{% elif p.state %}{{ p.state.name }}{% else %}India{% endif %}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge bg-success-subtle text-success rounded-pill fw-semibold" style="font-size: 11px;">Active</span>
+                </td>
+                <td class="text-end text-muted" style="font-size: 12px;">
+                  {% if p.user %}{{ p.user.date_joined|date:"d M, Y" }}{% else %}-{% endif %}
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="text-center py-4 text-muted">
+                  <i class="ri-user-unfollow-line d-block mb-1 fs-3 text-secondary"></i>
+                  No farmers registered yet.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Subscriptions & Revenue -->
+    <div class="col-lg-5">
+      <div class="card chart-card shadow-sm h-100">
+        <div class="card-header bg-transparent border-bottom py-3 d-flex align-items-center justify-content-between">
+          <div>
+            <h5 class="card-title mb-0 fw-bold text-dark">Active Subscriptions</h5>
+            <small class="text-muted">Live farmer plan memberships</small>
+          </div>
+          <a href="{% url 'manage_package' %}" class="btn btn-sm btn-light border px-2 py-1" style="font-size: 12px;">
+            Packages
+          </a>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light text-muted" style="font-size: 11.5px; text-transform: uppercase;">
+              <tr>
+                <th>Farmer</th>
+                <th>Plan Tier</th>
+                <th class="text-end">Amount</th>
+                <th class="text-end">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in recent_subscriptions %}
+              <tr>
+                <td>
+                  <div class="fw-semibold text-dark" style="font-size: 13px;">
+                    {% if s.farmer and s.farmer.user %}{{ s.farmer.user.first_name|default:s.farmer.user.username }}{% else %}Farmer #{{ s.id }}{% endif %}
+                  </div>
+                  <small class="text-muted">Renews: {{ s.end_date|date:"d M Y" }}</small>
+                </td>
+                <td>
+                  <span class="badge bg-label-warning text-dark fw-semibold" style="font-size: 11px;">
+                    {% if s.package %}{{ s.package.name }}{% else %}Standard{% endif %}
+                  </span>
+                </td>
+                <td class="text-end fw-bold text-success" style="font-size: 13px;">
+                  ₹{{ s.monthly_amount|stringformat:".2f" }}
+                </td>
+                <td class="text-end">
+                  <span class="badge bg-success-subtle text-success rounded-pill" style="font-size: 10.5px;">
+                    {{ s.subscription_status|title }}
+                  </span>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="4" class="text-center py-4 text-muted">
+                  <i class="ri-bill-line d-block mb-1 fs-3 text-secondary"></i>
+                  No active subscriptions found.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

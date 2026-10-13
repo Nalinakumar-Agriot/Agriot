@@ -1,0 +1,1010 @@
+{% extends "farmer/auth_base.html" %}
+{% load static %}
+{% load i18n %}
+{% block page_css %}
+<style>
+  .header{
+    background-color: #63771F;
+  }
+
+  .sub-header{
+    background-color: #FDFFFE;
+  }
+  .element-item {
+    color: #171717;
+    padding-top: 16px;
+    padding-bottom: 16px;
+    font-weight: 600;
+    font-size: 16px;
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+
+  .element-item:hover, .element-item.active {
+    color: #63771F !important;
+  }
+
+  .button-get-started{
+    background-color: #64781F;
+    font-weight: 600;
+    fill: #fdfffe;
+    color: #fdfffe !important;
+    border-radius: 3px;
+    display: inline-block;
+    font-size: 15px;
+    line-height: 1;
+    padding: 12px 24px;
+    text-align: center;
+    transition: all .3s;
+    text-decoration: none;
+  }
+
+  .button-get-started:hover {
+    background-color: #4e5e18;
+    color: #fdfffe !important;
+  }
+
+  .dropdown-menu-item:hover {
+    background-color: #63771F !important;
+    color: #ffffff !important;
+  }
+
+  /* Footer styling */
+  .footer-section {
+    background-color: #171717;
+    color: #ffffff;
+    font-size: 15px;
+  }
+  .footer-section a {
+    color: #ffffff;
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+  .footer-section a:hover {
+    color: #63771F !important;
+  }
+  .footer-title {
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 20px;
+    margin-bottom: 25px;
+  }
+  .footer-contact-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 15px;
+    line-height: 1.5;
+  }
+  .footer-contact-item i {
+    color: #ffffff;
+    font-size: 18px;
+    margin-top: 2px;
+  }
+  .footer-social-link {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: #FBFDFC !important;
+    color: #63771F !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s, color 0.3s;
+  }
+  .footer-social-link i {
+    color: #63771F !important;
+    transition: color 0.3s;
+  }
+  .footer-social-link:hover {
+    background-color: #63771F !important;
+  }
+  .footer-social-link:hover i {
+    color: #ffffff !important;
+  }
+
+  .pkg-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    padding: 35px 28px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    transition: box-shadow 0.3s, transform 0.3s;
+    position: relative;
+  }
+
+  .pkg-card:hover {
+    box-shadow: 0 15px 45px rgba(0, 0, 0, 0.08);
+    transform: translateY(-5px);
+  }
+
+  .pkg-card.featured {
+    border: 2px solid #63771F;
+    box-shadow: 0 10px 30px rgba(99, 119, 31, 0.12);
+  }
+
+  .pkg-card.featured:hover {
+    box-shadow: 0 20px 40px rgba(99, 119, 31, 0.2);
+  }
+
+  .pkg-card-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #111827;
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+  }
+  .pkg-card-desc {
+    font-size: 13px;
+    color: #6b7280;
+    line-height: 1.6;
+    margin-bottom: 20px;
+    min-height: 65px;
+  }
+  .barder-bottom {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 10px;
+  }
+  .pkg-price {
+    margin-bottom: 25px;
+  }
+  .pkg-section-scroll {
+    flex-grow: 1;
+    margin-bottom: 25px;
+  }
+
+  .pkg-section-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #4b5563;
+    margin: 12px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .pkg-section-label i {
+    color: #63771F;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .pkg-btn-solid {
+    background: #63771F !important;
+    color: #ffffff !important;
+    border: 2px solid #63771F !important;
+    padding: 10px 20px !important;
+    border-radius: 8px !important;
+    transition: background 0.3s, border-color 0.3s, color 0.3s !important;
+  }
+  .pkg-btn-solid:hover {
+    background: #4e5e18 !important;
+    border-color: #4e5e18 !important;
+  }
+
+  .pkg-btn-outline {
+    background: transparent !important;
+    color: #63771F !important;
+    border: 2px solid #63771F !important;
+    padding: 10px 20px !important;
+    border-radius: 8px !important;
+    transition: background 0.3s, border-color 0.3s, color 0.3s !important;
+  }
+  .pkg-btn-outline:hover {
+    background: #63771F !important;
+    color: #ffffff !important;
+  }
+  .pkg-device-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+  .pkg-device-tag {
+    font-size: 11px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    color: #374151;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .pkg-feature {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    color: #374151;
+    margin-bottom: 6px;
+  }
+  .pkg-feature.highlight {
+    font-weight: 700;
+    color: #648c34;
+    font-size: 13px;
+  }
+
+  .pkg-feature i.check { color: #648c34; font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+  .pkg-module-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 12px;
+  }
+  .pkg-module-row:last-child { border-bottom: none; }
+  .pkg-module-name {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #374151;
+    font-weight: 500;
+  }
+  .pkg-module-name.locked { color: #9ca3af; }
+  .pkg-module-status {
+    font-size: 11px;
+    font-weight: 600;
+    color: #648c34;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .pkg-module-status.locked { color: #9ca3af; }
+
+  .pkg-footer {
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid #f3f4f6;
+    font-size: 11px;
+    color: #9ca3af;
+    font-style: italic;
+    text-align: center;
+  }
+  .popular-badge {
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #FBA600;
+    color: white;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 5px 20px;
+    border-radius: 20px;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(251, 166, 0, 0.3);
+  }
+  .pkg-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .pkg-button-section {
+    margin-top: auto;
+    padding-top: 0px;
+    padding-bottom: 21px;
+    text-align: center;
+  }
+  .modal-content {
+    border-radius: 12px;
+    padding: 10px;
+  }
+
+  .modal-dialog {
+    max-width: 420px;
+  }
+
+  .modal-header {
+    border-bottom: none;
+  }
+
+  .modal-footer {
+    border-top: none;
+  }
+
+  .otp-boxes {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  .otp-boxes input {
+    width: 45px;
+    height: 50px;
+    text-align: center;
+    font-size: 20px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+  }
+
+  .otp-boxes input:focus {
+    border-color: #008A5C;
+    outline: none;
+    box-shadow: 0 0 0 2px #008a5c38;
+  }
+
+  .resend-text {
+    font-size: 14px;
+    text-align: center;
+    margin-top: 10px;
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}
+{% block content %}
+<div class="header px-10 py-3">
+  <div class="d-flex align-items-center justify-content-between gap-5 px-10 flex-wrap">
+      <div class="d-flex align-items-center justify-content-start gap-1 flex-wrap">
+        <a href="mailto:sales@agriotwifarm.com" class="text-white me-4" style="font-size: 16px; text-decoration: none;"><i class="ri-mail-line me-1"></i>sales@agriotwifarm.com</a>
+        <a href="tel:+917558126827" class="text-white" style="font-size: 16px; text-decoration: none;"><i class="ri-phone-line me-1"></i>+91 7558126827</a>
+      </div>
+      <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
+        <a href="https://www.instagram.com/agriot_wifarm/" target="_blank" class="footer-social-link" style="width: 32px; height: 32px; font-size: 14px;"><i class="ri-instagram-line"></i></a>
+        <a href="https://www.facebook.com/agriotWifarm" target="_blank" class="footer-social-link" style="width: 32px; height: 32px; font-size: 14px;"><i class="ri-facebook-fill"></i></a>
+      </div>
+  </div>
+</div>
+<div class="sub-header px-10 py-4 border-bottom">
+  <div class="d-flex align-items-center justify-content-between gap-5 px-10 flex-wrap">
+    <a href="https://agriotwifarm.com/">
+      <img src="{% static 'img/auth/agri_logo_3.png' %}" width="260" id="logo-full" style="display:block; border: none;" />
+    </a>
+    <div class="d-flex align-items-center justify-content-center gap-5 flex-wrap">
+      <a href="https://agriotwifarm.com/" class="element-item active">Home</a>
+      <a href="https://agriotwifarm.com/about-us/" class="element-item">About Us</a>
+      <!-- Bootstrap Dropdown for Products -->
+      <div class="dropdown">
+        <a href="#" class="element-item dropdown-toggle" id="productsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="text-decoration: none;">
+          Products <i class="ri-arrow-down-s-line align-middle"></i>
+        </a>
+        <ul class="dropdown-menu shadow border-0" aria-labelledby="productsDropdown" style="border-radius: 6px; padding: 8px 0;">
+          <li><a class="dropdown-item py-2 px-4 fw-semibold dropdown-menu-item" href="https://agriotwifarm.com/agriot-software-products/">Software Products</a></li>
+        </ul>
+      </div>
+      <a href="https://agriotwifarm.com/blogs/" class="element-item">Blogs</a>
+      <a href="https://agriotwifarm.com/contact-us/" class="element-item">Contact Us</a>
+    </div>
+    <a href="https://agriotwifarm.com/contact-us/" class="button-get-started">
+      <span class="text-white">Get Started</span>
+    </a>
+  </div>
+</div>
+<div class="package-section position-relative overflow-auto" style="minmax-height:300px; background:#eef2e6;">
+  <div class="position-absolute top-0 end-0 h-100 w-50 opacity-25"
+       style="background: radial-gradient(circle at 100% 50%, #648c34 0%, transparent 60%);">
+  </div>
+  <i class="ri-pulse-line position-absolute"
+     style="font-size:120px; color:#648c34; opacity:0.05; bottom:40px; left:40px;"></i>
+  <i class="ri-sun-cloudy-line position-absolute"
+     style="font-size:150px; color:#648c34; opacity:0.05; top:40px; right:80px;"></i>
+  <div class="container py-5 position-relative">
+    <div style="max-width:800px; margin: 0 auto;" class="text-center">
+      <h1 class="fw-bold mb-4" style="font-size:3rem; line-height:1.2;">
+        Empowering modern farmers with
+        <span style="color:#648c34;">Intelligent Data</span>
+      </h1>
+      <p class="mb-5 text-muted" style="font-size:1.2rem;">
+        Transform your agricultural operations with real-time IoT sensors, precise weather forecasting, and automated irrigation management.
+      </p>
+    </div>
+    <div class="py-5">
+      <div class="row g-4">
+        {% for package in packages %}
+          <div class="col-md-4">
+            <div class="pkg-card{% if package.id == 2 or package.name == 'Bumper Yield Professional' %} featured{% endif %}">
+              {% if package.id == 2 or package.name == 'Bumper Yield Professional' %}
+                <div class="popular-badge">POPULAR</div>
+              {% endif %}
+              <div class="border-bottom mb-4">
+                <div class="pkg-card-title">{{ package.name }}</div>
+                <div class="pkg-card-desc">
+                  {{ package.description }}
+                </div>
+              </div>
+              <div class="pkg-price d-flex align-items-baseline gap-1">
+                <span class="fs-1 fw-bold text-dark">₹{{ package.price|floatformat:0 }}</span>
+                <span class="text-muted" style="font-size: 14px; font-weight: 500;">/month</span>
+              </div>
+              <div class="pkg-section-scroll">
+                {% if package.my_land %}
+                  <div class="pkg-section-label d-flex align-items-start gap-2">
+                    <i class="ri-check-line"></i>
+                    <span>{{ package.my_land }} Land</span>
+                  </div>
+                {% endif %}
+                {% if package.my_crop %}
+                  <div class="pkg-section-label d-flex align-items-start gap-2">
+                    <i class="ri-check-line"></i>
+                    <span>{{ package.my_crop }} Crops</span>
+                  </div>
+                {% endif %}
+                {% if package.my_users %}
+                  <div class="pkg-section-label d-flex align-items-start gap-2">
+                    <i class="ri-check-line"></i>
+                    <span>{{ package.my_users }} Users</span>
+                  </div>
+                {% endif %}
+                {% if package.max_acre_support %}
+                  <div class="pkg-section-label d-flex align-items-start gap-2">
+                    <i class="ri-check-line"></i>
+                    <span>Coverage: Up to {{ package.max_acre_support }} Acres</span>
+                  </div>
+                {% endif %}
+
+                {% for feature in package.features %}
+                  <div class="pkg-section-label d-flex align-items-start gap-2">
+                    <i class="ri-check-line"></i>
+                    <span>{{ feature }}</span>
+                  </div>
+                {% endfor %}
+              </div>
+              <div class="pkg-button-section" style="transform: translateY(11px);">
+                <a href="#farmer_registration"
+                  class="btn btn-sm w-100 fw-bold {% if package.id == 2 or package.name == 'Bumper Yield Professional' %}pkg-btn-solid text-white{% else %}pkg-btn-outline{% endif %} select-package-btn"
+                  data-bs-toggle="modal"
+                  data-bs-target="#add_registration_modal"
+                  data-package-id="{{ package.id }}"
+                  data-package-name="{{ package.name }}"
+                  data-package-price="{{ package.price|floatformat:0 }}">
+                  Get Started
+                </a>
+              </div>
+              <div class="pkg-footer">
+                Pause or cancel anytime. 7-day money-back guarantee.
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div></div>
+  </div>
+
+<!-- Footer Section -->
+<footer class="footer-section py-5">
+  <div class="container py-4">
+    <div class="row g-5">
+      <!-- Column 1: Logo & Description -->
+      <div class="col-lg-3 col-md-6 d-flex flex-column gap-3">
+        <div>
+          <img src="{% static 'img/auth/agri_logo_5.png' %}" width="220" alt="Agriot WiFarm Logo" />
+        </div>
+        <p class="text-white opacity-75 mt-2" style="font-size: 14px; line-height: 1.6;">
+          Empowering farmers with digital tools for smart planning, better harvests & eco-friendly agriculture every season.
+        </p>
+        <div class="d-flex align-items-center gap-2 mt-2">
+          <a href="https://www.facebook.com/agriotWifarm" target="_blank" class="footer-social-link"><i class="ri-facebook-fill"></i></a>
+          <a href="https://www.instagram.com/agriot_wifarm/" target="_blank" class="footer-social-link"><i class="ri-instagram-line"></i></a>
+        </div>
+      </div>
+
+      <!-- Column 2: Quick Links -->
+      <div class="col-lg-3 col-md-6">
+        <h4 class="footer-title">Quick Links</h4>
+        <ul class="list-unstyled d-flex flex-column gap-2" style="font-size: 14px; font-weight: 500;">
+          <li><a href="https://agriotwifarm.com/">Home</a></li>
+          <li><a href="https://agriotwifarm.com/about-us/">About Us</a></li>
+          <li><a href="https://agriotwifarm.com/agriot-software-products/">Agriot Software Products</a></li>
+          <li><a href="https://agriotwifarm.com/blogs/">Blogs</a></li>
+          <li><a href="https://agriotwifarm.com/careers/">Careers</a></li>
+          <li><a href="https://agriotwifarm.com/contact-us/">Contact Us</a></li>
+        </ul>
+      </div>
+
+      <!-- Column 3: Contact Us -->
+      <div class="col-lg-3 col-md-6">
+        <h4 class="footer-title">Contact Us</h4>
+        <div class="d-flex flex-column" style="font-size: 14px;">
+          <div class="footer-contact-item">
+            <i class="ri-map-pin-line"></i>
+            <span>12/243, Yenthal Pannai,<br>Nallampillai, Athoor Taluk,<br>Sitharevu, Dindigul - 624204.</span>
+          </div>
+          <div class="footer-contact-item">
+            <i class="ri-phone-line"></i>
+            <a href="tel:+917558126827">+91 7558126827</a>
+          </div>
+          <div class="footer-contact-item">
+            <i class="ri-phone-line"></i>
+            <a href="tel:+91447392991146">+91 447392991146</a>
+          </div>
+          <div class="footer-contact-item">
+            <i class="ri-mail-line"></i>
+            <a href="mailto:sales@agriotwifarm.com">sales@agriotwifarm.com</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Column 4: Google Map -->
+      <div class="col-lg-3 col-md-6">
+        <div style="border-radius: 8px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.1);">
+          <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3925.1054367303037!2d77.854088!3d10.3334659!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3b00ab435fa8790b%3A0xe1db040776b6d2df!2sAthoor%20Taluk%20Office%2C%20Sitharevu!5e0!3m2!1sen!2sin!4v1718290000000!5m2!1sen!2sin" width="100%" height="150" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        </div>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <hr style="border-color: rgba(255, 255, 255, 0.15); margin-top: 40px; margin-bottom: 25px;">
+
+    <!-- Bottom copyright area -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3" style="font-size: 13px;">
+      <p class="mb-0 opacity-75">
+        Copyright &copy; 2026 AgriOT. All Rights Reserved. Powered by <a href="https://eibsglobal.com/" target="_blank" style="color: #63771F; font-weight: bold;">EiBS</a>
+      </p>
+      <div class="d-flex gap-3 opacity-75 text-white">
+        <a href="https://agriotwifarm.com/terms-and-conditions/">Term and Conditions</a>
+        <span>|</span>
+        <a href="https://agriotwifarm.com/privacy-policy/">Privacy Policy</a>
+        <span>|</span>
+        <a href="https://agriotwifarm.com/return-and-cancellation-policy/">Return and Cancellation Policy</a>
+      </div>
+    </div>
+  </div>
+</footer><!-- registration Modal -->
+<div class="modal fade" id="add_registration_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <div>
+        <button type="button" class="btn" data-bs-dismiss="modal">
+          &larr; Back to plan
+        </button>
+      </div>
+
+      <!-- Header -->
+      <div class="modal-header flex-column align-items-start border-bottom">
+        <h4 class="modal-title fw-semibold">Farmer Registration</h4>
+        <label class="text-muted mb-3">You selected:
+          <span id="selected-package-label" class="text-bold" style="font-size: 1rem; color: #63771F;">Loading plan...</span>
+        </label>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label">Full Name</label>
+          <input type="text" id="reg-fullname" class="form-control" placeholder="e.g. Ramesh Kumar" required>
+        </div>
+        <div class="mb-4">
+          <label class="form-label">Mobile Number</label>
+          <div class="input-group">
+            <span class="input-group-text">+91</span>
+            <input type="tel" id="reg-mobile" class="form-control" placeholder="10-digit number" required>
+          </div>
+        </div>
+
+        <button type="button" id="send-otp-btn" class="btn w-100 py-2 fw-semibold" style="background-color: #63771F; color: #fff;">
+          Send OTP to Verify
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- verify Modal -->
+<div class="modal fade" id="add_verify_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <div class="modal-header d-flex justify-content-center align-items-center">
+        <div class="rounded-circle d-flex justify-content-center align-items-center" style="width: 50px; height: 50px; background-color: #f0f0f0;">
+          <i class="ri-smartphone-line fs-3" style="color: #63771F;"></i>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <h4 class="text-center fw-bold">Verify Mobile</h4>
+        <p id="verify-mobile-label" class="text-center text-muted small mb-4">
+          We've sent a verification code.
+        </p>
+        <form method="POST" id="otp-form">
+          <div class="otp-boxes mb-4">
+            <input type="text" maxlength="1" class="otp-input" required>
+            <input type="text" maxlength="1" class="otp-input" required>
+            <input type="text" maxlength="1" class="otp-input" required>
+            <input type="text" maxlength="1" class="otp-input" required>
+            <input type="text" maxlength="1" class="otp-input" required>
+            <input type="text" maxlength="1" class="otp-input" required>
+          </div>
+          <input type="hidden" name="otp" id="otp-value">
+        </form>
+        <button type="button" id="confirm-otp-btn" class="btn w-100 py-2 fw-semibold text-white" style="background:#63771F; border:none;">
+          Confirm & Proceed to Payment
+        </button>
+        <div class="resend-text mt-3 text-center">
+          <span id="timer" class="text-muted small">Resend OTP in 30s</span>
+          <a href="#" id="resend-link" class="d-none small fw-semibold" style="color: #63771F;">Resend OTP</a>
+        </div>
+        <div id="landing-otp-box" class="mt-3 text-center d-none">
+          <div class="alert alert-warning py-2 px-3 m-0 d-inline-block fw-bold" style="background-color: #fff3cd; color: #856404; border: 1px dashed #ffc107; border-radius: 8px; font-size: 15px;">
+            OTP: <span id="landing-display-otp" style="letter-spacing: 2px;"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Panel -->
+<div class="modal fade" id="panel_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 900px;">
+    <div class="modal-content">
+      <div class="justify-content-end align-items-end ms-auto me-2 mb-4">
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="row">
+        <div class="col-lg-6 p-6 mb-6">
+          <label class="badge border rounded-pill" style="background: #d3dbb8; color: #63771F;">
+            <i class="ri-checkbox-circle-line me-1" style="color: #63771F;"></i>ACTIVE SUBSCRIPTION
+          </label>
+          <div class="mb-4">
+            <label class="text-bold" style="font-size: 1.2rem; color: black;">You are on the
+              <span id="success-plan-name" class="text-bold" style="color: #63771F;">Loading...</span> plan
+            </label>
+          </div>
+          <div class="mb-6">
+            <label class="text-muted fw-semibold">Your payment was successful and your farm boundaries are ready to be mapped.</label>
+          </div>
+          <div>
+            <div class="d-flex justify-content-between align-items-center border-bottom mb-4" style="font-size: 0.9rem;">
+              <div class="mb-3">
+                <label class="text-muted fw-semibold">Registrant Name:</label>
+              </div>
+              <div class="mb-3">
+                <label id="success-fullname" class="text-black fw-semibold">Loading...</label>
+              </div>
+            </div>
+            <div class="d-flex justify-content-between align-items-center border-bottom mb-4" style="font-size: 0.9rem;">
+              <div class="mb-3">
+                <label class="text-muted fw-semibold">Registered Phone:</label>
+              </div>
+              <div class="mb-3">
+                <label id="success-phone" class="text-black fw-semibold">Loading...</label>
+              </div>
+            </div>
+            <div class="d-flex justify-content-between align-items-center border-bottom mb-4" style="font-size: 0.9rem;">
+              <div class="mb-3">
+                <label class="text-muted fw-semibold">Billing Cycle:</label>
+              </div>
+              <div class="mb-3">
+                <label id="success-price" class="text-black fw-semibold">Loading...</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-6">
+          <div class="row p-3">
+            <div class="col-lg-12 border bg-gray text-white rounded">
+              <div class="modal-header d-flex justify-content-center align-items-center">
+                <div class="rounded-circle d-flex justify-content-center align-items-center" style="width: 50px; height: 50px; background-color: #ffffff;">
+                  <i class="ri-smartphone-line fs-3" style="color: #63771F;"></i>
+                </div>
+              </div>
+              <div>
+                <h4 class="text-center" style="color: #000000; font-size: 1.2rem;">Enhance Your Experience</h4>
+                <p class="text-center text-muted small mb-4" style="color: #8f8f8f;">
+                  Download the Agriot Mobile App to manage your farm sensors, view alerts, and control irrigation on the go.
+                </p>
+              </div>
+              <div class="text-center mb-4" style="font-size: 1rem;">
+                <a href="#" target="_blank">
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" alt="Play Store" style="height: 55px;">
+                </a>
+              </div>
+              <div class="d-flex align-items-center my-4">
+                <div class="flex-grow-1" style="height: 1px; background: #ccc;"></div>
+                <span class="px-3 text-black fw-semibold">OR</span>
+                <div class="flex-grow-1" style="height: 1px; background: #ccc;"></div>
+              </div>
+
+              <div class="text-center mb-4" style="color: #63771F">
+                <a href="/farmer/dashboard/" type="button" class="btn btn-outline-success">
+                  Go to Dashboard
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+  let selectedPackageId = null;
+  let selectedPackageName = '';
+  let selectedPackagePrice = '';
+  let userMobileNumber = '';
+
+  // Initialize Bootstrap Modals
+  const regModalElement = document.getElementById('add_registration_modal');
+  const verifyModalElement = document.getElementById('add_verify_modal');
+  const panelModalElement = document.getElementById('panel_modal');
+
+  const regModal = new bootstrap.Modal(regModalElement);
+  const verifyModal = new bootstrap.Modal(verifyModalElement);
+  const panelModal = new bootstrap.Modal(panelModalElement);
+
+  // Capture selected package when "Get Started" is clicked
+  document.querySelectorAll('.select-package-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      selectedPackageId = this.getAttribute('data-package-id');
+      selectedPackageName = this.getAttribute('data-package-name');
+      selectedPackagePrice = this.getAttribute('data-package-price');
+
+      document.getElementById('selected-package-label').textContent = 
+        `${selectedPackageName} at ₹${selectedPackagePrice}/mo`;
+    });
+  });
+
+  // Handle Send OTP
+  function triggerSendOTP(buttonElement) {
+    const fullname = document.getElementById('reg-fullname').value.trim();
+    const mobile = document.getElementById('reg-mobile').value.trim();
+
+    if (!fullname || !mobile) {
+      alert("Please enter both Full Name and Mobile Number.");
+      return;
+    }
+
+    if (mobile.length < 10) {
+      alert("Please enter a valid 10-digit mobile number.");
+      return;
+    }
+
+    const btn = buttonElement;
+    const originalText = btn.textContent;
+    btn.textContent = "Sending OTP...";
+    btn.disabled = true;
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    const formData = new FormData();
+    formData.append('fullname', fullname);
+    formData.append('mobile_number', mobile);
+    formData.append('package_id', selectedPackageId);
+
+    fetch('/farmer/send_otp/', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken
+      },
+      body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+      btn.textContent = originalText;
+      btn.disabled = false;
+
+      if (data.status === 'success') {
+        userMobileNumber = mobile;
+        let verifyText = `We've sent a 6-digit verification code to <strong>+91 ${mobile}</strong>.`;
+        document.getElementById('verify-mobile-label').innerHTML = verifyText;
+
+        if (data.otp) {
+          const otpBox = document.getElementById('landing-otp-box');
+          const otpDisplay = document.getElementById('landing-display-otp');
+          if (otpBox && otpDisplay) {
+            otpDisplay.textContent = data.otp;
+            otpBox.classList.remove('d-none');
+          }
+        }
+
+        // Switch modals
+        regModal.hide();
+        setTimeout(() => {
+          verifyModal.show();
+          startTimer();
+        }, 400);
+      } else {
+        alert(data.message || "Something went wrong. Please try again.");
+      }
+    })
+    .catch(error => {
+      btn.textContent = originalText;
+      btn.disabled = false;
+      console.error(error);
+      alert("Error sending request. Please check connection.");
+    });
+  }
+
+  document.getElementById('send-otp-btn').addEventListener('click', function() {
+    triggerSendOTP(this);
+  });
+
+  // Handle OTP inputs autofocus shift
+  const inputs = document.querySelectorAll(".otp-input");
+  inputs.forEach((input, index) => {
+    input.addEventListener("input", () => {
+      if (input.value && index < inputs.length - 1) {
+        inputs[index + 1].focus();
+      }
+      updateOTP();
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Backspace" && !input.value && index > 0) {
+        inputs[index - 1].focus();
+      }
+    });
+  });
+
+  function updateOTP() {
+    let otp = "";
+    inputs.forEach(i => otp += i.value);
+    document.getElementById("otp-value").value = otp;
+  }
+
+  // Razorpay SDK is loaded via script tag at the end of body
+
+  // Handle Confirm Verification & Payment
+  document.getElementById('confirm-otp-btn').addEventListener('click', function() {
+    const otp = document.getElementById("otp-value").value;
+
+    if (otp.length < 6) {
+      alert("Please enter the 6-digit verification code.");
+      return;
+    }
+
+    const btn = this;
+    const originalText = btn.textContent;
+    btn.textContent = "Verifying OTP...";
+    btn.disabled = true;
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    const formData = new FormData();
+    formData.append('mobile_number', userMobileNumber);
+    formData.append('otp', otp);
+    formData.append('package_id', selectedPackageId);
+
+    fetch('/farmer/verify_otp_and_payment/', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken
+      },
+      body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+      btn.textContent = originalText;
+      btn.disabled = false;
+
+      if (data.status === 'otp_verified') {
+        // Hide verification modal
+        verifyModal.hide();
+
+        // Bypass Razorpay if amount is 0
+        if (data.amount === 0) {
+           verifyPaymentOnServer({
+             razorpay_payment_id: "pay_free_mock",
+             razorpay_order_id: data.order_id,
+             razorpay_signature: "free_tier_bypass"
+           }, data.package_id, data.mobile_number);
+           return;
+        }
+
+        if (data.order_id.startsWith("order_mock_")) {
+           alert("Payment gateway error: Failed to create order. Please try again later.");
+           return;
+        }
+
+        // Launch Razorpay checkout popup
+        const options = {
+          "key": data.key_id,
+          "amount": data.amount,
+          "currency": "INR",
+          "name": "AgriOT WiFarm",
+          "description": `Subscription for ${data.package_name}`,
+          "order_id": data.order_id,
+          "handler": function (response) {
+            verifyPaymentOnServer(response, data.package_id, data.mobile_number);
+          },
+          "prefill": {
+            "name": data.fullname,
+            "contact": data.mobile_number
+          },
+          "theme": {
+            "color": "#63771F"
+          },
+          "modal": {
+            "ondismiss": function() {
+              alert("Payment cancelled. Please try again to activate subscription.");
+            }
+          }
+        };
+        const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function (response) {
+            alert("Payment failed: " + response.error.description);
+        });
+        rzp.open();
+      } else {
+        alert(data.message || "Invalid OTP code. Please try again.");
+      }
+    })
+    .catch(error => {
+      btn.textContent = originalText;
+      btn.disabled = false;
+      console.error(error);
+      alert("Verification failed. Please try again.");
+    });
+  });
+
+  // Verify payment details with server and show success panel
+  function verifyPaymentOnServer(rzpResponse, packageId, mobileNumber) {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const formData = new FormData();
+    formData.append('razorpay_payment_id', rzpResponse.razorpay_payment_id);
+    formData.append('razorpay_order_id', rzpResponse.razorpay_order_id);
+    formData.append('razorpay_signature', rzpResponse.razorpay_signature);
+    formData.append('package_id', packageId);
+    formData.append('mobile_number', mobileNumber);
+
+    fetch('/farmer/verify_payment/', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken
+      },
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.status === 'success') {
+        // Populate Success Panel
+        document.getElementById('success-plan-name').textContent = data.data.package_name;
+        document.getElementById('success-fullname').textContent = data.data.fullname;
+        document.getElementById('success-phone').textContent = `+91 ${data.data.mobile_number}`;
+        document.getElementById('success-price').textContent = `₹${data.data.package_price} / Monthly`;
+
+        // Switch to success card
+        panelModal.show();
+      } else {
+        alert(data.message || "Payment verification failed.");
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert("Error verifying payment on server. Please check connection.");
+    });
+  }
+
+  /* ---------------- COUNTDOWN TIMER ---------------- */
+  let timerInterval = null;
+  function startTimer() {
+    let timeLeft = 30;
+    const timerEl = document.getElementById("timer");
+    const resendLink = document.getElementById("resend-link");
+
+    timerEl.classList.remove("d-none");
+    resendLink.classList.add("d-none");
+    timerEl.textContent = `Resend OTP in ${timeLeft}s`;
+
+    if (timerInterval) clearInterval(timerInterval);
+
+    timerInterval = setInterval(() => {
+      timeLeft--;
+      timerEl.textContent = `Resend OTP in ${timeLeft}s`;
+
+      if (timeLeft <= 0) {
+        clearInterval(timerInterval);
+        timerEl.classList.add("d-none");
+        resendLink.classList.remove("d-none");
+      }
+    }, 1000);
+  }
+
+  // Hook Resend Link
+  document.getElementById('resend-link').addEventListener('click', function(e) {
+    e.preventDefault();
+    // Clear old input values
+    inputs.forEach(i => i.value = '');
+    document.getElementById("otp-value").value = '';
+    // Send OTP
+    triggerSendOTP(this);
+  });
+</script>
+
+{% endblock %}

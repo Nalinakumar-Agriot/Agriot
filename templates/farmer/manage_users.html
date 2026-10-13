@@ -1,0 +1,1193 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Users Management{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
+<style>
+.bg-gray-100{
+    background-color: #F8FAFC;
+}
+
+  /* Custom permissions card styling */
+  .permissions-card {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 14px !important;
+    padding: 20px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+  }
+
+  /* Custom checkbox wrapper */
+  .custom-checkbox-orange {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 14px;
+    color: #475569;
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  /* Hide original checkbox */
+  .custom-checkbox-orange input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  /* Checkbox design */
+  .custom-checkbox-orange .checkbox-indicator {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #475569; /* Slate 600 - dark outline */
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease-in-out;
+    background: #ffffff;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  /* Hover state */
+  .custom-checkbox-orange:hover .checkbox-indicator {
+    border-color: #f6943f;
+  }
+
+  /* Checked state */
+  .custom-checkbox-orange input[type="checkbox"]:checked + .checkbox-indicator {
+    background-color: #f6943f;
+    border-color: #f6943f;
+  }
+
+  /* Checkmark */
+  .custom-checkbox-orange .checkbox-indicator::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) scale(0);
+    transition: transform 0.15s ease-in-out;
+  }
+
+  .custom-checkbox-orange input[type="checkbox"]:checked + .checkbox-indicator::after {
+    transform: rotate(45deg) scale(1);
+  }
+
+  /* Disabled + Checked state (when All Modules toggle is active) */
+  .custom-checkbox-orange input[type="checkbox"]:disabled + .checkbox-indicator {
+    background-color: #fbc79a !important; /* Lighter/faded orange for disabled */
+    border-color: #fbc79a !important;
+    cursor: not-allowed;
+  }
+
+  /* Text color styling for Manager Role & Key Icon */
+  .text-orange-main {
+    color: #f6943f !important;
+  }
+
+  /* Custom Switch for All Modules */
+  .custom-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .custom-switch input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .custom-switch .switch-slider {
+    position: relative;
+    display: inline-block;
+    width: 38px;
+    height: 20px;
+    background-color: #cbd5e1;
+    border-radius: 20px;
+    transition: all 0.3s ease;
+  }
+
+  .custom-switch .switch-slider::before {
+    content: "";
+    position: absolute;
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+
+  .custom-switch input[type="checkbox"]:checked + .switch-slider {
+    background-color: #16a34a; /* green track when checked */
+  }
+
+  .custom-switch input[type="checkbox"]:checked + .switch-slider::before {
+    transform: translateX(18px);
+  }
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+
+<script>
+$(document).ready(function () {
+    var table;
+    $('.datatable').each(function () {
+        // 🔥 prevent double init
+        if ($.fn.dataTable.isDataTable(this)) {
+            $(this).DataTable().destroy();
+        }
+        table = $(this).DataTable({
+            pageLength: $(this).data('page-length') || 10,
+            lengthMenu: [5, 10, 25, 50],
+            responsive: true,
+            dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'>>" +
+                 "<'row'<'col-sm-12'tr>>" +
+                 "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>" // Hides default search box
+        });
+    });
+
+    // Custom Search
+    $('#customSearchBox').on('keyup', function () {
+        if (table) table.search(this.value).draw();
+    });
+
+    // Status Filter (Column 4)
+    $('.status-filter').on('click', function (e) {
+        e.preventDefault();
+        var val = $(this).data('value');
+        $('#statusDropdownBtn').text($(this).text());
+        if (table) table.column(4).search(val ? '^' + val + '$' : '', true, false).draw();
+    });
+
+    // Role Filter (Column 2)
+    $('.role-filter-new').on('click', function (e) {
+        e.preventDefault();
+        var val = $(this).data('value');
+        $('#roleDropdownBtn').text($(this).text());
+        if (table) table.column(2).search(val ? val : '', true, false).draw();
+    });
+
+    // Sort By
+    $('.sort-filter').on('click', function (e) {
+        e.preventDefault();
+        var sortCol = $(this).data('sort');
+        $('#sortDropdownBtn').text($(this).text());
+        if (table) {
+            if (sortCol === 'name') {
+                table.order([0, 'asc']).draw();
+            } else if (sortCol === 'status') {
+                table.order([4, 'asc']).draw();
+            }
+        }
+    });
+});
+</script>
+
+<script>
+  // Dynamic permissions visibility toggling
+  function toggleAddPermissions() {
+      if ($('#addRoleManagerCheck').is(':checked')) {
+          $('#add_permissions_wrapper').slideDown();
+      } else {
+          $('#add_permissions_wrapper').slideUp();
+      }
+  }
+
+  function toggleEditPermissions() {
+      if ($('#editRoleManagerCheck').is(':checked')) {
+          $('#edit_permissions_wrapper').slideDown();
+      } else {
+          $('#edit_permissions_wrapper').slideUp();
+      }
+  }
+
+  $('#addRoleManagerCheck').on('change', toggleAddPermissions);
+  $('#editRoleManagerCheck').on('change', toggleEditPermissions);
+
+  // All Modules permission toggle handlers
+  $('#add_perm_all').on('change', function() {
+      var isAll = $(this).is(':checked');
+      $('.add-perm-check').prop('checked', isAll).prop('disabled', isAll);
+  });
+
+  $('#edit_perm_all').on('change', function() {
+      var isAll = $(this).is(':checked');
+      $('.edit-perm-check').prop('checked', isAll).prop('disabled', isAll);
+  });
+
+  // AJAX CRUD Staff
+  $('#addStaffForm').on('submit', function(e) {
+      e.preventDefault();
+      var formData = new FormData();
+      formData.append('name', $('#add_name').val());
+      formData.append('mobile', $('#add_mobile').val());
+      formData.append('dob', $('#add_dob').val());
+      formData.append('gender', $('#add_gender').val());
+      formData.append('doc_type', $('#add_doctype').val());
+      if($('#add_docfile')[0].files[0]) {
+          formData.append('doc_file', $('#add_docfile')[0].files[0]);
+      }
+      if($('#add_profile_image')[0] && $('#add_profile_image')[0].files[0]) {
+          formData.append('profile_image', $('#add_profile_image')[0].files[0]);
+      }
+      formData.append('status', $('#add_status').val());
+      formData.append('is_manager', $('#addRoleManagerCheck').is(':checked'));
+      
+      var isPermAll = $('#add_perm_all').is(':checked');
+      formData.append('perm_all', isPermAll);
+      
+      var selectedPerms = [];
+      if (!isPermAll) {
+          $('.add-perm-check:checked').each(function() {
+              selectedPerms.push($(this).val());
+          });
+      }
+      formData.append('permissions', JSON.stringify(selectedPerms));
+      formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+      $.ajax({
+          url: "{% url 'add_staff_api' %}",
+          method: "POST",
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function(res) {
+              if (res.success) {
+                  let closeBtn = document.querySelector('#add_staff_modal .btn-close');
+                  if (closeBtn) closeBtn.click();
+                  showAppToast(res.message || "User added successfully", "success");
+                  setTimeout(() => location.reload(), 1500);
+              } else {
+                  showAppToast(res.error || "Failed to add user", "error");
+              }
+          }
+      });
+  });
+
+  $(document).on('click', '.edit-btn', function() {
+      var id = $(this).attr('data-id');
+      var name = $(this).attr('data-name');
+      var mobile = $(this).attr('data-mobile');
+      var dob = $(this).attr('data-dob');
+      var gender = $(this).attr('data-gender');
+      var doctype = $(this).attr('data-doctype');
+      var status = $(this).attr('data-status');
+      var ismanager = $(this).attr('data-ismanager');
+      var username = $(this).attr('data-username');
+      var permsRaw = $(this).attr('data-permissions');
+      var profileImg = $(this).attr('data-profile-image');
+
+      $('#edit_staff_id').val(id);
+      $('#edit_name').val(name);
+      $('#edit_mobile').val(mobile);
+      $('#edit_dob').val(dob);
+      
+      if(gender && gender !== "None") $('#edit_gender').val(gender);
+      else $('#edit_gender').val("");
+      
+      if(doctype && doctype !== "None") $('#edit_doctype').val(doctype);
+      else $('#edit_doctype').val("");
+      
+      if(profileImg && profileImg !== '') {
+          $('#edit_profile_image_preview').attr('src', profileImg).removeClass('d-none');
+      } else {
+          $('#edit_profile_image_preview').attr('src', '').addClass('d-none');
+      }
+      $('#edit_profile_image').val('');
+
+      $('#edit_status').val(status);
+      
+      var isManagerBool = (ismanager === 'true' || ismanager === 'True' || ismanager === '1');
+      $('#editRoleManagerCheck').prop('checked', isManagerBool);
+
+      // Parse permissions
+      var perms = [];
+      try {
+          perms = JSON.parse(permsRaw);
+      } catch(e) { perms = []; }
+
+      if (!Array.isArray(perms)) perms = [];
+
+      var hasAll = perms.includes('ALL');
+      $('#edit_perm_all').prop('checked', hasAll);
+      
+      if (hasAll) {
+          $('.edit-perm-check').prop('checked', true).prop('disabled', true);
+      } else {
+          $('.edit-perm-check').prop('disabled', false);
+          $('.edit-perm-check').each(function() {
+              var val = $(this).val();
+              $(this).prop('checked', perms.includes(val));
+          });
+      }
+      toggleEditPermissions();
+  });
+
+  $('#editStaffForm').on('submit', function(e) {
+      e.preventDefault();
+      var formData = new FormData();
+      formData.append('staff_id', $('#edit_staff_id').val());
+      formData.append('name', $('#edit_name').val());
+      formData.append('mobile', $('#edit_mobile').val());
+      formData.append('dob', $('#edit_dob').val());
+      formData.append('gender', $('#edit_gender').val());
+      formData.append('doc_type', $('#edit_doctype').val());
+      if($('#edit_docfile')[0].files[0]) {
+          formData.append('doc_file', $('#edit_docfile')[0].files[0]);
+      }
+      if($('#edit_profile_image')[0] && $('#edit_profile_image')[0].files[0]) {
+          formData.append('profile_image', $('#edit_profile_image')[0].files[0]);
+      }
+      formData.append('status', $('#edit_status').val());
+      formData.append('is_manager', $('#editRoleManagerCheck').is(':checked'));
+
+      var isPermAll = $('#edit_perm_all').is(':checked');
+      formData.append('perm_all', isPermAll);
+      
+      var selectedPerms = [];
+      if (!isPermAll) {
+          $('.edit-perm-check:checked').each(function() {
+              selectedPerms.push($(this).val());
+          });
+      }
+      formData.append('permissions', JSON.stringify(selectedPerms));
+      formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+      $.ajax({
+          url: "{% url 'update_staff_api' %}",
+          method: "POST",
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function(res) {
+              if (res.success) {
+                  let closeBtn = document.querySelector('#edit_staff_modal .btn-close');
+                  if (closeBtn) closeBtn.click();
+                  showAppToast(res.message || "User updated successfully", "success");
+                  setTimeout(() => location.reload(), 1500);
+              } else {
+                  showAppToast(res.error || "Failed to update user", "error");
+              }
+          }
+      });
+  });
+
+  let deleteStaffId = null;
+  $(document).on('click', '.delete-btn', function() {
+      deleteStaffId = $(this).attr('data-id');
+      $('#deleteFarmerName').text($(this).attr('data-name'));
+  });
+
+  $(document).on('click', '.view-btn', function() {
+      var name = $(this).attr('data-name');
+      var mobile = $(this).attr('data-mobile');
+      var role = $(this).attr('data-role');
+      var status = $(this).attr('data-status');
+      var gender = $(this).attr('data-gender');
+      var doctype = $(this).attr('data-doctype');
+      var dob = $(this).attr('data-dob');
+      var docurl = $(this).attr('data-docurl');
+      var profileImg = $(this).attr('data-profile-image');
+
+      $('#view_staff_name').text(name);
+      $('#view_staff_role').text(role);
+      $('#view_staff_mobile').text(mobile);
+      $('#view_staff_gender').text(gender);
+      $('#view_staff_doctype').text(doctype);
+      $('#view_staff_dob').text(dob);
+      
+      if (docurl && docurl !== '') {
+          $('#view_staff_doc_container').show();
+          $('#view_staff_doc_btn').attr('href', docurl);
+      } else {
+          $('#view_staff_doc_container').hide();
+          $('#view_staff_doc_btn').attr('href', '#');
+      }
+
+      if (profileImg && profileImg !== '') {
+          $('#view_staff_profile_img').attr('src', profileImg).removeClass('d-none');
+          $('#view_staff_initials').addClass('d-none');
+      } else {
+          $('#view_staff_profile_img').attr('src', '').addClass('d-none');
+          $('#view_staff_initials').removeClass('d-none');
+      }
+      
+      var initials = "";
+      if (name) {
+          initials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+      }
+      $('#view_staff_initials').text(initials);
+      
+      var badge = $('#view_staff_status_badge');
+      badge.text(status);
+      if(status === 'Active') {
+          badge.removeClass('bg-label-danger').addClass('bg-label-primary');
+      } else {
+          badge.removeClass('bg-label-primary').addClass('bg-label-danger');
+      }
+  });
+
+  // Dynamic Image Preview on File Selection
+  $('#add_profile_image').on('change', function(e) {
+      if (this.files && this.files[0]) {
+          var reader = new FileReader();
+          reader.onload = function(evt) {
+              $('#add_profile_image_preview').attr('src', evt.target.result).removeClass('d-none');
+          };
+          reader.readAsDataURL(this.files[0]);
+      } else {
+          $('#add_profile_image_preview').attr('src', '').addClass('d-none');
+      }
+  });
+
+  $('#edit_profile_image').on('change', function(e) {
+      if (this.files && this.files[0]) {
+          var reader = new FileReader();
+          reader.onload = function(evt) {
+              $('#edit_profile_image_preview').attr('src', evt.target.result).removeClass('d-none');
+          };
+          reader.readAsDataURL(this.files[0]);
+      }
+  });
+
+  window.openStaffImagePreview = function(el) {
+      var imgSrc = $(el).attr('data-img') || $(el).attr('src');
+      var staffName = $(el).attr('data-name') || 'Staff Member';
+      var staffRole = $(el).attr('data-role') || '';
+
+      if (!imgSrc) return;
+
+      var $modal = $('#staff_image_preview_modal');
+      if ($modal.parent().get(0) !== document.body) {
+          $modal.appendTo('body');
+      }
+
+      $('#preview_modal_img_src').attr('src', imgSrc);
+      $('#preview_modal_staff_name').text(staffName);
+      $('#preview_modal_staff_role').text(staffRole || 'Profile Photo');
+      $('#preview_modal_download_btn').attr('href', imgSrc);
+
+      var modalEl = document.getElementById('staff_image_preview_modal');
+      if (modalEl) {
+          var modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+          modalInstance.show();
+
+          setTimeout(function() {
+              $('.modal-backdrop').css('z-index', '109990');
+          }, 30);
+      }
+  };
+
+
+
+
+
+  $('#confirmDeleteBtn').on('click', function() {
+      if(deleteStaffId) {
+          $.ajax({
+              url: "{% url 'delete_staff_api' %}",
+              method: "POST",
+              data: {
+                  'staff_id': deleteStaffId,
+                  'csrfmiddlewaretoken': '{{ csrf_token }}'
+              },
+              success: function(res) {
+                  if (res.success) {
+                      let closeBtn = document.querySelector('#delete_labour .btn-close');
+                      if (closeBtn) closeBtn.click();
+                      showAppToast("User deleted successfully", "error");
+                      setTimeout(() => location.reload(), 1500);
+                  } else {
+                      showAppToast(res.error || "Failed to delete user", "error");
+                  }
+              }
+          });
+      }
+  });
+
+</script>
+{% endblock page_js %}
+
+{% block content %}
+
+<div class="card mb-2">
+    <div class="card-body d-flex justify-content-between align-items-center">
+      <div class="d-flex flex-column">
+        <div>
+            <h4 class="mb-1">
+            <i class="ri-group-line me-2 text-primary"></i>
+                Co-Owners & Farmhand Access Portal
+            </h4>
+        </div>
+      </div>
+      <a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#add_staff_modal">
+          <i class="ri-add-line"></i> Add Staff member
+      </a>
+    </div>
+</div>
+<div class="row g-3 mb-2">
+  <div class="col-12 col-md-6 col-lg-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-gray-100 border rounded-3 text-secondary">
+          <i class="ri-user-3-line fs-5"></i>
+        </div>
+        <div>
+          <span class="text-uppercase small fw-bold text-muted" style="font-size:10px; letter-spacing:1px;">
+            Total Staff
+          </span>
+          <div class="fs-4 fw-bold">{{ total_staff }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-6 col-lg-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-primary bg-opacity-10 border rounded-3 text-primary position-relative">
+          <span class="position-absolute top-0 start-100 translate-middle p-1 bg-primary rounded-circle"></span>
+          <i class="ri-user-follow-line fs-5"></i>
+        </div>
+        <div>
+          <span class="text-uppercase small fw-bold text-primary" style="font-size:10px; letter-spacing:1px;">
+            Active Online
+          </span>
+          <div class="fs-4 fw-bold">{{ active_staff }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-6 col-lg-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-danger bg-opacity-10 border rounded-3 text-danger">
+          <i class="ri-user-unfollow-line fs-5"></i>
+        </div>
+        <div>
+          <span class="text-uppercase small fw-bold text-danger" style="font-size:10px; letter-spacing:1px;">
+            Suspended
+          </span>
+          <div class="fs-4 fw-bold">{{ suspended_staff }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-6 col-lg-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="p-3 bg-info bg-opacity-10 border rounded-3 text-info">
+          <i class="ri-key-line fs-5"></i>
+        </div>
+        <div>
+          <span class="text-uppercase small fw-bold text-info" style="font-size:10px; letter-spacing:1px;">
+            Administrators
+          </span>
+          <div class="fs-4 fw-bold">{{ admins_staff }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="card mb-2">
+    <div class="card-body d-flex gap-2 flex-wrap p-2">
+        <div class="input-group w-50">
+            <span class="input-group-text bg-white">
+                <i class="ri-search-line"></i>
+            </span>
+            <input type="text"
+                id="customSearchBox"
+                class="form-control"
+                placeholder="Search staff members by name or emails...">
+        </div>
+        <div class="d-flex align-items-center justify-content-end gap-2">
+          <div class="dropdown" style="width: 200px;">
+            <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown" id="statusDropdownBtn">
+              All Status
+            </button>
+            <!-- Dropdown Menu -->
+            <ul class="dropdown-menu w-100">
+              <li><a class="dropdown-item status-filter" data-value="" href="#">All Status</a></li>
+              <li><a class="dropdown-item status-filter" data-value="Active" href="#">Active</a></li>
+              <li><a class="dropdown-item status-filter" data-value="Suspended" href="#">Suspended</a></li>
+            </ul>
+          </div>
+          <div class="dropdown" style="width: 200px;">
+            <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown" id="roleDropdownBtn">
+              All Roles
+            </button>
+            <!-- Dropdown Menu -->
+            <ul class="dropdown-menu w-100">
+              <li><a class="dropdown-item role-filter-new" data-value="" href="#">All Roles</a></li>
+              <li><a class="dropdown-item role-filter-new" data-value="Role Manager" href="#">Role Manager</a></li>
+              <li><a class="dropdown-item role-filter-new" data-value="Employee" href="#">Employee</a></li>
+            </ul>
+          </div>
+          <div class="dropdown" style="width: 200px;">
+            <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown" id="sortDropdownBtn">
+              Sort By
+            </button>
+            <!-- Dropdown Menu -->
+            <ul class="dropdown-menu w-100">
+              <li><a class="dropdown-item sort-filter" data-sort="name" href="#">Sort By Name</a></li>
+              <li><a class="dropdown-item sort-filter" data-sort="status" href="#">Sort By Status</a></li>
+            </ul>
+          </div>
+        </div>
+    </div>
+</div>
+
+<div class="card p-2">
+    <div class="card-body py-0 px-0">
+        <div class="table-responsive">
+            <table class="table align-middle datatable" data-page-length="10">
+                <thead class="table-gray-200 ">
+                    <tr class="fs-8 fw-medium">
+                        <th>Staff Name</th>
+                        <th>Mobile No</th>
+                        <th>Role</th>
+                        <th>Permission Scope</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="fs-7 fw-medium text-black">
+                    {% for staff in staff_members %}
+                    <tr>
+                        <td>
+                          <div class="d-flex align-items-center gap-3 py-1">
+                            {% if staff.profile_image %}
+                              <img src="{{ staff.profile_image.url }}" alt="{{ staff.name }}" class="rounded-circle object-fit-cover shadow-sm flex-shrink-0" style="width: 38px; height: 38px; min-width: 38px; border: 1.5px solid #e2e8f0; margin-right: 8px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform='scale(1)'" data-img="{{ staff.profile_image.url }}" data-name="{{ staff.name|escape }}" data-role="{% if staff.is_role_manager %}Role Manager{% else %}{{ staff.role }}{% endif %}" onclick="openStaffImagePreview(this)" title="Click to preview image">
+                            {% else %}
+                              <div class="rounded-circle bg-primary-subtle text-primary fw-bold d-flex align-items-center justify-content-center flex-shrink-0 shadow-sm" style="width: 38px; height: 38px; min-width: 38px; font-size: 13px; border: 1.5px solid #e2e8f0; margin-right: 8px;">
+                                {{ staff.name|slice:":2"|upper }}
+                              </div>
+                            {% endif %}
+                            <div class="d-flex flex-column justify-content-center">
+                              <span class="fw-semibold text-dark mb-0">{{ staff.name }}</span>
+                            </div>
+                          </div>
+                        </td>
+
+
+                        <td>
+                          <label class="fs-8 fw-normal"><i class="ri-phone-line me-1"></i>{{ staff.mobile_number }}</label>
+                        </td>
+                        <td>
+                        {% if staff.is_role_manager %}
+                        <label class="badge rounded ms-2" style="background: #ebe3f1; color: #5d0a72; border:1px solid #63085e;">Role Manager</label>
+                        {% else %}
+                        <label class="badge bg-label-primary border border-primary rounded ms-2">{{ staff.role }}</label>
+                        {% endif %}
+                        </td>
+                        <td>
+                          {% if staff.document_type %}
+                            <span class="badge bg-gray-100 text-dark border"><i class="ri-file-text-line"></i> {{ staff.document_type }}</span>
+                          {% else %}
+                            <span class="text-muted small">No Document</span>
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if staff.status == "0" %}
+                            <span class="badge bg-label-primary text-primary rounded-3">Active</span>
+                          {% else %}
+                            <span class="badge bg-label-danger text-danger rounded-3">Suspended</span>
+                          {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-secondary view-btn" 
+                                data-name="{{ staff.name }}"
+                                data-mobile="{{ staff.mobile_number }}"
+                                data-role="{% if staff.is_role_manager %}Role Manager{% else %}{{ staff.role }}{% endif %}"
+                                data-status="{% if staff.status == '0' %}Active{% else %}Suspended{% endif %}"
+                                data-gender="{{ staff.gender|default:'Not Specified' }}"
+                                data-doctype="{{ staff.document_type|default:'No Document' }}"
+                                data-dob="{{ staff.date_of_birth|date:'d M, Y'|default:'Not Specified' }}"
+                                data-docurl="{% if staff.document_file %}{{ staff.document_file.url }}{% else %}{% endif %}"
+                                data-profile-image="{% if staff.profile_image %}{{ staff.profile_image.url }}{% else %}{% endif %}"
+                                data-bs-toggle="offcanvas" data-bs-target="#view_staff_offcanvas"><i class="ri-eye-line"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary edit-btn" 
+                                data-id="{{ staff.id }}"
+                                data-name="{{ staff.name }}"
+                                data-mobile="{{ staff.mobile_number }}"
+                                data-dob="{{ staff.date_of_birth|date:'Y-m-d' }}"
+                                data-gender="{{ staff.gender }}"
+                                data-doctype="{{ staff.document_type }}"
+                                data-status="{{ staff.status }}"
+                                data-ismanager="{{ staff.is_role_manager|yesno:'true,false' }}"
+                                data-username="{% if staff.user %}{{ staff.user.username }}{% else %}{{ staff.mobile_number }}{% endif %}"
+                                data-permissions="{{ staff.permissions_json }}"
+                                data-profile-image="{% if staff.profile_image %}{{ staff.profile_image.url }}{% else %}{% endif %}"
+                                data-bs-toggle="modal" data-bs-target="#edit_staff_modal"><i class="ri-pencil-line"></i></button>
+                            <button class="btn btn-sm btn-outline-danger delete-btn"
+                                    data-id="{{ staff.id }}"
+                                    data-name="{{ staff.name }}"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#delete_staff_modal">
+                                <i class="ri-delete-bin-7-line"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+<!-- Add Staff Modal -->
+<div class="modal fade" id="add_staff_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+
+      <!-- Header -->
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Add Manager / Staff Member</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <form id="addStaffForm" enctype="multipart/form-data">
+          {% csrf_token %}
+          <!-- Body -->
+          <div class="modal-body">
+    
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Full Name</label>
+                <input type="text" class="form-control border rounded" id="add_name" placeholder="Liam Sterling" required>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Mobile Number</label>
+                <input type="text" class="form-control border rounded" id="add_mobile" placeholder="+91 9876543210" required>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Date of Birth</label>
+                <input type="date" class="form-control border rounded" id="add_dob">
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Gender</label>
+                <select class="form-select border rounded" id="add_gender">
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Document Type</label>
+                <select class="form-select border rounded" id="add_doctype">
+                  <option value="">Select Document</option>
+                  <option value="Aadhaar Card">Aadhaar Card</option>
+                  <option value="PAN Card">PAN Card</option>
+                  <option value="Driving License">Driving License</option>
+                  <option value="Voter ID">Voter ID</option>
+                </select>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Upload Document</label>
+                <input type="file" class="form-control border rounded" id="add_docfile">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Profile Image</label>
+                <div class="d-flex align-items-center gap-2">
+                  <img id="add_profile_image_preview" src="" alt="Preview" class="rounded-circle object-fit-cover shadow-sm d-none flex-shrink-0" style="width: 38px; height: 38px; border: 1.5px solid #e2e8f0;">
+                  <input type="file" class="form-control border rounded" id="add_profile_image" accept="image/*">
+                </div>
+              </div>
+
+    
+              <div class="col-md-6">
+                <label class="form-label">Status</label>
+                <select class="form-select border rounded" id="add_status">
+                  <option value="0">Active</option>
+                  <option value="1">Suspended locked</option>
+                </select>
+              </div>
+
+              <!-- Login Access Info Section -->
+              <div class="col-12 mt-3">
+                <div class="bg-gray-100 border rounded-4 p-3 d-flex align-items-center gap-3">
+                  <div class="p-2 bg-primary-subtle text-primary rounded-3">
+                    <i class="ri-smartphone-line fs-4"></i>
+                  </div>
+                  <div>
+                    <h6 class="fw-bold text-dark mb-0">OTP Login Access</h6>
+                    <small class="text-muted">Staff & Managers log in using their <strong>Mobile Number</strong> via OTP. No password setup required.</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Role & Permissions Section -->
+              <div class="col-12 mt-2">
+                <div class="permissions-card">
+                    <div class="mb-2">
+                      <label class="custom-checkbox-orange fw-bold text-orange-main" for="addRoleManagerCheck">
+                        <input type="checkbox" id="addRoleManagerCheck">
+                        <span class="checkbox-indicator"></span>
+                        <span>Assign as Manager (Role: Manager)</span>
+                      </label>
+                      <div class="text-muted small mt-1 ms-4">
+                        Grants manager privileges for operating and overseeing assigned farmer activities.
+                      </div>
+                    </div>
+
+                    <div id="add_permissions_wrapper" style="display: none;">
+                      <hr class="my-2" />
+
+                      <div class="d-flex align-items-center justify-content-between mb-3">
+                        <span class="fw-bold text-dark small"><i class="ri-key-2-line me-1 text-orange-main"></i> Module Access Permissions</span>
+                        <label class="custom-switch mb-0">
+                          <input type="checkbox" id="add_perm_all" checked>
+                          <span class="switch-slider"></span>
+                          <span class="fw-bold small text-success ms-1">All Modules</span>
+                        </label>
+                      </div>
+
+                      <div id="add_permissions_container" class="row g-3 mt-1">
+                        {% for perm in permissions %}
+                        <div class="col-6 col-md-4">
+                          <label class="custom-checkbox-orange" for="add_perm_{{ forloop.counter }}">
+                            <input type="checkbox" class="add-perm-check" value="{{ perm }}" id="add_perm_{{ forloop.counter }}" checked disabled>
+                            <span class="checkbox-indicator"></span>
+                            <span class="ms-1">{{ perm }}</span>
+                          </label>
+                        </div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer d-flex justify-content-between">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary">
+              <i class="ri-check-line me-1"></i> Confirm Registration
+            </button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<!-- Edit Staff Modal -->
+<div class="modal fade" id="edit_staff_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+
+      <!-- Header -->
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Edit Staff / Manager Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      
+      <form id="editStaffForm" enctype="multipart/form-data">
+          {% csrf_token %}
+          <input type="hidden" id="edit_staff_id">
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Full Name</label>
+                <input type="text" class="form-control border rounded" id="edit_name" required>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Mobile Number</label>
+                <input type="text" class="form-control border rounded" id="edit_mobile" required>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Date of Birth</label>
+                <input type="date" class="form-control border rounded" id="edit_dob">
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Gender</label>
+                <select class="form-select border rounded" id="edit_gender">
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Document Type</label>
+                <select class="form-select border rounded" id="edit_doctype">
+                  <option value="">Select Document</option>
+                  <option value="Aadhaar Card">Aadhaar Card</option>
+                  <option value="PAN Card">PAN Card</option>
+                  <option value="Driving License">Driving License</option>
+                  <option value="Voter ID">Voter ID</option>
+                </select>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Upload Document</label>
+                <input type="file" class="form-control border rounded" id="edit_docfile">
+                <small class="text-muted" id="edit_doc_link"></small>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Profile Image</label>
+                <div class="d-flex align-items-center gap-2">
+                  <img id="edit_profile_image_preview" src="" alt="Profile" class="rounded-circle object-fit-cover shadow-sm d-none flex-shrink-0" style="width: 38px; height: 38px; border: 1.5px solid #e2e8f0;">
+                  <input type="file" class="form-control border rounded" id="edit_profile_image" accept="image/*">
+                </div>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Status</label>
+                <select class="form-select border rounded" id="edit_status">
+                  <option value="0">Active</option>
+                  <option value="1">Suspended locked</option>
+                </select>
+              </div>
+
+              <!-- Login Access Info Section -->
+              <div class="col-12 mt-3">
+                <div class="bg-gray-100 border rounded-4 p-3 d-flex align-items-center gap-3">
+                  <div class="p-2 bg-primary-subtle text-primary rounded-3">
+                    <i class="ri-smartphone-line fs-4"></i>
+                  </div>
+                  <div>
+                    <h6 class="fw-bold text-dark mb-0">OTP Login Access</h6>
+                    <small class="text-muted">Login authentication is managed via <strong>Mobile Number</strong> + OTP.</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Role & Permissions Section -->
+              <div class="col-12 mt-2">
+                <div class="permissions-card">
+                    <div class="mb-2">
+                      <label class="custom-checkbox-orange fw-bold text-orange-main" for="editRoleManagerCheck">
+                        <input type="checkbox" id="editRoleManagerCheck">
+                        <span class="checkbox-indicator"></span>
+                        <span>Assign as Manager (Role: Manager)</span>
+                      </label>
+                    </div>
+
+                    <div id="edit_permissions_wrapper" style="display: none;">
+                      <hr class="my-2" />
+
+                      <div class="d-flex align-items-center justify-content-between mb-3">
+                        <span class="fw-bold text-dark small"><i class="ri-key-2-line me-1 text-orange-main"></i> Module Access Permissions</span>
+                        <label class="custom-switch mb-0">
+                          <input type="checkbox" id="edit_perm_all" checked>
+                          <span class="switch-slider"></span>
+                          <span class="fw-bold small text-success ms-1">All Modules</span>
+                        </label>
+                      </div>
+
+                      <div id="edit_permissions_container" class="row g-3 mt-1">
+                        {% for perm in permissions %}
+                        <div class="col-6 col-md-4">
+                          <label class="custom-checkbox-orange" for="edit_perm_{{ forloop.counter }}">
+                            <input type="checkbox" class="edit-perm-check" value="{{ perm }}" id="edit_perm_{{ forloop.counter }}">
+                            <span class="checkbox-indicator"></span>
+                            <span class="ms-1">{{ perm }}</span>
+                          </label>
+                        </div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer d-flex justify-content-between">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary">
+              <i class="ri-check-line me-1"></i> Save Changes
+            </button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete staff Modal -->
+<div class="modal fade" id="delete_staff_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title text-danger">Confirm Delete</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body text-center">
+        <p class="mb-0">
+          Are you sure you want to delete
+          <strong id="deleteFarmerName">this Staff</strong>?
+        </p>
+      </div>
+
+      <div class="modal-footer justify-content-center">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+          Yes, Delete
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="view_staff_offcanvas" style="width: 400px;">
+  <!-- HEADER -->
+  <div class="offcanvas-header border-bottom bg-gray-100">
+    <div class="d-flex align-items-center gap-3">
+      <div class="p-2 bg-primary-subtle text-primary rounded-3">
+        <i class="ri-user-line fs-5"></i>
+      </div>
+      <div>
+        <h5 class="mb-0 fw-bold">Staff Details</h5>
+        <small class="text-muted" id="view_staff_role">Role</small>
+      </div>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <!-- BODY -->
+  <div class="offcanvas-body p-4">
+    <div class="d-flex flex-column align-items-center mb-4">
+      <div class="avatar avatar-xl mb-3" style="width: 4.5rem; height: 4.5rem;">
+        <img id="view_staff_profile_img" src="" alt="Profile Image" class="rounded-circle object-fit-cover w-100 h-100 shadow-sm d-none" style="border: 2px solid #e2e8f0;">
+        <div class="avatar-initial rounded-circle bg-primary text-white fs-3 d-flex align-items-center justify-content-center shadow-sm" id="view_staff_initials" style="width: 100%; height: 100%;">?</div>
+      </div>
+      <h5 class="mb-1 fw-bold text-dark" id="view_staff_name">Staff Name</h5>
+      <span class="badge bg-label-primary rounded-pill mt-1" id="view_staff_status_badge">Status</span>
+    </div>
+
+    <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem;">Information</h6>
+    <ul class="list-unstyled mb-4">
+      <li class="d-flex align-items-center mb-3">
+        <i class="ri-phone-line ri-20px text-primary me-2"></i>
+        <span class="fw-medium text-heading me-2">Contact:</span>
+        <span id="view_staff_mobile">Mobile Number</span>
+      </li>
+      <li class="d-flex align-items-center mb-3">
+        <i class="ri-calendar-line ri-20px text-primary me-2"></i>
+        <span class="fw-medium text-heading me-2">Date of Birth:</span>
+        <span id="view_staff_dob">DOB</span>
+      </li>
+      <li class="d-flex align-items-center mb-3">
+        <i class="ri-men-line ri-20px text-primary me-2"></i>
+        <span class="fw-medium text-heading me-2">Gender:</span>
+        <span id="view_staff_gender">Gender</span>
+      </li>
+      <li class="d-flex align-items-center">
+        <i class="ri-file-list-3-line ri-20px text-primary me-2"></i>
+        <span class="fw-medium text-heading me-2">Document Type:</span>
+        <span id="view_staff_doctype">Doc Type</span>
+      </li>
+    </ul>
+
+    <div class="mt-4" id="view_staff_doc_container" style="display: none;">
+      <a href="#" id="view_staff_doc_btn" target="_blank" class="btn btn-outline-primary w-100">
+        <i class="ri-file-download-line me-2"></i> View / Download Document
+      </a>
+    </div>
+  </div>
+</div>
+
+<style>
+#staff_image_preview_modal {
+  z-index: 109999 !important;
+}
+#staff_image_preview_modal .modal-dialog {
+  z-index: 110000 !important;
+  position: relative;
+}
+</style>
+
+<!-- Staff Profile Image Lightbox Preview Modal -->
+<div class="modal fade" id="staff_image_preview_modal" tabindex="-1" aria-hidden="true" style="z-index: 109999 !important;">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header border-bottom py-3 px-4 bg-light">
+        <div class="d-flex align-items-center gap-2">
+          <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+            <i class="ri-image-line fs-5"></i>
+          </div>
+          <div>
+            <h6 class="modal-title fw-bold text-dark mb-0" id="preview_modal_staff_name">Profile Image Preview</h6>
+            <span class="text-muted small" id="preview_modal_staff_role">Staff Member</span>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4 text-center bg-white">
+        <div class="rounded-4 overflow-hidden shadow-sm mx-auto d-inline-block border" style="max-width: 100%; max-height: 400px; background-color: #f8fafc;">
+          <img id="preview_modal_img_src" src="" alt="Staff Profile" class="img-fluid object-fit-contain" style="max-height: 380px; width: auto; min-width: 220px; display: block; margin: 0 auto;">
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2.5 px-3 bg-light d-flex justify-content-between">
+        <a href="#" id="preview_modal_download_btn" target="_blank" download class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1">
+          <i class="ri-download-2-line"></i> Download Image
+        </a>
+        <button type="button" class="btn btn-sm btn-secondary px-3" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+{% endblock %}
+

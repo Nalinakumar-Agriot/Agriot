@@ -1,0 +1,2 @@
+RewriteEngine On
+RewriteRule ^(.*)$ https://dev.agriotwifarm.com/$1 [R=302,L]

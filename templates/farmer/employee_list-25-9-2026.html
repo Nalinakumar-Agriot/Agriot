@@ -1,0 +1,4484 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+{% block title %}Employee{% endblock %}
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+<style>
+  #farmerTabs .nav-link {
+    border-radius: 8px;
+    font-weight: 500;
+    color: #6b7280;
+    padding: 8px 18px;
+    transition: all 0.2s ease;
+    border: none;
+    background: transparent;
+  }
+  #farmerTabs .nav-link:hover {
+    background-color: #f1f5f9;
+    color: #111827;
+  }
+  #farmerTabs .nav-link.active {
+    background-color: #F69C55 !important;
+    color: #ffffff !important;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(246, 156, 85, 0.25);
+  }
+
+  .list-group-item {
+    background: transparent;
+  }
+
+  .border-4 {
+    border-radius: 18px !important;
+  }
+    .bg-gray-100{
+        background-color: #F8FAFC;
+    }
+
+    .btn-gray-100{
+        background-color: #F8FAFC;
+    }
+
+    .plot-card {
+        transition: 0.2s;
+        background: white;
+        cursor: pointer;
+    }
+
+    .plot-card:hover {
+        border-color: #63b49d;
+    }
+
+    .plot-card.active {
+        border: 1px solid #F6943F !important;
+        background: #eef7f4 !important;
+        color: #F6943F;
+    }
+
+    .plot-card.active .check-icon {
+        display: block !important;
+    }
+    .sticky-col {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+    }
+    thead .sticky-col {
+      z-index: 3;
+    }
+
+    .payroll-row {
+      border-bottom: 1px solid #eee;
+      transition: 0.2s;
+    }
+
+    .payroll-row:hover {
+      background: #f8fafc;
+    }
+
+    .icon-box {
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      color: #4338ca;
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 18px;
+    }
+
+    .divide > div:last-child {
+      border-bottom: none;
+    }
+
+  .custom-wrapper {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  /* Header */
+  .custom-header {
+    background: #0f172a;
+    color: #fff;
+    padding: 12px 16px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .title-text {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Filter */
+  .filter-bar {
+    background: #f8fafc;
+    padding: 10px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .filter-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #9ca3af;
+  }
+
+  /* Scroll */
+  .scroll-area {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  /* Month Header */
+  .month-header {
+    background: #eef2ff;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 800;
+    border-top: 1px solid #e0e7ff;
+    border-bottom: 1px solid #e0e7ff;
+  }
+
+  /* Row */
+  .transaction-row {
+    padding: 14px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  .transaction-row:hover {
+    background: #f8fafc;
+  }
+
+  /* Dot */
+  .dot {
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+  }
+
+  /* Meta */
+  .meta {
+    font-size: 11px;
+    color: #6b7280;
+  }
+
+  /* Right */
+  .label {
+    font-size: 10px;
+    color: #9ca3af;
+    text-transform: uppercase;
+  }
+
+  .amount {
+    font-weight: 800;
+    font-size: 13px;
+    background: #ecfdf5;
+    border: 1px solid #d1fae5;
+    color: #065f46;
+    padding: 4px 10px;
+    border-radius: 8px;
+    display: inline-block;
+    margin-top: 4px;
+  }
+
+  .payout-wrapper {
+    font-size: 12px;
+  }
+
+  /* Summary */
+  .summary-box {
+    background: #ecfdf5;
+    border: 1px solid #d1fae5;
+    border-radius: 12px;
+    padding: 14px;
+  }
+
+  .small-text {
+    font-size: 12px;
+    color: #6b7280;
+  }
+
+  .border-dashed {
+    border-bottom: 1px dashed #d1fae5;
+  }
+
+  .net-amount {
+    font-size: 18px;
+    font-weight: 800;
+    color: #065f46;
+  }
+
+  /* Labels */
+  .label-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  /* RADIO CARD STYLE */
+  .radio-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    background: #fff;
+    transition: all 0.2s;
+  }
+
+  .radio-card:hover {
+    background: #f8fafc;
+  }
+
+  .radio-card input {
+    accent-color: #10b981;
+  }
+
+  /* ACTIVE STATE */
+  .radio-card.active {
+    background: #ecfdf5;
+    border-color: #34d399;
+    color: #065f46;
+  }
+
+  /* INPUT ICON */
+  .input-icon {
+    position: relative;
+  }
+
+  .input-icon span {
+    position: absolute;
+    left: 10px;
+    top: 8px;
+    font-size: 12px;
+    color: #9ca3af;
+  }
+
+  .input-icon input {
+    padding-left: 24px;
+    border-radius: 10px;
+    font-size: 12px;
+  }
+
+  /* Hint */
+  .hint {
+    font-size: 10px;
+    color: #9ca3af;
+    margin-top: 4px;
+  }
+    /* container look */
+  .border.rounded {
+      background: #f8f9fa;
+      padding: 4px;
+  }
+
+  /* tab buttons */
+  .active-tab,
+  .btn[data-bs-toggle="tab"] {
+      border: none !important;
+      background: transparent;
+      color: #555;
+      font-weight: 500;
+      transition: all 0.25s ease;
+  }
+
+  /* active tab */
+  .active-tab,
+  .btn.active {
+      background: #0c9e6d !important;
+      color: #fff !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+
+  /* hover effect */
+  .btn[data-bs-toggle="tab"]:hover {
+      background: rgba(138, 212, 18, 0.15);
+      color: #000;
+  }
+
+  /* Custom permissions card styling */
+  .permissions-card {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 14px !important;
+    padding: 20px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+  }
+
+  /* Custom checkbox wrapper */
+  .custom-checkbox-orange {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 14px;
+    color: #475569;
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  /* Hide original checkbox */
+  .custom-checkbox-orange input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  /* Checkbox design */
+  .custom-checkbox-orange .checkbox-indicator {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #475569; /* Slate 600 - dark outline */
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease-in-out;
+    background: #ffffff;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  /* Hover state */
+  .custom-checkbox-orange:hover .checkbox-indicator {
+    border-color: #f6943f;
+  }
+
+  /* Checked state */
+  .custom-checkbox-orange input[type="checkbox"]:checked + .checkbox-indicator {
+    background-color: #f6943f;
+    border-color: #f6943f;
+  }
+
+  /* Checkmark */
+  .custom-checkbox-orange .checkbox-indicator::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) scale(0);
+    transition: transform 0.15s ease-in-out;
+  }
+
+  .custom-checkbox-orange input[type="checkbox"]:checked + .checkbox-indicator::after {
+    transform: rotate(45deg) scale(1);
+  }
+
+  /* Disabled + Checked state (when All Modules toggle is active) */
+  .custom-checkbox-orange input[type="checkbox"]:disabled + .checkbox-indicator {
+    background-color: #fbc79a !important; /* Lighter/faded orange for disabled */
+    border-color: #fbc79a !important;
+    cursor: not-allowed;
+  }
+
+  /* Text color styling for Manager Role & Key Icon */
+  .text-orange-main {
+    color: #f6943f !important;
+  }
+
+  /* Custom Switch for All Modules */
+  .custom-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .custom-switch input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .custom-switch .switch-slider {
+    position: relative;
+    display: inline-block;
+    width: 38px;
+    height: 20px;
+    background-color: #cbd5e1;
+    border-radius: 20px;
+    transition: all 0.3s ease;
+  }
+
+  .custom-switch .switch-slider::before {
+    content: "";
+    position: absolute;
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+
+  .custom-switch input[type="checkbox"]:checked + .switch-slider {
+    background-color: #16a34a; /* green track when checked */
+  }
+
+  .custom-switch input[type="checkbox"]:checked + .switch-slider::before {
+    transform: translateX(18px);
+  }
+</style>
+<style>
+/* Attendance Task-Management Aesthetic Theme */
+.attendance-kpi-card {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 16px 20px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+.attendance-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+  border-color: #cbd5e1;
+}
+
+.attendance-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 14px;
+  background: #f8fafc;
+}
+.attendance-calendar-grid .cal-weekday {
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+  padding: 8px 0;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+.attendance-calendar-grid .cal-weekday.sunday {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.attendance-calendar-grid .cal-day {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  min-height: 102px;
+  padding: 10px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+.attendance-calendar-grid .cal-day:hover {
+  border-color: #60a5fa;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.1);
+  transform: translateY(-2px);
+}
+.attendance-calendar-grid .cal-day.active-selected-day {
+  border: 2px solid #2563eb !important;
+  background-color: #f0f7ff !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
+}
+.attendance-calendar-grid .cal-day.sunday {
+  background: #fffafa;
+  border-color: #fee2e2;
+}
+.attendance-calendar-grid .cal-day.sunday.active-selected-day {
+  background: #fef2f2 !important;
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2) !important;
+}
+.attendance-calendar-grid .cal-day.empty {
+  background: transparent;
+  border: none;
+  cursor: default;
+}
+.attendance-calendar-grid .cal-day-number {
+  font-weight: 800;
+  font-size: 14.5px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #1e293b;
+}
+.attendance-calendar-grid .cal-day.sunday .cal-day-number {
+  color: #dc2626;
+}
+.attendance-calendar-grid .cal-counts {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.attendance-calendar-grid .cal-counts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 7px;
+  letter-spacing: 0.2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.attendance-calendar-grid .cal-count-p { 
+  background: #ecfdf5; 
+  color: #047857; 
+  border: 1px solid #a7f3d0; 
+}
+.attendance-calendar-grid .cal-count-p i { 
+  color: #10b981; 
+  font-size: 12px; 
+}
+.attendance-calendar-grid .cal-count-a { 
+  background: #fef2f2; 
+  color: #b91c1c; 
+  border: 1px solid #fecaca; 
+}
+.attendance-calendar-grid .cal-count-a i { 
+  color: #ef4444; 
+  font-size: 12px; 
+}
+.attendance-calendar-grid .cal-count-h { 
+  background: #f0f9ff; 
+  color: #0369a1; 
+  border: 1px solid #bae6fd; 
+}
+.attendance-calendar-grid .cal-count-h i { 
+  color: #0284c7; 
+  font-size: 12px; 
+}
+
+/* Status pill selector in Daily Sheet */
+.att-status-pill-btn {
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.att-status-pill-btn:hover {
+  background: #f1f5f9;
+}
+.att-status-pill-btn.active-p {
+  background: #16a34a !important;
+  color: #fff !important;
+  border-color: #16a34a !important;
+}
+.att-status-pill-btn.active-a {
+  background: #dc2626 !important;
+  color: #fff !important;
+  border-color: #dc2626 !important;
+}
+.att-status-pill-btn.active-h {
+  background: #0284c7 !important;
+  color: #fff !important;
+  border-color: #0284c7 !important;
+}
+.att-status-pill-btn.active-dash {
+  background: #64748b !important;
+  color: #fff !important;
+  border-color: #64748b !important;
+}
+
+#attendance_list_view th.sunday-col {
+  background-color: #dc2626 !important;
+  color: #fff !important;
+}
+#attendance_list_view td.sunday-col {
+  background-color: #fef2f2 !important;
+}
+#attendance_list_view td.sunday-col .attendance-btn.btn-light {
+  background-color: #fee2e2 !important;
+  border-color: #fecaca !important;
+}
+#attendance_list_view th.today-col {
+  background-color: #1e293b !important;
+  box-shadow: inset 0 0 0 2px #F69C55;
+  color: #fff !important;
+}
+#attendance_list_view td.today-col {
+  background-color: #fff7ed !important;
+  border-left: 2px solid #F69C55 !important;
+  border-right: 2px solid #F69C55 !important;
+}
+#attendance_list_view td.today-col .attendance-btn.btn-light {
+  background-color: #ffedd5 !important;
+  border-color: #fdba74 !important;
+  color: #c2410c !important;
+}
+</style>
+<style>
+.search-collapse-wrapper {
+  position: relative;
+}
+.search-input-group {
+  width: 0;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.25s ease, opacity 0.2s ease;
+  white-space: nowrap;
+}
+.search-input-group.expanded {
+  max-width: 420px;
+  width: 420px;
+  opacity: 1;
+  margin-left: 8px;
+}
+@media (max-width: 576px) {
+  .search-input-group.expanded {
+    max-width: 220px;
+    width: 220px;
+  }
+}
+</style>
+{% endblock page_css %}
+{% block page_js %}
+{{ block.super }}
+<script>
+// Persist & sync active tab across refreshes and auto-refresh on tab switch
+function restoreActiveFarmerTab() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var tabParam = urlParams.get('tab');
+    var activeTab = tabParam ? ('#' + tabParam) : (localStorage.getItem('activeFarmerTab') || '#users');
+    if (!activeTab || !$('#farmerTabs .nav-link[data-bs-target="' + activeTab + '"]').length) {
+        activeTab = '#users';
+    }
+
+    localStorage.setItem('activeFarmerTab', activeTab);
+
+    // Sync active classes
+    $('#farmerTabs .nav-link').removeClass('active').attr('aria-selected', 'false');
+    $('.tab-content > .tab-pane').removeClass('show active');
+
+    var $tabLink = $('#farmerTabs .nav-link[data-bs-target="' + activeTab + '"]');
+    $tabLink.addClass('active').attr('aria-selected', 'true');
+    $(activeTab).addClass('show active');
+
+    try {
+        var tabEl = $tabLink[0];
+        var tab = bootstrap.Tab.getInstance(tabEl) || new bootstrap.Tab(tabEl);
+        tab.show();
+    } catch(e) {}
+
+    if (activeTab === '#daily_attendance') {
+        if (typeof updateTopStats === 'function') updateTopStats();
+        setTimeout(scrollToTodayColumn, 250);
+    }
+}
+
+$(document).ready(function() {
+    restoreActiveFarmerTab();
+    if (typeof updateTopStats === 'function') {
+        updateTopStats();
+    }
+
+    // Auto-refresh when switching tabs so all calculations and data re-execute fresh from DB
+    $(document).on('click', '#farmerTabs .nav-link', function(e) {
+        var target = $(this).attr('data-bs-target');
+        if (!target) return;
+
+        var tabName = target.replace('#', '');
+        var urlParams = new URLSearchParams(window.location.search);
+        var currentTab = urlParams.get('tab') || localStorage.getItem('activeFarmerTab') || '#users';
+        currentTab = currentTab.replace('#', '');
+
+        localStorage.setItem('activeFarmerTab', target);
+
+        if (tabName !== currentTab) {
+            e.preventDefault();
+            var url = new URL(window.location.href);
+            url.searchParams.set('tab', tabName);
+            window.location.href = url.toString();
+        }
+    });
+});
+
+
+function toggleSearchBox() {
+  var group = document.getElementById('search_input_group');
+  var isExpanded = group.classList.contains('expanded');
+
+  if (isExpanded) {
+    closeSearchBox();
+  } else {
+    group.classList.remove('d-none');
+    // small timeout lets the browser register display change before animating width
+    setTimeout(function () {
+      group.classList.add('expanded');
+      document.getElementById('customSearchBox').focus();
+    }, 10);
+  }
+}
+
+function closeSearchBox() {
+  var group = document.getElementById('search_input_group');
+  var input = document.getElementById('customSearchBox');
+
+  group.classList.remove('expanded');
+
+  // clear search + re-trigger the existing keyup-bound DataTables filter so the table resets
+  input.value = '';
+  $(input).trigger('keyup');
+
+  setTimeout(function () {
+    group.classList.add('d-none');
+  }, 250); // matches the CSS transition duration
+}
+
+// Optional: collapse the box if the user clicks elsewhere on the page
+document.addEventListener('click', function (e) {
+  var wrapper = document.getElementById('search_collapse_wrapper');
+  var group = document.getElementById('search_input_group');
+  if (wrapper && group && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+    closeSearchBox();
+  }
+
+  var advWrapper = document.getElementById('adv_search_collapse_wrapper');
+  var advGroup = document.getElementById('adv_search_input_group');
+  if (advWrapper && advGroup && !advWrapper.contains(e.target) && advGroup.classList.contains('expanded')) {
+    closeAdvSearchBox();
+  }
+});
+
+function toggleAdvSearchBox() {
+  var group = document.getElementById('adv_search_input_group');
+  if (!group) return;
+  var isExpanded = group.classList.contains('expanded');
+
+  if (isExpanded) {
+    closeAdvSearchBox();
+  } else {
+    group.classList.remove('d-none');
+    setTimeout(function () {
+      group.classList.add('expanded');
+      var input = document.getElementById('advance_search_input');
+      if (input) input.focus();
+    }, 10);
+  }
+}
+
+function closeAdvSearchBox() {
+  var group = document.getElementById('adv_search_input_group');
+  var input = document.getElementById('advance_search_input');
+  if (!group) return;
+
+  group.classList.remove('expanded');
+  if (input) {
+    input.value = '';
+    filterAdvanceTable();
+  }
+
+  setTimeout(function () {
+    group.classList.add('d-none');
+  }, 250);
+}
+function highlightSundaysInListView() {
+    var $table = $('#attendance_list_view table');
+    if (!$table.length) return;
+
+    var $headerCells = $table.find('thead th');
+    var $bodyRows = $table.find('tbody tr');
+
+    // Column index 0 is the "Crew Employee" name column, so day columns start at 1
+    $headerCells.each(function (colIndex) {
+        if (colIndex === 0) return; // skip name column
+
+        // Find a data-date value for this column from any row (first row with data)
+        var dateVal = null;
+        $bodyRows.each(function () {
+            var $cell = $(this).find('td').eq(colIndex);
+            var $btn = $cell.find('.attendance-btn');
+            if ($btn.length && $btn.data('date')) {
+                dateVal = $btn.data('date');
+                return false; // break
+            }
+        });
+
+        if (!dateVal) return;
+
+        var d = new Date(dateVal + 'T00:00:00');
+        if (isNaN(d.getTime())) return;
+
+        if (d.getDay() === 0) { // Sunday
+            $(this).addClass('sunday-col');
+            $bodyRows.each(function () {
+                $(this).find('td').eq(colIndex).addClass('sunday-col');
+            });
+        }
+    });
+}
+
+// ----------------------------------------------------
+// DAILY ATTENDANCE CONTROLLER (Task Management Style & Flow)
+// ----------------------------------------------------
+window.currentAttendanceDate = '{% if is_latest_month %}{{ today_str }}{% else %}{{ days.0.key }}{% endif %}';
+window.currentAttendanceMonthDays = [
+    {% for d in days %}
+    { label: "{{ d.label|escapejs }}", key: "{{ d.key }}", is_today: {{ d.is_today|yesno:"true,false" }}, is_sunday: {{ d.is_sunday|yesno:"true,false" }}, is_future: {{ d.is_future|yesno:"true,false" }} },
+    {% endfor %}
+];
+
+function toggleAttendanceSearchBox() {
+    var group = document.getElementById('att_search_input_group');
+    if (!group) return;
+    var isExpanded = group.classList.contains('expanded');
+    if (isExpanded) {
+        closeAttendanceSearchBox();
+    } else {
+        group.classList.remove('d-none');
+        setTimeout(function () {
+            group.classList.add('expanded');
+            var input = document.getElementById('attendanceSearchInput');
+            if (input) input.focus();
+        }, 10);
+    }
+}
+
+function closeAttendanceSearchBox() {
+    var group = document.getElementById('att_search_input_group');
+    if (!group) return;
+    var input = document.getElementById('attendanceSearchInput');
+    group.classList.remove('expanded');
+    if (input) {
+        input.value = '';
+        applyAttendanceFilters();
+    }
+    setTimeout(function () {
+        group.classList.add('d-none');
+    }, 250);
+}
+
+document.addEventListener('click', function (e) {
+    var wrapper = document.getElementById('att_search_collapse_wrapper');
+    var group = document.getElementById('att_search_input_group');
+    if (wrapper && group && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+        closeAttendanceSearchBox();
+    }
+});
+
+window.currentAttendancePeriod = 'day';
+
+window.setAttendancePeriod = function(period) {
+    window.currentAttendancePeriod = period;
+    $('.att-period-btn').removeClass('btn-primary active').addClass('btn-outline-secondary');
+    $('#att_period_' + period + '_btn').addClass('btn-primary active').removeClass('btn-outline-secondary');
+
+    if (period === 'day') {
+        $('#attendanceDateSelectorWrapper').removeClass('d-none');
+    } else if (period === 'week') {
+        $('#attendanceDateSelectorWrapper').removeClass('d-none');
+    } else {
+        $('#attendanceDateSelectorWrapper').addClass('d-none');
+    }
+
+    updateTopStats();
+    applyAttendanceFilters();
+};
+
+function getAttendanceDateKeysForPeriod(targetDate, period) {
+    targetDate = targetDate || window.currentAttendanceDate || '{{ today_str }}';
+    period = period || window.currentAttendancePeriod || 'day';
+
+    if (period === 'day') {
+        return [targetDate];
+    } else if (period === 'week') {
+        var curD = new Date(targetDate + 'T00:00:00');
+        var dayOfWeek = curD.getDay(); // 0 is Sunday
+        var diffToMon = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+        var monDate = new Date(curD);
+        monDate.setDate(curD.getDate() + diffToMon);
+
+        var keys = [];
+        for (var i = 0; i < 7; i++) {
+            var wd = new Date(monDate);
+            wd.setDate(monDate.getDate() + i);
+            var y = wd.getFullYear();
+            var m = String(wd.getMonth() + 1).padStart(2, '0');
+            var d = String(wd.getDate()).padStart(2, '0');
+            var k = y + '-' + m + '-' + d;
+            if (window.currentAttendanceMonthDays.some(function(x) { return x.key === k; })) {
+                keys.push(k);
+            }
+        }
+        return keys.length ? keys : [targetDate];
+    } else if (period === 'month') {
+        return window.currentAttendanceMonthDays.map(function(x) { return x.key; });
+    }
+    return [targetDate];
+}
+
+function updateTopStats(targetDate) {
+    var defaultDate = (window.currentAttendanceMonthDays && window.currentAttendanceMonthDays.length)
+        ? ((window.currentAttendanceMonthDays.find(function(d) { return d.is_today; }) || window.currentAttendanceMonthDays[0]).key)
+        : '{{ today_str }}';
+    targetDate = targetDate || window.currentAttendanceDate || defaultDate;
+    var period = window.currentAttendancePeriod || 'day';
+    var targetDateKeys = getAttendanceDateKeysForPeriod(targetDate, period);
+
+    var search = ($('#attendanceSearchInput').val() || '').toLowerCase().trim();
+    var role = ($('#filterAttendanceRole').val() || '').toLowerCase().trim();
+    var desig = ($('#filterAttendanceDesignation').val() || '').toLowerCase().trim();
+
+    var totalP = 0;
+    var totalA = 0;
+    var totalH = 0;
+    var totalUnmarked = 0;
+    var evaluatedStaffCount = 0;
+
+    $('#attendance_list_view tbody tr:not(#attendance_no_records_row)').each(function () {
+        var $tr = $(this);
+        var name = ($tr.data('name') || $tr.find('td:first-child span').first().text()).toString().toLowerCase().trim();
+        var empRole = ($tr.data('role') || '').toString().toLowerCase().trim();
+        var empRawRole = ($tr.data('raw-role') || '').toString().toLowerCase().trim();
+        var empDesig = ($tr.data('designation') || '').toString().toLowerCase().trim();
+
+        var isSuspended = $tr.hasClass('opacity-75') || $tr.find('.ri-lock-2-line').length > 0;
+        if (isSuspended) return;
+
+        var okSearch = !search || name.includes(search) || empRole.includes(search) || empDesig.includes(search);
+        var okRole = !role || empRole === role || empRawRole === role || (role === 'role manager' && (empRole.includes('manager') || empRawRole.includes('manager')));
+        var okDesig = !desig || empDesig === desig;
+        if (!okSearch || !okRole || !okDesig) return;
+
+        evaluatedStaffCount++;
+
+        targetDateKeys.forEach(function(dk) {
+            var $btn = $tr.find('.attendance-btn[data-date="' + dk + '"]');
+            if ($btn.length) {
+                var status = $btn.text().trim();
+                if (status === 'P') totalP++;
+                else if (status === 'A') totalA++;
+                else if (status === 'H') totalH++;
+                else totalUnmarked++;
+            }
+        });
+    });
+
+    var totalLogged = totalP + totalA + totalH;
+    var effectivePresence = totalP + (totalH * 0.5);
+    var attendanceRate = totalLogged > 0 ? ((effectivePresence / totalLogged) * 100).toFixed(1) : 0;
+
+    var formatNum = function(num) {
+        return num < 10 && num >= 0 ? '0' + num : num;
+    };
+
+    $('#top_stat_present').text(formatNum(totalP));
+    $('#top_stat_absent').text(formatNum(totalA));
+    $('#top_stat_halfday').text(formatNum(totalH));
+    $('#top_stat_rate').text(attendanceRate + '%');
+
+    // Update label indicator & subtitles based on active period
+    if (period === 'day') {
+        var dObj = window.currentAttendanceMonthDays.find(function(d) { return d.key === targetDate; });
+        var labelText = dObj ? (dObj.is_today ? 'Today (' + dObj.label + ')' : dObj.label) : targetDate;
+        $('#top_stat_period_badge').html('<i class="ri-calendar-event-line me-1 text-primary"></i>Day: ' + labelText);
+        $('#top_stat_present_subtitle').text('On Duty Today');
+        $('#top_stat_absent_subtitle').text('Off Duty Today');
+        $('#top_stat_halfday_subtitle').text('0.5 Shift');
+        $('#top_stat_rate_subtitle').text(evaluatedStaffCount + ' Staff Active');
+    } else if (period === 'week') {
+        var firstD = targetDateKeys[0] || targetDate;
+        var lastD = targetDateKeys[targetDateKeys.length - 1] || targetDate;
+        var fObj = window.currentAttendanceMonthDays.find(function(d) { return d.key === firstD; });
+        var lObj = window.currentAttendanceMonthDays.find(function(d) { return d.key === lastD; });
+        var wLabel = (fObj ? fObj.label : firstD) + ' – ' + (lObj ? lObj.label : lastD);
+        $('#top_stat_period_badge').html('<i class="ri-calendar-check-line me-1 text-primary"></i>Week: ' + wLabel);
+        var avgP = targetDateKeys.length ? (totalP / targetDateKeys.length).toFixed(1) : 0;
+        $('#top_stat_present_subtitle').text('Avg ' + avgP + '/day');
+        var avgA = targetDateKeys.length ? (totalA / targetDateKeys.length).toFixed(1) : 0;
+        $('#top_stat_absent_subtitle').text('Avg ' + avgA + '/day');
+        $('#top_stat_halfday_subtitle').text(totalH + ' Half Shifts');
+        $('#top_stat_rate_subtitle').text(targetDateKeys.length + ' Days Span');
+    } else if (period === 'month') {
+        var monthName = '{{ current_month_name }} {{ selected_year }}';
+        $('#top_stat_period_badge').html('<i class="ri-calendar-2-line me-1 text-primary"></i>Month: ' + monthName);
+        var avgP = targetDateKeys.length ? (totalP / targetDateKeys.length).toFixed(1) : 0;
+        $('#top_stat_present_subtitle').text('Avg ' + avgP + '/day');
+        var avgA = targetDateKeys.length ? (totalA / targetDateKeys.length).toFixed(1) : 0;
+        $('#top_stat_absent_subtitle').text('Avg ' + avgA + '/day');
+        $('#top_stat_halfday_subtitle').text('Monthly Total');
+        $('#top_stat_rate_subtitle').text(targetDateKeys.length + ' Days Span');
+    }
+
+    if ($('#attendanceDateSelector').length && $('#attendanceDateSelector').val() !== targetDate) {
+        if ($('#attendanceDateSelector option[value="' + targetDate + '"]').length > 0) {
+            $('#attendanceDateSelector').val(targetDate);
+        }
+    }
+}
+
+function selectCalendarDay(dateKey) {
+    if (!dateKey) return;
+    window.currentAttendanceDate = dateKey;
+    
+    // Highlight calendar day card
+    $('.attendance-calendar-grid .cal-day').removeClass('active-selected-day');
+    $('.attendance-calendar-grid .cal-day[data-date="' + dateKey + '"]').addClass('active-selected-day');
+
+    // Update Top KPIs
+    updateTopStats(dateKey);
+
+    // Apply list view filtering if in list view
+    applyAttendanceFilters();
+}
+
+function openCalendarDateModal(dateKey) {
+    if (!dateKey) return;
+    selectCalendarDay(dateKey);
+    renderCalendarDateModalContent(dateKey);
+    var modalEl = document.getElementById('calendarAttendanceModal');
+    if (modalEl) {
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+    }
+}
+
+function renderCalendarDateModalContent(dateKey) {
+    dateKey = dateKey || window.currentAttendanceDate || '{{ today_str }}';
+    var body = document.getElementById('calendarAttendanceModalBody');
+    var subLabel = document.getElementById('calendarAttendanceModalSubLabel');
+    if (!body) return;
+
+    var dObj = window.currentAttendanceMonthDays.find(d => d.key === dateKey) || { key: dateKey, label: dateKey, is_future: false, is_today: false, is_sunday: false };
+    var isFuture = dObj.is_future;
+
+    var staffRows = [];
+    $('#attendance_list_view tbody tr').each(function() {
+        var $tr = $(this);
+        var empName = $tr.find('td:first-child span').first().text().trim();
+        var empRole = $tr.data('role') || 'Staff';
+        var empDesig = $tr.data('designation') || '';
+        var isSuspended = $tr.hasClass('opacity-75') || $tr.find('.ri-lock-2-line').length > 0;
+        var $btn = $tr.find('.attendance-btn[data-date="' + dateKey + '"]');
+        var empId = $btn.data('emp-id');
+        var currentStatus = $btn.text().trim() || '-';
+
+        if (empId) {
+            staffRows.push({
+                id: empId,
+                name: empName,
+                role: empRole,
+                designation: empDesig,
+                is_suspended: isSuspended,
+                status: currentStatus
+            });
+        }
+    });
+
+    var countP = staffRows.filter(s => s.status === 'P').length;
+    var countA = staffRows.filter(s => s.status === 'A').length;
+    var countH = staffRows.filter(s => s.status === 'H').length;
+
+    if (subLabel) {
+        subLabel.innerHTML = `<strong>${dObj.label || dateKey}</strong> ${dObj.is_today ? '<span class="badge bg-warning text-dark ms-1">Today</span>' : ''} ${dObj.is_sunday ? '<span class="badge bg-danger text-white ms-1">Sunday</span>' : ''} &nbsp;·&nbsp; Total: <strong>${staffRows.length} Staff</strong>`;
+    }
+
+    if (staffRows.length === 0) {
+        body.innerHTML = '<div class="text-center text-muted p-5">No staff members found for ' + dateKey + '.</div>';
+        return;
+    }
+
+    var html = `
+    <div class="px-4 py-3 bg-light border-bottom d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1"><i class="ri-check-line me-1"></i>${countP} Present</span>
+            <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1"><i class="ri-close-line me-1"></i>${countA} Absent</span>
+            <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1"><i class="ri-time-line me-1"></i>${countH} Half Day</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            ${!isFuture ? `
+            <button type="button" class="btn btn-sm btn-outline-success fw-bold d-flex align-items-center gap-1" onclick="bulkUpdateDateAttendance('${dateKey}', 'P')">
+                <i class="ri-check-double-line"></i> Mark All Present
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-danger fw-semibold d-flex align-items-center gap-1" onclick="bulkUpdateDateAttendance('${dateKey}', 'A')">
+                <i class="ri-close-circle-line"></i> Mark All Absent
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" onclick="bulkUpdateDateAttendance('${dateKey}', '-')">
+                <i class="ri-eraser-line"></i> Clear All
+            </button>
+            ` : '<span class="badge bg-light text-muted border"><i class="ri-time-line me-1"></i> Future Date (Locked)</span>'}
+        </div>
+    </div>
+    <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light sticky-top">
+                <tr>
+                    <th class="ps-4" style="width: 38%;">Employee / Crew Member</th>
+                    <th style="width: 24%;">Role / Designation</th>
+                    <th class="text-end pe-4" style="width: 38%;">Status</th>
+                </tr>
+            </thead>
+            <tbody>`;
+
+    staffRows.forEach(function(s) {
+        var initials = s.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        html += `
+        <tr class="${s.is_suspended ? 'opacity-50 bg-light' : ''}">
+            <td class="ps-4">
+                <div class="d-flex align-items-center gap-2.5">
+                    <div class="worker-avatar bg-primary-subtle text-primary fw-bold" style="width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px;">
+                        ${initials}
+                    </div>
+                    <div>
+                        <div class="fw-bold text-dark">${s.name}</div>
+                        ${s.is_suspended ? '<span class="badge bg-danger-subtle text-danger" style="font-size:9px;">Suspended</span>' : ''}
+                    </div>
+                </div>
+            </td>
+            <td>
+                <span class="badge bg-light text-secondary border px-2 py-1">${s.role || 'Staff'}</span>
+                ${s.designation ? `<span class="badge bg-light text-primary border px-2 py-1 ms-1">${s.designation}</span>` : ''}
+            </td>
+            <td class="text-end pe-4">
+                ${s.is_suspended ? '<span class="text-muted small fst-italic">Account Locked</span>' : (isFuture ? '<span class="text-muted small fst-italic">Future Date</span>' : `
+                <div class="btn-group btn-group-sm rounded-pill p-0.5 bg-light border" role="group">
+                    <button type="button" class="att-status-pill-btn ${s.status === 'P' ? 'active-p' : ''}" onclick="setEmployeeAttendance(${s.id}, '${dateKey}', 'P')">
+                        <i class="ri-check-line me-0.5"></i> Present
+                    </button>
+                    <button type="button" class="att-status-pill-btn ${s.status === 'A' ? 'active-a' : ''}" onclick="setEmployeeAttendance(${s.id}, '${dateKey}', 'A')">
+                        <i class="ri-close-line me-0.5"></i> Absent
+                    </button>
+                    <button type="button" class="att-status-pill-btn ${s.status === 'H' ? 'active-h' : ''}" onclick="setEmployeeAttendance(${s.id}, '${dateKey}', 'H')">
+                        <i class="ri-time-line me-0.5"></i> Halfday
+                    </button>
+                    <button type="button" class="att-status-pill-btn ${s.status === '-' ? 'active-dash' : ''}" onclick="setEmployeeAttendance(${s.id}, '${dateKey}', '-')">
+                        -
+                    </button>
+                </div>
+                `)}
+            </td>
+        </tr>`;
+    });
+
+    html += `
+            </tbody>
+        </table>
+    </div>`;
+
+    body.innerHTML = html;
+}
+
+function setEmployeeAttendance(empId, dateKey, status) {
+    $.ajax({
+        url: '/farmer/employee/update_attendance/',
+        method: 'POST',
+        data: {
+            'employee_id': empId,
+            'date': dateKey,
+            'status': status
+        },
+        success: function(res) {
+            if (res.success) {
+                // Update table button in list view
+                var $btn = $('#attendance_list_view .attendance-btn[data-emp-id="' + empId + '"][data-date="' + dateKey + '"]');
+                if ($btn.length) {
+                    $btn.text(status);
+                    var newClass = "btn btn-sm attendance-btn btn-light text-muted";
+                    if (status === "P") newClass = "btn btn-sm attendance-btn btn-primary";
+                    else if (status === "A") newClass = "btn btn-sm attendance-btn btn-danger";
+                    else if (status === "H") newClass = "btn btn-sm attendance-btn btn-info";
+                    $btn.attr('class', newClass);
+                }
+
+                // Update Top Stats & Calendar & Modal Content
+                updateTopStats(dateKey);
+                renderAttendanceCalendar();
+                renderCalendarDateModalContent(dateKey);
+
+                if (window.Toastify) {
+                    Toastify({ text: '✅ Attendance updated for ' + dateKey, backgroundColor: '#10B981', duration: 2000 }).showToast();
+                } else if (typeof window.showAppToast === 'function') {
+                    window.showAppToast("Attendance updated", "success", 2000);
+                }
+            } else {
+                alert('Error: ' + (res.error || 'Failed to update attendance'));
+            }
+        },
+        error: function() {
+            alert('Network error while updating attendance.');
+        }
+    });
+}
+
+function bulkUpdateDateAttendance(dateKey, status) {
+    $.ajax({
+        url: '/farmer/employee/bulk_update_attendance/',
+        method: 'POST',
+        data: {
+            'date': dateKey,
+            'status': status
+        },
+        success: function(res) {
+            if (res.success) {
+                // Update all matching buttons in List View table
+                $('#attendance_list_view .attendance-btn[data-date="' + dateKey + '"]').each(function() {
+                    var $b = $(this);
+                    if (!$b.prop('disabled')) {
+                        $b.text(status);
+                        var newClass = "btn btn-sm attendance-btn btn-light text-muted";
+                        if (status === "P") newClass = "btn btn-sm attendance-btn btn-primary";
+                        else if (status === "A") newClass = "btn btn-sm attendance-btn btn-danger";
+                        else if (status === "H") newClass = "btn btn-sm attendance-btn btn-info";
+                        $b.attr('class', newClass);
+                    }
+                });
+
+                // Update Top Stats & Calendar & Modal Content
+                updateTopStats(dateKey);
+                renderAttendanceCalendar();
+                renderCalendarDateModalContent(dateKey);
+
+                if (window.Toastify) {
+                    Toastify({ text: '✅ Bulk updated ' + res.count + ' staff on ' + dateKey, backgroundColor: '#10B981', duration: 2500 }).showToast();
+                } else if (typeof window.showAppToast === 'function') {
+                    window.showAppToast("Bulk attendance updated", "success", 2000);
+                }
+            } else {
+                alert('Error: ' + (res.error || 'Failed to bulk update'));
+            }
+        },
+        error: function() {
+            alert('Network error during bulk attendance update.');
+        }
+    });
+}
+
+function applyAttendanceFilters() {
+    var search = ($('#attendanceSearchInput').val() || '').toLowerCase().trim();
+    var role = ($('#filterAttendanceRole').val() || '').toLowerCase().trim();
+    var desig = ($('#filterAttendanceDesignation').val() || '').toLowerCase().trim();
+    var status = ($('#filterAttendanceStatus').val() || '').trim();
+    var defaultDate = (window.currentAttendanceMonthDays && window.currentAttendanceMonthDays.length)
+        ? ((window.currentAttendanceMonthDays.find(function(d) { return d.is_today; }) || window.currentAttendanceMonthDays[0]).key)
+        : '{{ today_str }}';
+    var curDate = window.currentAttendanceDate || defaultDate;
+    var period = window.currentAttendancePeriod || 'day';
+    var targetDateKeys = getAttendanceDateKeysForPeriod(curDate, period);
+
+    var visibleCount = 0;
+    var $rows = $('#attendance_list_view tbody tr:not(#attendance_no_records_row)');
+
+    $rows.each(function () {
+        var $tr = $(this);
+        var name = ($tr.data('name') || $tr.find('td:first-child span').first().text()).toString().toLowerCase().trim();
+        var empRole = ($tr.data('role') || '').toString().toLowerCase().trim();
+        var empRawRole = ($tr.data('raw-role') || '').toString().toLowerCase().trim();
+        var empDesig = ($tr.data('designation') || '').toString().toLowerCase().trim();
+
+        var okSearch = !search || name.includes(search) || empRole.includes(search) || empDesig.includes(search);
+        var okRole = !role || empRole === role || empRawRole === role || (role === 'role manager' && (empRole.includes('manager') || empRawRole.includes('manager')));
+        var okDesig = !desig || empDesig === desig;
+
+        var okStatus = true;
+        if (status) {
+            if (period === 'day') {
+                var $cellBtn = $tr.find('.attendance-btn[data-date="' + curDate + '"]');
+                var attStatus = $cellBtn.length ? $cellBtn.text().trim() : '-';
+                okStatus = (attStatus === status);
+            } else {
+                var hasStatus = false;
+                targetDateKeys.forEach(function(dk) {
+                    var $btn = $tr.find('.attendance-btn[data-date="' + dk + '"]');
+                    if ($btn.length && $btn.text().trim() === status) {
+                        hasStatus = true;
+                    }
+                });
+                okStatus = hasStatus;
+            }
+        }
+
+        if (okSearch && okRole && okDesig && okStatus) {
+            $tr.show();
+            visibleCount++;
+        } else {
+            $tr.hide();
+        }
+    });
+
+    if ($rows.length > 0) {
+        if (visibleCount === 0) {
+            $('#attendance_no_records_row').show();
+        } else {
+            $('#attendance_no_records_row').hide();
+        }
+    }
+
+    updateTopStats(curDate);
+}
+
+function scrollToTodayColumn() {
+    var $container = $('#attendance_list_view .table-responsive');
+    if (!$container.length) return;
+
+    var $target = $('#today_col_header');
+    if (!$target.length) {
+        $target = $container.find('.today-col').first();
+    }
+
+    if ($target.length) {
+        var stickyColWidth = $container.find('.sticky-col').first().outerWidth() || 140;
+        var targetOffset = $target.offset().left;
+        var containerOffset = $container.offset().left;
+        var currentScroll = $container.scrollLeft();
+        
+        var desiredScroll = currentScroll + (targetOffset - containerOffset) - stickyColWidth - 10;
+        
+        if (desiredScroll >= 0) {
+            $container.stop().animate({ scrollLeft: desiredScroll }, 350);
+        } else {
+            $container.stop().animate({ scrollLeft: 0 }, 350);
+        }
+    }
+}
+
+function switchAttendanceView(view) {
+    if (view === 'list') {
+        $('#attendance_list_view').removeClass('d-none');
+        $('#attendance_calendar_view').addClass('d-none');
+        $('#attendance_view_list_btn').addClass('btn-primary active').removeClass('btn-outline-primary');
+        $('#attendance_view_calendar_btn').addClass('btn-outline-primary').removeClass('btn-primary active');
+        setTimeout(scrollToTodayColumn, 150);
+    } else {
+        $('#attendance_list_view').addClass('d-none');
+        $('#attendance_calendar_view').removeClass('d-none');
+        $('#attendance_view_calendar_btn').addClass('btn-primary active').removeClass('btn-outline-primary');
+        $('#attendance_view_list_btn').addClass('btn-outline-primary').removeClass('btn-primary active');
+        renderAttendanceCalendar();
+    }
+}
+
+function renderAttendanceCalendar() {
+    var countsByDate = {};
+
+    $('#attendance_list_view .attendance-btn').each(function () {
+        var date = $(this).data('date');
+        var status = $(this).text().trim();
+        if (!date || (status !== 'P' && status !== 'A' && status !== 'H')) return;
+        if (!countsByDate[date]) countsByDate[date] = { P: 0, A: 0, H: 0 };
+        countsByDate[date][status]++;
+    });
+
+    var allDates = Object.keys(countsByDate).sort();
+    if (allDates.length === 0 && window.currentAttendanceMonthDays.length === 0) {
+        $('#attendance_calendar_grid').html('<div class="text-center text-muted p-4">No attendance data for this month.</div>');
+        return;
+    }
+
+    var sampleDateStr = window.currentAttendanceMonthDays.length ? window.currentAttendanceMonthDays[0].key : (allDates.length ? allDates[0] : '{{ today_str }}');
+    var sample = new Date(sampleDateStr + 'T00:00:00');
+    var year = sample.getFullYear();
+    var month = sample.getMonth();
+
+    var startOffset = new Date(year, month, 1).getDay(); // 0 = Sunday
+    var daysInMonth = new Date(year, month + 1, 0).getDate();
+    var weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    var html = '';
+    weekdayLabels.forEach(function (wd, idx) {
+        html += '<div class="cal-weekday' + (idx === 0 ? ' sunday' : '') + '">' + wd + '</div>';
+    });
+
+    for (var i = 0; i < startOffset; i++) {
+        html += '<div class="cal-day empty"></div>';
+    }
+
+    for (var day = 1; day <= daysInMonth; day++) {
+        var isSunday = new Date(year, month, day).getDay() === 0;
+        var dateKey = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+        var c = countsByDate[dateKey] || { P: 0, A: 0, H: 0 };
+        var isSelected = (dateKey === window.currentAttendanceDate);
+        var isToday = (dateKey === '{{ today_str }}');
+
+        var countChips = '';
+        if (c.P > 0) {
+            countChips += '<span class="cal-count-p" title="' + c.P + ' Present"><i class="ri-checkbox-circle-fill"></i> P: <strong>' + c.P + '</strong></span>';
+        }
+        if (c.A > 0) {
+            countChips += '<span class="cal-count-a" title="' + c.A + ' Absent"><i class="ri-close-circle-fill"></i> A: <strong>' + c.A + '</strong></span>';
+        }
+        if (c.H > 0) {
+            countChips += '<span class="cal-count-h" title="' + c.H + ' Half Day"><i class="ri-time-fill"></i> H: <strong>' + c.H + '</strong></span>';
+        }
+
+        html += '<div class="cal-day ' + (isSunday ? 'sunday ' : '') + (isSelected ? 'active-selected-day ' : '') + '" data-date="' + dateKey + '" onclick="openCalendarDateModal(\'' + dateKey + '\')">';
+        html += '<div class="cal-day-number"><span>' + day + '</span>' +
+                (isToday ? '<span class="badge bg-warning text-dark py-0.5 px-1.5" style="font-size:8.5px; border-radius:5px;">TODAY</span>' : (isSunday ? '<span class="badge bg-danger py-0.5 px-1.5" style="font-size:8.5px; border-radius:5px;">SUN</span>' : '')) +
+                '</div>';
+        if (countChips) {
+            html += '<div class="cal-counts">' + countChips + '</div>';
+        }
+        html += '</div>';
+    }
+
+    $('#attendance_calendar_grid').html(html);
+}
+
+$(document).ready(function () {
+    highlightSundaysInListView();
+    updateTopStats();
+
+    // Table click listener
+    $(document).on('click', '#attendance_list_view .attendance-btn', function () {
+        if ($(this).prop('disabled')) return;
+        var state = $(this).text().trim();
+        var empId = $(this).data('empId') || $(this).attr('data-emp-id');
+        var date = $(this).data('date') || $(this).attr('data-date');
+        var newState = "-";
+        var newClass = "btn btn-sm attendance-btn btn-light text-muted";
+
+        if (state === "-") {
+            newState = "P";
+            newClass = "btn btn-sm attendance-btn btn-primary";
+        } else if (state === "P") {
+            newState = "A";
+            newClass = "btn btn-sm attendance-btn btn-danger";
+        } else if (state === "A") {
+            newState = "H";
+            newClass = "btn btn-sm attendance-btn btn-info";
+        }
+
+        var button = this;
+
+        $.ajax({
+            url: '/farmer/employee/update_attendance/',
+            method: 'POST',
+            data: {
+                'employee_id': empId,
+                'date': date,
+                'status': newState
+            },
+            success: function(res) {
+                if (res.success) {
+                    button.innerText = newState;
+                    button.className = newClass;
+                    updateTopStats(date);
+                    renderAttendanceCalendar();
+                    if (window.currentAttendanceDate === date) {
+                        renderSelectedDateSheet(date);
+                    }
+                    if (window.Toastify) {
+                        Toastify({ text: '✅ Attendance marked: ' + newState, backgroundColor: '#10B981', duration: 1500 }).showToast();
+                    } else if (typeof window.showAppToast === 'function') {
+                        window.showAppToast("Attendance updated", "success", 2000);
+                    }
+                } else {
+                    alert('Error: ' + (res.error || 'Failed to update attendance'));
+                }
+            },
+            error: function() {
+                alert('Network error while updating attendance');
+            }
+        });
+    });
+});
+</script>
+<script>
+function togglePlot(checkbox) {
+    const card = checkbox.closest("label").querySelector(".plot-card");
+
+    if (!card) return;
+
+    const icon = card.querySelector(".check-icon");
+
+    if (checkbox.checked) {
+        card.classList.add("active");
+        if (icon) icon.classList.remove("d-none");
+    } else {
+        card.classList.remove("active");
+        if (icon) icon.classList.add("d-none");
+    }
+}
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".plot-card").forEach(card => {
+        card.addEventListener("click", function () {
+            const checkbox = this.closest("label").querySelector(".plot-checkbox");
+
+            if (!checkbox) return;
+
+            setTimeout(() => {
+                checkbox.dispatchEvent(new Event("change"));
+            }, 0);
+        });
+    });
+});
+</script>
+<script>
+function enableEdit(id) {
+    document.getElementById(`duty-view-₹{id}`).classList.add("d-none");
+    document.getElementById(`duty-edit-₹{id}`).classList.remove("d-none");
+}
+
+function cancelDuty(id) {
+    document.getElementById(`duty-edit-₹{id}`).classList.add("d-none");
+    document.getElementById(`duty-view-₹{id}`).classList.remove("d-none");
+}
+
+function saveDuty(id) {
+    let input = document.getElementById(`duty-input-₹{id}`).value;
+
+    // update UI instantly
+    document.getElementById(`duty-text-₹{id}`).innerText = input;
+
+    // toggle back
+    cancelDuty(id);
+
+    // OPTIONAL: send to backend (AJAX later)
+    console.log("Saving duty:", input);
+}
+</script>
+<script>
+$(document).ready(function () {
+    var table;
+    $('.datatable').each(function () {
+        // 🔥 prevent double init
+        if ($.fn.dataTable.isDataTable(this)) {
+            $(this).DataTable().destroy();
+        }
+        table = $(this).DataTable({
+            pageLength: $(this).data('page-length') || 10,
+            lengthMenu: [5, 10, 25, 50],
+            responsive: true,
+            dom: 't<"bottom d-flex align-items-center justify-content-between mt-3"ip>'
+        });
+    });
+
+    // Custom Search
+    $('#customSearchBox').on('keyup', function () {
+        if (table) table.search(this.value).draw();
+    });
+
+    // Status Filter (Column 4)
+    $('.status-filter').on('click', function (e) {
+        e.preventDefault();
+        var val = $(this).data('value');
+        $('#statusDropdownBtn').text($(this).text());
+        if (table) table.column(4).search(val ? '^' + val + '$' : '', true, false).draw();
+    });
+
+    // Role Filter (Column 2)
+    $('.role-filter-new').on('click', function (e) {
+        e.preventDefault();
+        var val = $(this).data('value');
+        $('#roleDropdownBtn').text($(this).text());
+        if (table) table.column(2).search(val ? val : '', true, false).draw();
+    });
+
+    // Sort By
+    $('.sort-filter').on('click', function (e) {
+        e.preventDefault();
+        var sortCol = $(this).data('sort');
+        $('#sortDropdownBtn').text($(this).text());
+        if (table) {
+            if (sortCol === 'name') {
+                table.order([0, 'asc']).draw();
+            } else if (sortCol === 'status') {
+                table.order([4, 'asc']).draw();
+            }
+        }
+    });
+});
+</script>
+
+<script>
+  // Dynamic permissions visibility toggling
+  let currentQuickDesigTarget = 'add';
+  window.openQuickDesignationModal = function(target) {
+      currentQuickDesigTarget = target || 'add';
+      $('#quick_designation_name').val('');
+      $('#quick_designation_desc').val('');
+      var modalEl = document.getElementById('quick_add_designation_modal');
+      var modal = new bootstrap.Modal(modalEl);
+      modal.show();
+  };
+
+  window.submitQuickDesignation = function() {
+      var name = $('#quick_designation_name').val().trim();
+      var desc = $('#quick_designation_desc').val().trim();
+      if (!name) {
+          showAppToast('Please enter a Designation name.', 'error');
+          return;
+      }
+
+      var formData = new FormData();
+      formData.append('name', name);
+      formData.append('description', desc);
+      formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+      $.ajax({
+          url: "{% url 'quick_add_designation' %}",
+          method: "POST",
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function(res) {
+              if (res.success) {
+                  ['#add_designation', '#edit_designation'].forEach(function(sel) {
+                      var $select = $(sel);
+                      if ($select.length) {
+                          var exists = false;
+                          $select.find('option').each(function() {
+                              if ($(this).val() == res.id || $(this).text().toLowerCase() === res.name.toLowerCase()) {
+                                  exists = true;
+                              }
+                          });
+                          if (!exists) {
+                              $select.append($('<option>', {
+                                  value: res.id,
+                                  text: res.name
+                              }));
+                          }
+                      }
+                  });
+
+                  var targetSel = currentQuickDesigTarget === 'edit' ? '#edit_designation' : '#add_designation';
+                  $(targetSel).val(res.id);
+
+                  let closeBtn = document.querySelector('#quick_add_designation_modal .btn-close');
+                  if (closeBtn) closeBtn.click();
+
+                  showAppToast("Designation '" + res.name + "' added successfully!", "success");
+              } else {
+                  showAppToast(res.error || "Failed to add designation", "error");
+              }
+          },
+          error: function() {
+              showAppToast('Error creating designation.', 'error');
+          }
+      });
+  };
+
+  function toggleAddPermissions() {
+      if ($('#addRoleManagerCheck').is(':checked')) {
+          $('#add_permissions_wrapper').slideDown();
+      } else {
+          $('#add_permissions_wrapper').slideUp();
+      }
+  }
+
+  function toggleEditPermissions() {
+      if ($('#editRoleManagerCheck').is(':checked')) {
+          $('#edit_permissions_wrapper').slideDown();
+      } else {
+          $('#edit_permissions_wrapper').slideUp();
+      }
+  }
+
+  $('#addRoleManagerCheck').on('change', toggleAddPermissions);
+  $('#editRoleManagerCheck').on('change', toggleEditPermissions);
+
+  // All Modules permission toggle handlers
+  $('#add_perm_all').on('change', function() {
+      var isAll = $(this).is(':checked');
+      $('.add-perm-check').prop('checked', isAll).prop('disabled', isAll);
+  });
+
+  $('#edit_perm_all').on('change', function() {
+      var isAll = $(this).is(':checked');
+      $('.edit-perm-check').prop('checked', isAll).prop('disabled', isAll);
+  });
+
+  // AJAX CRUD Staff
+  $('#addStaffForm').on('submit', function(e) {
+      e.preventDefault();
+      var formData = new FormData();
+      formData.append('name', $('#add_name').val());
+      formData.append('mobile', $('#add_mobile').val());
+      formData.append('dob', $('#add_dob').val());
+      formData.append('gender', $('#add_gender').val());
+      formData.append('doc_type', $('#add_doctype').val());
+      if($('#add_docfile')[0].files[0]) {
+          formData.append('doc_file', $('#add_docfile')[0].files[0]);
+      }
+      if($('#add_profile_image')[0] && $('#add_profile_image')[0].files[0]) {
+          formData.append('profile_image', $('#add_profile_image')[0].files[0]);
+      }
+      formData.append('status', $('#add_status').val());
+      formData.append('is_manager', $('#addRoleManagerCheck').is(':checked'));
+      formData.append('designation', $('#add_designation').val());
+      formData.append('salary_frequency', $('#add_sal_freq').val());
+      formData.append('salary', $('#add_salary').val());
+      formData.append('address', $('#add_address').val());
+      
+      var isPermAll = $('#add_perm_all').is(':checked');
+      formData.append('perm_all', isPermAll);
+      
+      var selectedPerms = [];
+      if (!isPermAll) {
+          $('.add-perm-check:checked').each(function() {
+              selectedPerms.push($(this).val());
+          });
+      }
+      formData.append('permissions', JSON.stringify(selectedPerms));
+      formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+      $.ajax({
+          url: "{% url 'add_staff_api' %}",
+          method: "POST",
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function(res) {
+              if (res.success) {
+                  let closeBtn = document.querySelector('#add_staff_modal .btn-close');
+                  if (closeBtn) closeBtn.click();
+                  showAppToast(res.message || "User added successfully", "success");
+                  setTimeout(() => location.reload(), 1500);
+              } else {
+                  showAppToast(res.error || "Failed to add user", "error");
+              }
+          }
+      });
+  });
+
+  $(document).on('click', '.edit-btn', function() {
+      var id = $(this).attr('data-id');
+      var name = $(this).attr('data-name');
+      var mobile = $(this).attr('data-mobile');
+      var dob = $(this).attr('data-dob');
+      var gender = $(this).attr('data-gender');
+      var doctype = $(this).attr('data-doctype');
+      var status = $(this).attr('data-status');
+      var ismanager = $(this).attr('data-ismanager');
+      var username = $(this).attr('data-username');
+      var permsRaw = $(this).attr('data-permissions');
+      var profileImg = $(this).attr('data-profile-image');
+      var salaryfreq = $(this).attr('data-salary-frequency');
+      var salary = $(this).attr('data-salary');
+      var address = $(this).attr('data-address');
+      var designation = $(this).attr('data-designation');
+
+      $('#edit_staff_id').val(id);
+      $('#edit_name').val(name);
+      $('#edit_mobile').val(mobile);
+      $('#edit_dob').val(dob);
+      
+      if(gender && gender !== "None") $('#edit_gender').val(gender);
+      else $('#edit_gender').val("");
+      
+      if(doctype && doctype !== "None") $('#edit_doctype').val(doctype);
+      else $('#edit_doctype').val("");
+      
+      if(profileImg && profileImg !== '') {
+          $('#edit_profile_image_preview').attr('src', profileImg).removeClass('d-none');
+      } else {
+          $('#edit_profile_image_preview').attr('src', '').addClass('d-none');
+      }
+      $('#edit_profile_image').val('');
+
+      $('#edit_status').val(status);
+      
+      var isManagerBool = (ismanager === 'true' || ismanager === 'True' || ismanager === '1');
+      $('#editRoleManagerCheck').prop('checked', isManagerBool);
+
+      $('#edit_sal_freq').val(salaryfreq || "");
+      $('#edit_salary').val(salary || "");
+      $('#edit_address').val(address || "");
+      $('#edit_designation').val(designation || "");
+
+      // Parse permissions
+      var perms = [];
+      try {
+          perms = JSON.parse(permsRaw);
+      } catch(e) { perms = []; }
+
+      if (!Array.isArray(perms)) perms = [];
+
+      var hasAll = perms.includes('ALL');
+      $('#edit_perm_all').prop('checked', hasAll);
+      
+      if (hasAll) {
+          $('.edit-perm-check').prop('checked', true).prop('disabled', true);
+      } else {
+          $('.edit-perm-check').prop('disabled', false);
+          $('.edit-perm-check').each(function() {
+              var val = $(this).val();
+              $(this).prop('checked', perms.includes(val));
+          });
+      }
+      toggleEditPermissions();
+  });
+
+  $('#editStaffForm').on('submit', function(e) {
+      e.preventDefault();
+      var formData = new FormData();
+      formData.append('staff_id', $('#edit_staff_id').val());
+      formData.append('name', $('#edit_name').val());
+      formData.append('mobile', $('#edit_mobile').val());
+      formData.append('dob', $('#edit_dob').val());
+      formData.append('gender', $('#edit_gender').val());
+      formData.append('doc_type', $('#edit_doctype').val());
+      if($('#edit_docfile')[0].files[0]) {
+          formData.append('doc_file', $('#edit_docfile')[0].files[0]);
+      }
+      if($('#edit_profile_image')[0] && $('#edit_profile_image')[0].files[0]) {
+          formData.append('profile_image', $('#edit_profile_image')[0].files[0]);
+      }
+      formData.append('status', $('#edit_status').val());
+      formData.append('is_manager', $('#editRoleManagerCheck').is(':checked'));
+      formData.append('designation', $('#edit_designation').val());
+      formData.append('salary_frequency', $('#edit_sal_freq').val());
+      formData.append('salary', $('#edit_salary').val());
+      formData.append('address', $('#edit_address').val());
+
+      var isPermAll = $('#edit_perm_all').is(':checked');
+      formData.append('perm_all', isPermAll);
+      
+      var selectedPerms = [];
+      if (!isPermAll) {
+          $('.edit-perm-check:checked').each(function() {
+              selectedPerms.push($(this).val());
+          });
+      }
+      formData.append('permissions', JSON.stringify(selectedPerms));
+      formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+      $.ajax({
+          url: "{% url 'update_staff_api' %}",
+          method: "POST",
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function(res) {
+              if (res.success) {
+                  let closeBtn = document.querySelector('#edit_staff_modal .btn-close');
+                  if (closeBtn) closeBtn.click();
+                  showAppToast(res.message || "User updated successfully", "success");
+                  setTimeout(() => location.reload(), 1500);
+              } else {
+                  showAppToast(res.error || "Failed to update user", "error");
+              }
+          }
+      });
+  });
+
+  let deleteStaffId = null;
+  $(document).on('click', '.delete-btn', function() {
+      deleteStaffId = $(this).attr('data-id');
+      $('#deleteFarmerName').text($(this).attr('data-name'));
+  });
+
+  $(document).on('click', '.view-btn', function() {
+      var name = $(this).attr('data-name');
+      var mobile = $(this).attr('data-mobile');
+      var role = $(this).attr('data-role');
+      var status = $(this).attr('data-status');
+      var gender = $(this).attr('data-gender');
+      var doctype = $(this).attr('data-doctype');
+      var dob = $(this).attr('data-dob');
+      var docurl = $(this).attr('data-docurl');
+      var profileImg = $(this).attr('data-profile-image');
+      var salaryfreq = $(this).attr('data-salary-frequency');
+      var salary = $(this).attr('data-salary');
+      var address = $(this).attr('data-address');
+      var designation = $(this).attr('data-designation');
+
+      $('#view_staff_name').text(name);
+      $('#view_staff_role').text(role);
+      $('#view_staff_designation').text(designation || "Not Assigned");
+      $('#view_staff_mobile').text(mobile);
+      $('#view_staff_gender').text(gender);
+      $('#view_staff_doctype').text(doctype);
+      $('#view_staff_dob').text(dob);
+      $('#view_staff_sal_freq').text(salaryfreq || "Not Specified");
+      $('#view_staff_salary').text(salary ? "₹ " + salary + "/-" : "Not Specified");
+      $('#view_staff_address').text(address || "Not Specified");
+      
+      if (docurl && docurl !== '') {
+          $('#view_staff_doc_container').show();
+          $('#view_staff_doc_btn').attr('href', docurl);
+      } else {
+          $('#view_staff_doc_container').hide();
+          $('#view_staff_doc_btn').attr('href', '#');
+      }
+
+      if (profileImg && profileImg !== '') {
+          $('#view_staff_profile_img').attr('src', profileImg).removeClass('d-none');
+          $('#view_staff_initials').addClass('d-none');
+      } else {
+          $('#view_staff_profile_img').attr('src', '').addClass('d-none');
+          $('#view_staff_initials').removeClass('d-none');
+      }
+      
+      var initials = "";
+      if (name) {
+          initials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+      }
+      $('#view_staff_initials').text(initials);
+      
+      var badge = $('#view_staff_status_badge');
+      badge.text(status);
+      if(status === 'Active') {
+          badge.removeClass('bg-label-danger').addClass('bg-label-primary');
+      } else {
+          badge.removeClass('bg-label-primary').addClass('bg-label-danger');
+      }
+  });
+
+  // Dynamic Image Preview on File Selection
+  $('#add_profile_image').on('change', function(e) {
+      if (this.files && this.files[0]) {
+          var reader = new FileReader();
+          reader.onload = function(evt) {
+              $('#add_profile_image_preview').attr('src', evt.target.result).removeClass('d-none');
+          };
+          reader.readAsDataURL(this.files[0]);
+      } else {
+          $('#add_profile_image_preview').attr('src', '').addClass('d-none');
+      }
+  });
+
+  $('#edit_profile_image').on('change', function(e) {
+      if (this.files && this.files[0]) {
+          var reader = new FileReader();
+          reader.onload = function(evt) {
+              $('#edit_profile_image_preview').attr('src', evt.target.result).removeClass('d-none');
+          };
+          reader.readAsDataURL(this.files[0]);
+      }
+  });
+
+  window.openStaffImagePreview = function(el) {
+      var imgSrc = $(el).attr('data-img') || $(el).attr('src');
+      var staffName = $(el).attr('data-name') || 'Staff Member';
+      var staffRole = $(el).attr('data-role') || '';
+
+      if (!imgSrc) return;
+
+      var $modal = $('#staff_image_preview_modal');
+      if ($modal.parent().get(0) !== document.body) {
+          $modal.appendTo('body');
+      }
+
+      $('#preview_modal_img_src').attr('src', imgSrc);
+      $('#preview_modal_staff_name').text(staffName);
+      $('#preview_modal_staff_role').text(staffRole || 'Profile Photo');
+      $('#preview_modal_download_btn').attr('href', imgSrc);
+
+      var modalEl = document.getElementById('staff_image_preview_modal');
+      if (modalEl) {
+          var modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+          modalInstance.show();
+
+          setTimeout(function() {
+              $('.modal-backdrop').css('z-index', '109990');
+          }, 30);
+      }
+  };
+
+
+
+
+
+  $('#confirmDeleteBtn').on('click', function() {
+      if(deleteStaffId) {
+          $.ajax({
+              url: "{% url 'delete_staff_api' %}",
+              method: "POST",
+              data: {
+                  'staff_id': deleteStaffId,
+                  'csrfmiddlewaretoken': '{{ csrf_token }}'
+              },
+              success: function(res) {
+                  if (res.success) {
+                      let closeBtn = document.querySelector('#delete_labour .btn-close');
+                      if (closeBtn) closeBtn.click();
+                      showAppToast("User deleted successfully", "error");
+                      setTimeout(() => location.reload(), 1500);
+                  } else {
+                      showAppToast(res.error || "Failed to delete user", "error");
+                  }
+              }
+          });
+      }
+  });
+document.addEventListener("DOMContentLoaded", function () {
+
+  function updateBulkBar() {
+    var checked = document.querySelectorAll('.payroll-row-check:checked');
+    var btn = document.getElementById('bulk_disburse_btn');
+    var countSpan = document.getElementById('bulk_selected_count');
+    countSpan.innerText = checked.length;
+    if (checked.length > 0) {
+      btn.classList.remove('d-none');
+    } else {
+      btn.classList.add('d-none');
+    }
+
+    // Keep "select all" checkbox in sync (checked / indeterminate / unchecked)
+    var all = document.querySelectorAll('.payroll-row-check');
+    var selectAll = document.getElementById('payroll_select_all');
+    if (all.length === 0) {
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+    } else if (checked.length === all.length) {
+      selectAll.checked = true;
+      selectAll.indeterminate = false;
+    } else if (checked.length === 0) {
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+    } else {
+      selectAll.checked = false;
+      selectAll.indeterminate = true;
+    }
+  }
+
+  document.getElementById('payroll_select_all').addEventListener('change', function () {
+    document.querySelectorAll('.payroll-row-check').forEach(function (cb) {
+      cb.checked = this.checked;
+    }, this);
+    updateBulkBar();
+  });
+
+  document.querySelectorAll('.payroll-row-check').forEach(function (cb) {
+    cb.addEventListener('change', updateBulkBar);
+  });
+
+});
+
+var bulkQueue = [];
+
+function openBulkDisburseModal() {
+  var checked = document.querySelectorAll('.payroll-row-check:checked');
+  bulkQueue = [];
+
+  var listHtml = '';
+  var totalAmount = 0;
+
+  checked.forEach(function (cb) {
+    var row = cb.closest('.payroll-row');
+    var rateInput = row ? row.querySelector('.row-rate-input') : null;
+    var advInput = row ? row.querySelector('.row-adv-input') : null;
+    var incInput = row ? row.querySelector('.row-inc-input') : null;
+    var freqSelect = row ? row.querySelector('.row-freq-select') : null;
+
+    var empId = cb.dataset.id;
+    var name = cb.dataset.name;
+    var role = cb.dataset.role || (row && row.querySelector('.text-muted') ? row.querySelector('.text-muted').innerText.split('•')[0].replace('Role:', '').trim() : '');
+    var present = parseFloat(cb.dataset.present) || 0;
+    var advance = advInput ? (parseFloat(advInput.value) || 0) : (parseFloat(cb.dataset.advance) || 0);
+    var rate = rateInput ? (parseFloat(rateInput.value) || 0) : (parseFloat(cb.dataset.rate) || 0);
+    var inc = incInput ? (parseFloat(incInput.value) || 0) : 0;
+    var freq = freqSelect ? freqSelect.value : (cb.dataset.frequency || 'Daily');
+
+    var dailyRate = (typeof getDailyRate === 'function') ? getDailyRate(rate, freq) : (freq === 'Monthly' ? rate / 30.0 : (freq === 'Weekly' ? rate / 6.0 : rate));
+    var gross = dailyRate * present;
+    var net = Math.max(0, gross - advance + inc);
+    totalAmount += net;
+
+    bulkQueue.push({
+      employee_id: empId,
+      name: name,
+      advance: advance,
+      incentive: inc,
+      gross: gross,
+      present: present,
+      net_pay: net
+    });
+
+    listHtml += `
+      <div class="card border shadow-none mb-2" style="border-radius:10px; background:#fbfcfd;">
+        <div class="card-body p-2 d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-bold text-dark d-flex align-items-center gap-2 mb-1" style="font-size:13.5px;">
+              <span>${name}</span>
+              ${role ? `<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:10px; font-weight:500;">${role}</span>` : ''}
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-1" style="font-size:11.5px;">
+              <span class="badge bg-primary bg-opacity-10 text-primary border" style="font-weight:600;">
+                <i class="ri-calendar-check-line me-1"></i>${present} Days
+              </span>
+              <span class="badge bg-light text-dark border">
+                ₹${dailyRate.toFixed(2)}/day
+              </span>
+              ${inc > 0 ? `<span class="badge bg-success bg-opacity-10 text-success border">+₹${inc.toFixed(2)} Extra</span>` : ''}
+              ${advance > 0 ? `<span class="badge bg-danger bg-opacity-10 text-danger border">-₹${advance.toFixed(2)} Adv</span>` : ''}
+            </div>
+          </div>
+          <div class="text-end ps-3 border-start">
+            <small class="text-muted d-block" style="font-size:10px; text-transform:uppercase; letter-spacing:0.5px;">Net Pay</small>
+            <strong class="text-success fs-6 fw-bold">₹${net.toFixed(2)}</strong>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  document.getElementById('bulk_modal_count').innerText = bulkQueue.length;
+  document.getElementById('bulk_modal_list').innerHTML = listHtml;
+
+  var modal = new bootstrap.Modal(document.getElementById('bulk_disburse_modal'));
+  modal.show();
+}
+
+function submitBulkDisburse() {
+  if (bulkQueue.length === 0) return;
+
+  var method = document.querySelector('input[name="bulk_pay"]:checked').value;
+  var submitBtn = document.getElementById('bulk_disburse_submit_btn');
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+
+  var completed = 0;
+  var failed = [];
+
+  function processNext(index) {
+    if (index >= bulkQueue.length) {
+      // Done
+      var closeBtn = document.querySelector('#bulk_disburse_modal .btn-close');
+      if (closeBtn) closeBtn.click();
+
+      if (failed.length === 0) {
+        showAppToast(completed + " payroll(s) disbursed successfully", "success", 1500);
+      } else {
+        showAppToast(completed + " succeeded, " + failed.length + " failed: " + failed.join(', '), "error");
+      }
+      setTimeout(function () { location.reload(); }, 1500);
+      return;
+    }
+
+    var item = bulkQueue[index];
+
+    $.ajax({
+      url: '/farmer/employee/execute_paycheck/',
+      method: 'POST',
+      data: {
+        'employee_id': item.employee_id,
+        'advance': item.advance,
+        'incentive': item.incentive,
+        'method': method,
+        'net_pay': item.net_pay,
+        'gross': item.gross,
+        'present': item.present
+      },
+      success: function (res) {
+        if (res.success) {
+          completed++;
+        } else {
+          failed.push(item.name);
+        }
+        processNext(index + 1);
+      },
+      error: function () {
+        failed.push(item.name);
+        processNext(index + 1);
+      }
+    });
+  }
+
+  processNext(0);
+}
+</script>
+{% endblock page_js %}
+
+{% block content %}
+
+<!-- ── Page Header ── -->
+
+<div class="mb-3">
+  <ul class="nav nav-pills gap-2" id="farmerTabs" role="tablist">
+    <li class="nav-item">
+      <a class="nav-link {% if active_tab == 'users' or not active_tab %}active{% endif %}" data-bs-toggle="pill" data-bs-target="#users" role="tab" style="cursor: pointer;">
+        <i class="ri-group-line me-1"></i>User
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if active_tab == 'daily_attendance' %}active{% endif %}" data-bs-toggle="pill" data-bs-target="#daily_attendance" role="tab" style="cursor: pointer;">
+        <i class="ri-calendar-todo-line me-1"></i>Daily Attendance
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if active_tab == 'paycheck_payroll' %}active{% endif %}" data-bs-toggle="pill" data-bs-target="#paycheck_payroll" role="tab" style="cursor: pointer;">
+        <i class="ri-wallet-3-line me-1"></i>Payment
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if active_tab == 'employee_advance' %}active{% endif %}" data-bs-toggle="pill" data-bs-target="#employee_advance" role="tab" style="cursor: pointer;">
+        <i class="ri-hand-coin-line me-1"></i>Advance
+      </a>
+    </li>
+  </ul>
+</div>
+<div class="card mb-2">
+    <div class="card-body d-flex justify-content-between align-items-center border-bottom">
+        <div>
+             <h4 class="mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="ri-pulse-line text-primary"></i>
+                {% trans "Employee " %}
+            </h4>
+        </div>
+        <a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#add_staff_modal">
+            <i class="ri-add-line"></i> Add Staff member
+        </a>
+    </div>
+</div>
+<div class="tab-content p-0">
+  <div class="tab-pane fade {% if active_tab == 'users' or not active_tab %}show active{% endif %}" id="users">
+    <div class="row g-3 mb-2">
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm rounded-4 p-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="p-3 bg-gray-100 border rounded-3 text-secondary">
+              <i class="ri-user-3-line fs-5"></i>
+            </div>
+            <div>
+              <span class="text-uppercase small fw-bold text-muted" style="font-size:10px; letter-spacing:1px;">
+                Total Staff
+              </span>
+              <div class="fs-4 fw-bold">{{ total_staff }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm rounded-4 p-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="p-3 bg-primary bg-opacity-10 border rounded-3 text-primary position-relative">
+              <span class="position-absolute top-0 start-100 translate-middle p-1 bg-primary rounded-circle"></span>
+              <i class="ri-user-follow-line fs-5"></i>
+            </div>
+            <div>
+              <span class="text-uppercase small fw-bold text-primary" style="font-size:10px; letter-spacing:1px;">
+                Active Online
+              </span>
+              <div class="fs-4 fw-bold">{{ active_staff }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm rounded-4 p-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="p-3 bg-danger bg-opacity-10 border rounded-3 text-danger">
+              <i class="ri-user-unfollow-line fs-5"></i>
+            </div>
+            <div>
+              <span class="text-uppercase small fw-bold text-danger" style="font-size:10px; letter-spacing:1px;">
+                Suspended
+              </span>
+              <div class="fs-4 fw-bold">{{ suspended_staff }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm rounded-4 p-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="p-3 bg-info bg-opacity-10 border rounded-3 text-info">
+              <i class="ri-key-line fs-5"></i>
+            </div>
+            <div>
+              <span class="text-uppercase small fw-bold text-info" style="font-size:10px; letter-spacing:1px;">
+                Administrators
+              </span>
+              <div class="fs-4 fw-bold">{{ admins_staff }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Filters & Table for Employees -->
+    <div class="card border-0 shadow-sm rounded-4">
+      <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+
+        <!-- Collapsible Search -->
+        <div class="d-flex align-items-center search-collapse-wrapper" id="search_collapse_wrapper">
+          <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="search_toggle_btn" onclick="toggleSearchBox()">
+            <i class="ri-search-line"></i>
+          </button>
+          <div class="input-group search-input-group d-none" id="search_input_group">
+            <span class="input-group-text bg-white border-end-0">
+              <i class="ri-search-line text-muted"></i>
+            </span>
+            <input type="text"
+                id="customSearchBox"
+                class="form-control border-start-0"
+                placeholder="Search staff members by name or emails...">
+            <button class="btn btn-outline-secondary border-start-0" type="button" id="search_close_btn" onclick="closeSearchBox()">
+              <i class="ri-close-line"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Sort dropdown -->
+        <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+          <div class="dropdown" style="width: 200px;">
+            <button class="btn btn-outline-secondary dropdown-toggle w-100 d-flex align-items-center justify-content-between" type="button" data-bs-toggle="dropdown" id="sortDropdownBtn">
+              <span><i class="ri-filter-3-line me-1"></i> Sort By</span>
+            </button>
+            <ul class="dropdown-menu w-100">
+              <li><a class="dropdown-item sort-filter" data-sort="name" href="#">Sort By Name</a></li>
+              <li><a class="dropdown-item sort-filter" data-sort="status" href="#">Sort By Status</a></li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="table-responsive text-nowrap p-4">
+          <table class="table table-hover align-middle border-top datatable" data-page-length="10">
+                    <thead class="table-gray-200 ">
+                        <tr class="fs-8 fw-medium">
+                            <th>Staff Name</th>
+                            <th>Mobile No</th>
+                            <th>Role</th>
+                            <th>Designation</th>
+                            <th>Permission Scope</th>
+                            <th>Status</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="fs-7 fw-medium text-black">
+                        {% for staff in staff_members %}
+                        <tr>
+                            <td>
+                              <div class="d-flex align-items-center gap-3 py-1">
+                                {% if staff.profile_image %}
+                                  <img src="{{ staff.profile_image.url }}" alt="{{ staff.name }}" class="rounded-circle object-fit-cover shadow-sm flex-shrink-0" style="width: 38px; height: 38px; min-width: 38px; border: 1.5px solid #e2e8f0; margin-right: 8px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform='scale(1)'" data-img="{{ staff.profile_image.url }}" data-name="{{ staff.name|escape }}" data-role="{% if staff.is_role_manager %}Role Manager{% else %}{{ staff.role }}{% endif %}" onclick="openStaffImagePreview(this)" title="Click to preview image">
+                                {% else %}
+                                  <div class="rounded-circle bg-primary-subtle text-primary fw-bold d-flex align-items-center justify-content-center flex-shrink-0 shadow-sm" style="width: 38px; height: 38px; min-width: 38px; font-size: 13px; border: 1.5px solid #e2e8f0; margin-right: 8px;">
+                                    {{ staff.name|slice:":2"|upper }}
+                                  </div>
+                                {% endif %}
+                                <div class="d-flex flex-column justify-content-center">
+                                  <span class="fw-semibold text-dark mb-0">{{ staff.name }}</span>
+                                </div>
+                              </div>
+                            </td>
+
+
+                            <td>
+                              <label class="fs-8 fw-normal"><i class="ri-phone-line me-1"></i>{{ staff.mobile_number }}</label>
+                            </td>
+                            <td>
+                            {% if staff.is_role_manager %}
+                            <label class="badge rounded ms-2" style="background: #ebe3f1; color: #5d0a72; border:1px solid #63085e;">Role Manager</label>
+                            {% else %}
+                            <label class="badge bg-label-primary border border-primary rounded ms-2">{{ staff.role }}</label>
+                            {% endif %}
+                            </td>
+                            <td>
+                              {% if staff.designation %}
+                                <span class="badge bg-label-info border border-info rounded">{{ staff.designation.name }}</span>
+                              {% else %}
+                                <span class="text-muted small">—</span>
+                              {% endif %}
+                            </td>
+                            <td>
+                              {% if staff.document_type %}
+                                <span class="badge bg-gray-100 text-dark border"><i class="ri-file-text-line"></i> {{ staff.document_type }}</span>
+                              {% else %}
+                                <span class="text-muted small">No Document</span>
+                              {% endif %}
+                            </td>
+                            <td>
+                              {% if staff.status == "0" %}
+                                <span class="badge bg-label-primary text-primary rounded-3">Active</span>
+                              {% else %}
+                                <span class="badge bg-label-danger text-danger rounded-3">Suspended</span>
+                              {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-secondary view-btn" 
+                                    data-name="{{ staff.name }}"
+                                    data-mobile="{{ staff.mobile_number }}"
+                                    data-role="{% if staff.is_role_manager %}Role Manager{% else %}{{ staff.role }}{% endif %}"
+                                    data-status="{% if staff.status == '0' %}Active{% else %}Suspended{% endif %}"
+                                    data-gender="{{ staff.gender|default:'Not Specified' }}"
+                                    data-doctype="{{ staff.document_type|default:'No Document' }}"
+                                    data-dob="{{ staff.date_of_birth|date:'d M, Y'|default:'Not Specified' }}"
+                                    data-docurl="{% if staff.document_file %}{{ staff.document_file.url }}{% else %}{% endif %}"
+                                    data-profile-image="{% if staff.profile_image %}{{ staff.profile_image.url }}{% else %}{% endif %}"
+                                    data-salary-frequency="{{ staff.salary_frequency|default:'' }}"
+                                    data-salary="{{ staff.salary|default:'' }}"
+                                    data-address="{{ staff.address|default:'' }}"
+                                    data-designation="{{ staff.designation.name|default:'Not Assigned' }}"
+                                    data-bs-toggle="offcanvas" data-bs-target="#view_staff_offcanvas"><i class="ri-eye-line"></i></button>
+                                <button class="btn btn-sm btn-outline-secondary edit-btn" 
+                                    data-id="{{ staff.id }}"
+                                    data-name="{{ staff.name }}"
+                                    data-mobile="{{ staff.mobile_number }}"
+                                    data-dob="{{ staff.date_of_birth|date:'Y-m-d' }}"
+                                    data-gender="{{ staff.gender }}"
+                                    data-doctype="{{ staff.document_type }}"
+                                    data-status="{{ staff.status }}"
+                                    data-ismanager="{{ staff.is_role_manager|yesno:'true,false' }}"
+                                    data-username="{% if staff.user %}{{ staff.user.username }}{% else %}{{ staff.mobile_number }}{% endif %}"
+                                    data-permissions="{{ staff.permissions_json }}"
+                                    data-profile-image="{% if staff.profile_image %}{{ staff.profile_image.url }}{% else %}{% endif %}"
+                                    data-salary-frequency="{{ staff.salary_frequency|default:'' }}"
+                                    data-salary="{{ staff.salary|default:'' }}"
+                                    data-address="{{ staff.address|default:'' }}"
+                                    data-designation="{{ staff.designation.id|default:'' }}"
+                                    data-bs-toggle="modal" data-bs-target="#edit_staff_modal"><i class="ri-pencil-line"></i></button>
+                                <button class="btn btn-sm btn-outline-danger delete-btn"
+                                        data-id="{{ staff.id }}"
+                                        data-name="{{ staff.name }}"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#delete_staff_modal">
+                                    <i class="ri-delete-bin-7-line"></i>
+                                </button>
+                            </td>
+
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+          </div><!-- end table-responsive -->
+    </div><!-- end card border-0 shadow-sm rounded-4 -->
+  </div><!-- end tab-pane #users -->
+  <div class="tab-pane fade {% if active_tab == 'daily_attendance' %}show active{% endif %}" id="daily_attendance">
+    <!-- Top KPI Cards with Time Period Filter (Day, Week, Month) -->
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-sm-6 col-lg-3">
+        <div class="attendance-kpi-card h-100">
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-3">
+              <div class="rounded-3 p-3 d-flex align-items-center justify-content-center" style="background: rgba(22, 163, 74, 0.12); color: #16a34a; width: 48px; height: 48px;">
+                <i class="ri-user-follow-line fs-4"></i>
+              </div>
+              <div>
+                <span class="text-uppercase small fw-bold text-success" style="font-size:11px; letter-spacing:0.8px;">
+                  Present
+                </span>
+                <div class="fs-3 fw-bold text-dark" id="top_stat_present">00</div>
+              </div>
+            </div>
+            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small" id="top_stat_present_subtitle">On Duty</span>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-lg-3">
+        <div class="attendance-kpi-card h-100">
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-3">
+              <div class="rounded-3 p-3 d-flex align-items-center justify-content-center" style="background: rgba(220, 38, 38, 0.12); color: #dc2626; width: 48px; height: 48px;">
+                <i class="ri-user-unfollow-line fs-4"></i>
+              </div>
+              <div>
+                <span class="text-uppercase small fw-bold text-danger" style="font-size:11px; letter-spacing:0.8px;">
+                  Absent
+                </span>
+                <div class="fs-3 fw-bold text-dark" id="top_stat_absent">00</div>
+              </div>
+            </div>
+            <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 small" id="top_stat_absent_subtitle">Off Duty</span>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-lg-3">
+        <div class="attendance-kpi-card h-100">
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-3">
+              <div class="rounded-3 p-3 d-flex align-items-center justify-content-center" style="background: rgba(2, 132, 199, 0.12); color: #0284c7; width: 48px; height: 48px;">
+                <i class="ri-time-line fs-4"></i>
+              </div>
+              <div>
+                <span class="text-uppercase small fw-bold text-info" style="font-size:11px; letter-spacing:0.8px;">
+                  Half Day
+                </span>
+                <div class="fs-3 fw-bold text-dark" id="top_stat_halfday">00</div>
+              </div>
+            </div>
+            <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1 small" id="top_stat_halfday_subtitle">0.5 Shift</span>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-lg-3">
+        <div class="attendance-kpi-card h-100">
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-3">
+              <div class="rounded-3 p-3 d-flex align-items-center justify-content-center" style="background: rgba(147, 51, 234, 0.12); color: #9333ea; width: 48px; height: 48px;">
+                <i class="ri-pie-chart-2-line fs-4"></i>
+              </div>
+              <div>
+                <span class="text-uppercase small fw-bold text-primary" style="font-size:11px; letter-spacing:0.8px;">
+                  Attendance Rate
+                </span>
+                <div class="fs-3 fw-bold text-dark" id="top_stat_rate">0%</div>
+              </div>
+            </div>
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 small" id="top_stat_rate_subtitle">Rate</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task-Management Styled Action & Filter Toolbar -->
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+      <div class="card-body p-3 d-flex flex-wrap align-items-center justify-content-between gap-2.5">
+        <!-- Left: Period Switcher, Search & Filter Dropdowns -->
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <!-- Collapsible Search Box -->
+          <div class="d-flex align-items-center search-collapse-wrapper" id="att_search_collapse_wrapper">
+            <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="att_search_toggle_btn" onclick="toggleAttendanceSearchBox()" style="width: 38px; height: 38px;">
+              <i class="ri-search-line"></i>
+            </button>
+            <div class="input-group search-input-group d-none" id="att_search_input_group">
+              <span class="input-group-text bg-white border-end-0">
+                <i class="ri-search-line text-muted"></i>
+              </span>
+              <input type="text"
+                     id="attendanceSearchInput"
+                     class="form-control border-start-0"
+                     placeholder="Search employee..."
+                     onkeyup="applyAttendanceFilters()">
+              <button class="btn btn-outline-secondary border-start-0" type="button" id="att_search_close_btn" onclick="closeAttendanceSearchBox()">
+                <i class="ri-close-line"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Period Filter Selector (Day | Week | Month) -->
+          <div class="btn-group btn-group-sm shadow-xs" role="group" aria-label="Attendance Period Filter">
+            <button type="button" class="btn btn-sm btn-primary active fw-semibold att-period-btn" id="att_period_day_btn" onclick="setAttendancePeriod('day')">
+              <i class="ri-calendar-event-line me-1"></i>Day
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold att-period-btn" id="att_period_week_btn" onclick="setAttendancePeriod('week')">
+              <i class="ri-calendar-check-line me-1"></i>Week
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold att-period-btn" id="att_period_month_btn" onclick="setAttendancePeriod('month')">
+              <i class="ri-calendar-2-line me-1"></i>Month
+            </button>
+          </div>
+
+          <!-- Date Selector (Visible for Day & Week) -->
+          <div id="attendanceDateSelectorWrapper">
+            <select class="form-select form-select-sm w-auto" id="attendanceDateSelector" onchange="selectCalendarDay(this.value)">
+              {% for d in days %}
+              <option value="{{ d.key }}" {% if is_latest_month and d.is_today %}selected{% elif not is_latest_month and forloop.first %}selected{% endif %}>
+                {{ d.label }} {% if d.is_today %}(Today){% elif d.is_sunday %}(Sun){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Role Filter -->
+          <select class="form-select form-select-sm w-auto" id="filterAttendanceRole" onchange="applyAttendanceFilters()">
+            <option value="">All Roles</option>
+            {% for r in staff_roles %}
+            <option value="{{ r }}">{{ r }}</option>
+            {% endfor %}
+          </select>
+
+          <!-- Designation Filter -->
+          <select class="form-select form-select-sm w-auto" id="filterAttendanceDesignation" onchange="applyAttendanceFilters()">
+            <option value="">All Designations</option>
+            {% for d in designations %}
+            <option value="{{ d.name }}">{{ d.name }}</option>
+            {% endfor %}
+          </select>
+
+          <!-- Attendance Status Filter -->
+          <select class="form-select form-select-sm w-auto" id="filterAttendanceStatus" onchange="applyAttendanceFilters()">
+            <option value="">All Statuses</option>
+            <option value="P">Present (P)</option>
+            <option value="A">Absent (A)</option>
+            <option value="H">Half Day (H)</option>
+            <option value="-">Unmarked (-)</option>
+          </select>
+
+          <!-- Period Scope Indicator Badge -->
+          <span class="badge bg-light text-dark border px-2.5 py-1.5 small d-none d-lg-inline-flex align-items-center" id="top_stat_period_badge">
+            <i class="ri-calendar-event-line me-1 text-primary"></i>Day: Today
+          </span>
+        </div>
+
+        <!-- Right: View Switchers & Month Nav -->
+        <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
+          <!-- Month Navigator -->
+          <div class="d-flex align-items-center gap-1 bg-white border rounded-3 px-2 py-1 shadow-xs">
+            <a href="?month={{ prev_month }}&year={{ prev_year }}&tab=daily_attendance" class="btn btn-sm btn-link text-muted p-0 text-decoration-none">
+              <i class="ri-arrow-left-s-line fs-5"></i>
+            </a>
+            <span class="fw-bold fs-7 mx-2 text-primary" style="min-width: 75px; text-align: center;">{{ current_month_name }} {{ selected_year }}</span>
+            {% if is_latest_month %}
+            <button class="btn btn-sm btn-link text-muted p-0 text-decoration-none opacity-25" disabled>
+              <i class="ri-arrow-right-s-line fs-5"></i>
+            </button>
+            {% else %}
+            <a href="?month={{ next_month }}&year={{ next_year }}&tab=daily_attendance" class="btn btn-sm btn-link text-muted p-0 text-decoration-none">
+              <i class="ri-arrow-right-s-line fs-5"></i>
+            </a>
+            {% endif %}
+          </div>
+
+          <!-- View Toggle Group -->
+          <div class="btn-group shadow-xs" role="group">
+            <button type="button" class="btn btn-sm btn-primary active fw-semibold" id="attendance_view_list_btn" onclick="switchAttendanceView('list')">
+              <i class="ri-list-check-2 me-1"></i>List View
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" id="attendance_view_calendar_btn" onclick="switchAttendanceView('calendar')">
+              <i class="ri-calendar-2-line me-1"></i>Calendar View
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1. LIST VIEW TAB -->
+    <div id="attendance_list_view">
+      <div class="card border-0 shadow-sm rounded-4 mb-3 overflow-hidden">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle mb-0 text-center">
+              <thead class="table-dark">
+                <tr>
+                  <th class="text-start sticky-col bg-dark text-white" style="min-width: 190px;">Crew Employee</th>
+                  {% for d in days %}
+                  <th style="min-width:70px; font-size:11px;"
+                      class="{% if d.is_today %}today-col{% endif %}"
+                      data-date="{{ d.key }}"
+                      {% if d.is_today %}id="today_col_header"{% endif %}>
+                    {{ d.label }}
+                    {% if d.is_today %}
+                    <span class="badge bg-warning text-dark d-block mt-1 py-0" style="font-size:9px;">Today</span>
+                    {% endif %}
+                  </th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for emp in attend_employees %}
+                <tr class="{% if emp.is_suspended %}opacity-75 bg-light{% endif %}"
+                    {% if emp.is_suspended %}style="background-color: #f8fafc;"{% endif %}
+                    data-name="{{ emp.name|lower }}"
+                    data-role="{{ emp.role|lower }}"
+                    data-raw-role="{{ emp.raw_role|lower }}"
+                    data-designation="{{ emp.designation|default:''|lower }}">
+                  <td class="text-start fw-bold sticky-col {% if emp.is_suspended %}bg-light text-muted{% else %}bg-white{% endif %}">
+                    <div class="d-flex align-items-center gap-1.5 flex-wrap">
+                      <span>{{ emp.name }}</span>
+                      {% if emp.is_suspended %}
+                      <span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size:9px; padding: 2px 6px;">
+                        <i class="ri-lock-2-line"></i> Suspended
+                      </span>
+                      {% endif %}
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                      {% if emp.is_role_manager %}
+                        <span class="badge rounded py-0 px-1.5" style="background: #ebe3f1; color: #5d0a72; border:1px solid #63085e; font-size:10px;">Role Manager</span>
+                      {% else %}
+                        <span class="badge bg-label-primary border border-primary rounded py-0 px-1.5" style="font-size:10px;">{{ emp.role }}</span>
+                      {% endif %}
+                      {% if emp.designation %} • <span class="badge bg-label-info border border-info rounded py-0 px-1.5" style="font-size:10px;">{{ emp.designation }}</span>{% endif %}
+                    </small>
+                  </td>
+                  {% for att in emp.attendance %}
+                  <td class="{% if att.is_today or att.date == today_str %}today-col{% endif %}">
+                    <button class="btn btn-sm attendance-btn
+                      {% if att.status == 'P' %} btn-primary
+                      {% elif att.status == 'A' %} btn-danger
+                      {% elif att.status == 'H' %} btn-info
+                      {% else %} btn-light text-muted
+                      {% endif %}
+                    " data-emp-id="{{ emp.id }}" data-date="{{ att.date }}"
+                    {% if att.is_future or emp.is_suspended %}disabled title="{% if emp.is_suspended %}Account is suspended/locked{% endif %}"{% endif %}
+                    {% if emp.is_suspended %}style="cursor: not-allowed; opacity: 0.4; pointer-events: none;"{% endif %}>
+                      {{ att.status }}
+                    </button>
+                  </td>
+                  {% endfor %}
+                </tr>
+                {% endfor %}
+                <tr id="attendance_no_records_row" style="display: none;">
+                  <td colspan="{{ days|length|add:1 }}" class="text-center py-4 text-muted">
+                    <i class="ri-user-search-line fs-3 d-block mb-1"></i>
+                    No employees match the selected filters.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="p-2.5 bg-light text-center small border-top d-flex align-items-center justify-content-center gap-3 flex-wrap">
+            <strong>Legend:</strong>
+            <span><span class="badge bg-primary me-1">P</span> Present (Click once)</span>
+            <span><span class="badge bg-danger me-1">A</span> Absent (Click twice)</span>
+            <span><span class="badge bg-info me-1">H</span> Half Day (Click 3 times)</span>
+            <span><span class="badge bg-light text-muted border me-1">-</span> Unmarked</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. CALENDAR VIEW TAB -->
+    <div id="attendance_calendar_view" class="d-none">
+      <div class="card border-0 shadow-sm rounded-4 mb-3">
+        <div class="card-body p-3">
+          <div id="attendance_calendar_grid" class="attendance-calendar-grid"></div>
+          
+          <div class="p-2.5 bg-light text-center small mt-3 rounded-3 d-flex align-items-center justify-content-center gap-3 flex-wrap border">
+            <strong>Calendar Legend:</strong>
+            <span class="badge" style="background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;">P Present</span>
+            <span class="badge" style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;">A Absent</span>
+            <span class="badge" style="background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;">H Half Day</span>
+            <span class="badge" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;">Sunday</span>
+            <span class="badge bg-primary text-white">Click any day to view & mark attendance</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendar Date Attendance Modal Popup -->
+    <div class="modal fade" id="calendarAttendanceModal" tabindex="-1" aria-labelledby="calendarAttendanceModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+          <div class="modal-header bg-white border-bottom py-3 px-4">
+            <div class="d-flex align-items-center gap-2.5">
+              <div class="rounded-circle d-flex align-items-center justify-content-center bg-primary-subtle text-primary" style="width: 40px; height: 40px;">
+                <i class="ri-calendar-check-line fs-4"></i>
+              </div>
+              <div>
+                <h5 class="modal-title fw-bold mb-0 text-dark" id="calendarAttendanceModalLabel">Daily Attendance Sheet</h5>
+                <small class="text-muted" id="calendarAttendanceModalSubLabel">Loading...</small>
+              </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body p-0" id="calendarAttendanceModalBody">
+            <!-- Dynamically populated -->
+          </div>
+          <div class="modal-footer bg-light border-top py-2 px-4 d-flex justify-content-between align-items-center">
+            <small class="text-muted"><i class="ri-information-line me-1"></i>Changes are saved automatically.</small>
+            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="tab-pane fade {% if active_tab == 'paycheck_payroll' %}show active{% endif %}" id="paycheck_payroll">
+    <!-- <div style="flex-grow-1" class="mb-3 mt-2">
+      <div class="border rounded p-1 bg-white">
+        <ul class="nav nav-pills gap-2" role="tablist">
+          <li class="nav-item">
+            <button class="nav-link active fw-semibold px-4" data-bs-toggle="tab" data-bs-target="#sub_payroll">
+              <i class="ri-settings-4-line me-1"></i> Payroll Runs
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link fw-semibold px-4" data-bs-toggle="tab" data-bs-target="#sub_paycheck">
+              <i class="ri-history-line me-1"></i> Paycheck History
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div> -->
+    <div class="card mb-2 shadow-sm">
+      <div class="card-body p-0">
+        <div class="d-flex justify-content-between align-items-center px-3 py-2 small bg-gray-100 border-bottom">
+          <div class="d-flex align-items-center gap-2">
+            <div class="form-check mb-0">
+              <input class="form-check-input" type="checkbox" id="payroll_select_all">
+              <label class="form-check-label fw-bold text-muted" for="payroll_select_all">
+                Select All
+              </label>
+            </div>
+            <span class="fw-bold text-muted">PAYROLL RUN SHEET (LAST 30 DAYS)</span>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm fw-bold d-none" id="bulk_disburse_btn" onclick="openBulkDisburseModal()">
+            <i class="ri-hand-coin-line me-1"></i> Disburse Selected (<span id="bulk_selected_count">0</span>)
+          </button>
+        </div>
+        <div class="border-bottom">
+          {% for p in payroll_run_sheet %}
+          <div class="payroll-row p-3 d-flex flex-column flex-md-row justify-content-between gap-3 {% if p.already_paid or p.is_suspended %}opacity-50 bg-light{% endif %}">
+            <div class="d-flex gap-3 align-items-start" style="min-width:240px;">
+              {% if not p.already_paid and not p.is_suspended %}
+              <div class="form-check mt-1">
+                <input class="form-check-input payroll-row-check" type="checkbox"
+                      data-id="{{ p.id }}"
+                      data-name="{{ p.name }}"
+                      data-role="{{ p.role }}"
+                      data-present="{{ p.present_days }}"
+                      data-advance="{{ p.advance }}"
+                      data-rate="{{ p.base_rate }}"
+                      data-frequency="{{ p.salary_frequency }}">
+              </div>
+              {% else %}
+              <div style="width:20px;"></div>
+              {% endif %}
+              <div class="icon-box">
+                <i class="ri-bank-card-fill {% if p.is_suspended %}text-secondary{% else %}text-warning{% endif %}"></i>
+              </div>
+              <div>
+                <div class="fw-bold d-flex align-items-center gap-1 flex-wrap">
+                  {{ p.name }}
+                  {% if p.is_suspended %}
+                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size:9px; padding: 2px 6px;">
+                    <i class="ri-lock-2-line"></i> Suspended
+                  </span>
+                  {% endif %}
+                </div>
+                <small class="text-muted d-flex align-items-center gap-1 mt-1">
+                  Role: {{ p.role }} • Rate: ₹
+                  <input type="number" class="form-control form-control-sm p-1 row-rate-input" style="width:75px; height:24px; font-size:12px;" value="{{ p.base_rate }}" data-id="{{ p.id }}" data-present="{{ p.present_days }}" data-advance="{{ p.advance }}" {% if p.already_paid or p.is_suspended %}disabled{% endif %}>
+                  /
+                  <select name="sl_freq" class="form-select row-freq-select" style="width:95px; height:24px; font-size:11px; padding: 2px 8px;" data-id="{{ p.id }}" {% if p.already_paid or p.is_suspended %}disabled{% endif %}>
+                    <option value="Daily" {% if p.salary_frequency == "Daily" %}selected{% endif %}>Daily</option>
+                    <option value="Weekly" {% if p.salary_frequency == "Weekly" %}selected{% endif %}>Weekly</option>
+                    <option value="Monthly" {% if p.salary_frequency == "Monthly" %}selected{% endif %}>Monthly</option>
+                  </select>
+                </small>
+              </div>
+            </div>
+            <div class="row flex-grow-1 text-center small">
+              <div class="col-6 col-md-3">
+                <div class="text-muted">Present Days</div>
+                <div class="text-primary fw-bold">{{ p.present_days }} Days</div>
+              </div>
+              <div class="col-6 col-md-3">
+                <div class="text-muted">Absent Days</div>
+                <div class="text-danger fw-semibold">{{ p.absent_days }} Days</div>
+              </div>
+              <div class="col-6 col-md-3">
+                <div class="text-muted">Advance</div>
+                <!-- <div class="text-danger fw-bold">-₹{{ p.advance }}</div> -->
+                <div class="d-flex align-items-center justify-content-center text-danger fw-bold">
+                  -₹ <input type="number" class="form-control form-control-sm p-1 mx-1 row-adv-input" style="width:60px; height:24px; font-size:12px;" value="0" {% if p.advance %}disabled{% endif %}>
+                </div>
+              </div>
+
+              <div class="col-6 col-md-3">
+                <div class="text-muted">Incentives</div>
+                <div class="d-flex align-items-center justify-content-center text-primary fw-bold">
+                  +₹ <input type="number" class="form-control form-control-sm p-1 mx-1 row-inc-input" style="width:60px; height:24px; font-size:12px;" value="0" {% if p.already_paid %}disabled{% endif %}>
+                </div>
+              </div>
+            </div>
+            <div class="d-flex align-items-center gap-3 pt-2 pt-md-0">
+              <div class="text-end">
+                <small class="text-muted">Net Pay</small>
+                <div class="fw-bold row-net-pay">
+                  {% if p.already_paid %}
+                    <span class="text-success"><i class="ri-check-double-line"></i> Settled</span>
+                  {% else %}
+                    ₹{{ p.net_pay }}
+                  {% endif %}
+                </div>
+              </div>
+              {% if p.already_paid %}
+              <button class="btn btn-secondary btn-sm fw-bold" disabled>
+                <i class="ri-check-line me-1"></i> Paid
+              </button>
+              {% else %}
+              <button class="btn btn-primary btn-sm fw-bold execute-modal-btn" data-bs-toggle="modal" data-bs-target="#execute_paycheck_modal"
+                data-id="{{ p.id }}" data-name="{{ p.name }}" data-rate="{{ p.base_rate }}"
+                data-present="{{ p.present_days }}" data-gross="{{ p.gross }}" data-advance="{{ p.advance }}" data-net="{{ p.net_pay }}"
+                data-frequency="{{ p.salary_frequency }}">
+                <i class="ri-hand-coin-line me-1"></i> Disburse
+              </button>
+              {% endif %}
+            </div>
+          </div>
+          {% empty %}
+          <div class="p-3 text-center text-muted">No staff available for this cycle.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Employee Advance Tab Pane ── -->
+  <div class="tab-pane fade {% if active_tab == 'employee_advance' %}show active{% endif %}" id="employee_advance">
+    <!-- 4 KPI Summary Cards -->
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+          <div class="d-flex align-items-center gap-3">
+            <div class="p-3 bg-warning bg-opacity-10 border rounded-3 text-warning">
+              <i class="ri-hand-coin-line fs-4"></i>
+            </div>
+            <div>
+              <span class="text-uppercase small fw-bold text-muted" style="font-size:10px; letter-spacing:1px;">
+                Total Advances
+              </span>
+              <div class="fs-4 fw-bold text-dark">₹ {{ total_advance_amount|floatformat:2 }}</div>
+              <span class="text-muted" style="font-size:11px;">Cumulative advance payouts</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+          <div class="d-flex align-items-center gap-3">
+            <div class="p-3 bg-danger bg-opacity-10 border rounded-3 text-danger">
+              <i class="ri-time-line fs-4"></i>
+            </div>
+            <div>
+              <span class="text-uppercase small fw-bold text-danger" style="font-size:10px; letter-spacing:1px;">
+                Outstanding Deductions
+              </span>
+              <div class="fs-4 fw-bold text-danger">₹ {{ total_advance_pending|floatformat:2 }}</div>
+              <span class="text-muted" style="font-size:11px;">Pending payroll deduction</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+          <div class="d-flex align-items-center gap-3">
+            <div class="p-3 bg-success bg-opacity-10 border rounded-3 text-success">
+              <i class="ri-checkbox-circle-line fs-4"></i>
+            </div>
+            <div>
+              <span class="text-uppercase small fw-bold text-success" style="font-size:10px; letter-spacing:1px;">
+                Recovered via Payroll
+              </span>
+              <div class="fs-4 fw-bold text-success">₹ {{ total_advance_recovered|floatformat:2 }}</div>
+              <span class="text-muted" style="font-size:11px;">Settled in completed cycles</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+          <div class="d-flex align-items-center gap-3">
+            <div class="p-3 bg-primary bg-opacity-10 border rounded-3 text-primary">
+              <i class="ri-user-shared-line fs-4"></i>
+            </div>
+            <div>
+              <span class="text-uppercase small fw-bold text-primary" style="font-size:10px; letter-spacing:1px;">
+                Staff with Outstanding Advance
+              </span>
+              <div class="fs-4 fw-bold text-primary">{{ active_advance_staff_count }}</div>
+              <span class="text-muted" style="font-size:11px;">Employees with pending balance</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters & Table for Advances -->
+    <div class="card border-0 shadow-sm rounded-4">
+      <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+
+        <!-- Search button / box -->
+        <div class="d-flex align-items-center search-collapse-wrapper" id="adv_search_collapse_wrapper">
+          <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="adv_search_toggle_btn" onclick="toggleAdvSearchBox()" style="width: 38px; height: 38px;">
+            <i class="ri-search-line"></i>
+          </button>
+          <div class="input-group search-input-group d-none" id="adv_search_input_group">
+            <span class="input-group-text bg-white border-end-0">
+              <i class="ri-search-line text-muted"></i>
+            </span>
+            <input type="text"
+                id="advance_search_input"
+                class="form-control border-start-0"
+                placeholder="Search staff, role, payment...">
+            <button class="btn btn-outline-secondary border-start-0" type="button" id="adv_search_close_btn" onclick="closeAdvSearchBox()">
+              <i class="ri-close-line"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter: Recovery Status -->
+        <select id="advance_status_filter" class="form-select form-select-sm w-auto">
+          <option value="all">All Recovery Statuses</option>
+          <option value="pending">Pending Deduction</option>
+          <option value="recovered">Recovered</option>
+        </select>
+
+        <!-- Filter: Payment Method -->
+        <select id="advance_method_filter" class="form-select form-select-sm w-auto">
+          <option value="all">All Payment Methods</option>
+          <option value="Bank Transfer Wire">Bank Transfer Wire</option>
+          <option value="Hard Cash Handout">Hard Cash Handout</option>
+          <option value="Instant UPI">Instant UPI</option>
+          <option value="Certified Paper Cheque">Certified Paper Cheque</option>
+        </select>
+
+        <!-- Reset Button -->
+        <button type="button" class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center" onclick="resetAdvanceFilters()" title="Reset Filters" style="height: 38px; width: 38px;">
+          <i class="ri-refresh-line"></i>
+        </button>
+
+        <!-- Right Side: Add Advance Button -->
+        <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
+          <button type="button" class="btn btn-primary btn-sm d-flex align-items-center gap-1 shadow-xs" data-bs-toggle="modal" data-bs-target="#add_advance_amount">
+            <i class="ri-add-line fs-6"></i> Add Advance
+          </button>
+        </div>
+      </div>
+
+      <div class="table-responsive text-nowrap p-4">
+        <table class="table table-hover align-middle border-top" id="advance_table">
+          <thead class="table-gray-200">
+            <tr class="fs-8 fw-medium">
+              <th>Date</th>
+              <th>Staff Member</th>
+              <th>Advance Amount</th>
+              <th>Payment Method</th>
+              <th>Deduction Status</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="fs-7 fw-medium text-black" id="advance_table_body">
+            {% for adv in advances_list %}
+            <tr class="advance-row"
+                data-staff="{{ adv.staff.name|lower }}"
+                data-role="{{ adv.staff.role|lower }}"
+                data-method="{{ adv.payment_method|lower }}"
+                data-status="{% if adv.is_paid %}recovered{% else %}pending{% endif %}">
+              <td>
+                <span class="text-muted"><i class="ri-calendar-line me-1"></i>{{ adv.date|date:"d M, Y"|default:adv.date }}</span>
+              </td>
+              <td>
+                <div class="d-flex align-items-center gap-3 py-1">
+                  {% if adv.staff.profile_image %}
+                    <img src="{{ adv.staff.profile_image.url }}" alt="{{ adv.staff.name }}" class="rounded-circle object-fit-cover shadow-sm flex-shrink-0" style="width: 38px; height: 38px; min-width: 38px; border: 1.5px solid #e2e8f0; margin-right: 8px;">
+                  {% else %}
+                    <div class="rounded-circle bg-primary-subtle text-primary fw-bold d-flex align-items-center justify-content-center flex-shrink-0 shadow-sm" style="width: 38px; height: 38px; min-width: 38px; font-size: 13px; border: 1.5px solid #e2e8f0; margin-right: 8px;">
+                      {{ adv.staff.name|slice:":2"|upper }}
+                    </div>
+                  {% endif %}
+                  <div class="d-flex flex-column justify-content-center">
+                    <span class="fw-semibold text-dark mb-0">{{ adv.staff.name }}</span>
+                    <small class="text-muted fs-8">{{ adv.staff.role|default:"Staff" }}</small>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="fw-bold text-dark fs-7">₹ {{ adv.amount|floatformat:2 }}</span>
+              </td>
+              <td>
+                <span class="badge bg-label-info border border-info rounded">
+                  {{ adv.payment_method }}
+                </span>
+              </td>
+              <td>
+                {% if adv.is_paid %}
+                <span class="badge bg-label-success text-success rounded-3">
+                  <i class="ri-check-double-line me-1"></i>Recovered
+                </span>
+                {% else %}
+                <span class="badge bg-label-warning text-warning rounded-3">
+                  <i class="ri-time-line me-1"></i>Pending Deduction
+                </span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                {% if not adv.is_paid %}
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="openDeleteAdvanceModal('{{ adv.id }}', '{{ adv.staff.name|escapejs }}', '{{ adv.amount }}')" title="Void Advance">
+                  <i class="ri-delete-bin-line"></i>
+                </button>
+                {% else %}
+                <span class="badge bg-label-secondary text-secondary rounded-3" title="Settled via paycheck">
+                  <i class="ri-lock-2-line me-1"></i>Settled
+                </span>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr id="advance_empty_initial">
+              <td colspan="6" class="text-center py-5">
+                <div class="py-4">
+                  <div class="avatar-lg bg-light rounded-circle d-inline-flex align-items-center justify-content-center text-muted mb-3" style="width: 64px; height: 64px;">
+                    <i class="ri-hand-coin-line fs-2 text-warning"></i>
+                  </div>
+                  <h6 class="fw-bold text-dark mb-1">No Advances Recorded</h6>
+                  <p class="text-muted small mb-3">No staff members have been given any advance payments yet.</p>
+                  <button type="button" class="btn btn-primary btn-sm px-3 py-2 rounded-3" data-bs-toggle="modal" data-bs-target="#add_advance_amount">
+                    <i class="ri-add-line me-1"></i> Add Advance
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+            <tr id="advance_no_results" style="display: none;">
+              <td colspan="6" class="text-center py-5">
+                <div class="py-3">
+                  <i class="ri-search-line fs-2 text-muted mb-2 d-block"></i>
+                  <h6 class="fw-bold text-dark mb-1">No Matching Advances Found</h6>
+                  <p class="text-muted small mb-2">Try adjusting your search terms or filters.</p>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetAdvanceFilters()">Reset Filters</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="bulk_disburse_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Bulk Disburse Payroll</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-3">
+          You are about to disburse pay to <strong id="bulk_modal_count">0</strong> staff member(s) using
+          each employee's current rate, present days, advance, and incentive values shown on the sheet.
+        </p>
+        <div id="bulk_modal_list" class="mb-3" style="max-height:220px; overflow-y:auto;"></div>
+        <label class="label-title"><i class="ri-bank-card-fill text-warning"></i> Disbursement Payment Type *</label>
+        <div class="d-grid gap-2" id="bulk_payment_method">
+          <label class="radio-card active">
+            <input type="radio" name="bulk_pay" value="Bank Transfer Wire" checked>
+            <span><i class="ri-bank-line me-1"></i> Bank Transfer Wire</span>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="bulk_pay" value="Hard Cash Handout">
+            <span><i class="ri-cash-line me-1"></i>Hard Cash Handout</span>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="bulk_pay" value="Instant UPI">
+            <span><i class="ri-smartphone-line me-1"></i>Instant UPI / PhonePe</span>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="bulk_pay" value="Certified Paper Cheque">
+            <span><i class="ri-edit-line me-1"></i> Certified Paper Cheque</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="bulk_disburse_submit_btn" onclick="submitBulkDisburse()">
+          <i class="ri-check-line me-1"></i> Confirm & Disburse All
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Add Staff Modal -->
+<div class="modal fade" id="add_staff_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+
+      <!-- Header -->
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Add Manager / Staff Member</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <form id="addStaffForm" enctype="multipart/form-data">
+          {% csrf_token %}
+          <!-- Body -->
+          <div class="modal-body">
+    
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Full Name</label>
+                <input type="text" class="form-control border rounded" id="add_name" placeholder="Liam Sterling" required>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Mobile Number</label>
+                <input type="text" class="form-control border rounded" id="add_mobile" placeholder="+91 9876543210" required>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Date of Birth</label>
+                <input type="date" class="form-control border rounded" id="add_dob">
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Gender</label>
+                <select class="form-select border rounded" id="add_gender">
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0">Designation</label>
+                  <button type="button" class="btn btn-sm btn-link text-primary p-0 text-decoration-none fw-semibold" style="font-size:12px;" onclick="openQuickDesignationModal('add')">
+                    <i class="ri-add-line"></i> Quick Add
+                  </button>
+                </div>
+                <select class="form-select border rounded" id="add_designation">
+                  <option value="">Select Designation</option>
+                  {% for desig in designations %}
+                    <option value="{{ desig.id }}">{{ desig.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Salary Frequency</label>
+                <select class="form-select border rounded" id="add_sal_freq">
+                  <option value="">Select Salary Frequency</option>
+                  <option value="Daily">Daily</option>
+                  <option value="Monthly">Monthly</option>
+                  <option value="Weekly">Weekly</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Salary</label>
+                <input type="text" class="form-control border rounded" id="add_salary" placeholder="5000" required>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Document Type</label>
+                <select class="form-select border rounded" id="add_doctype">
+                  <option value="">Select Document</option>
+                  <option value="Aadhaar Card">Aadhaar Card</option>
+                  <option value="PAN Card">PAN Card</option>
+                  <option value="Driving License">Driving License</option>
+                  <option value="Voter ID">Voter ID</option>
+                </select>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Upload Document</label>
+                <input type="file" class="form-control border rounded" id="add_docfile">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Profile Image</label>
+                <div class="d-flex align-items-center gap-2">
+                  <img id="add_profile_image_preview" src="" alt="Preview" class="rounded-circle object-fit-cover shadow-sm d-none flex-shrink-0" style="width: 38px; height: 38px; border: 1.5px solid #e2e8f0;">
+                  <input type="file" class="form-control border rounded" id="add_profile_image" accept="image/*">
+                </div>
+              </div>
+
+    
+              <div class="col-md-12">
+                <label class="form-label">Status</label>
+                <select class="form-select border rounded" id="add_status">
+                  <option value="0">Active</option>
+                  <option value="1">Suspended locked</option>
+                </select>
+              </div>
+
+              <div class="col-md-12">
+                <label class="form-label">Address</label>
+                <textarea class="form-control border rounded" rows="2" id="add_address"></textarea>
+              </div>
+
+              <!-- Login Access Info Section -->
+              <!-- <div class="col-12 mt-3">
+                <div class="bg-gray-100 border rounded-4 p-3 d-flex align-items-center gap-3">
+                  <div class="p-2 bg-primary-subtle text-primary rounded-3">
+                    <i class="ri-smartphone-line fs-4"></i>
+                  </div>
+                  <div>
+                    <h6 class="fw-bold text-dark mb-0">OTP Login Access</h6>
+                    <small class="text-muted">Staff & Managers log in using their <strong>Mobile Number</strong> via OTP. No password setup required.</small>
+                  </div>
+                </div>
+              </div> -->
+
+              <!-- Role & Permissions Section -->
+              <div class="col-12 mt-3">
+                <div class="permissions-card">
+                    <div class="mb-2">
+                      <label class="custom-checkbox-orange fw-bold text-orange-main" for="addRoleManagerCheck">
+                        <input type="checkbox" id="addRoleManagerCheck">
+                        <span class="checkbox-indicator"></span>
+                        <span>Assign as Manager (Role: Manager)</span>
+                      </label>
+                      <div class="text-muted small mt-1 ms-4">
+                        Grants manager privileges for operating and overseeing assigned farmer activities.
+                      </div>
+                    </div>
+
+                    <div id="add_permissions_wrapper" style="display: none;">
+                      <hr class="my-2" />
+
+                      <div class="d-flex align-items-center justify-content-between mb-3">
+                        <span class="fw-bold text-dark small"><i class="ri-key-2-line me-1 text-orange-main"></i> Module Access Permissions</span>
+                        <label class="custom-switch mb-0">
+                          <input type="checkbox" id="add_perm_all" checked>
+                          <span class="switch-slider"></span>
+                          <span class="fw-bold small text-success ms-1">All Modules</span>
+                        </label>
+                      </div>
+
+                      <div id="add_permissions_container" class="row g-3 mt-1">
+                        {% for perm in permissions %}
+                        <div class="col-6 col-md-4">
+                          <label class="custom-checkbox-orange" for="add_perm_{{ forloop.counter }}">
+                            <input type="checkbox" class="add-perm-check" value="{{ perm }}" id="add_perm_{{ forloop.counter }}" checked disabled>
+                            <span class="checkbox-indicator"></span>
+                            <span class="ms-1">{{ perm }}</span>
+                          </label>
+                        </div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer d-flex justify-content-between">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary">
+              <i class="ri-check-line me-1"></i> Confirm Registration
+            </button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Staff Modal -->
+<div class="modal fade" id="edit_staff_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+
+      <!-- Header -->
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Edit Staff / Manager Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      
+      <form id="editStaffForm" enctype="multipart/form-data">
+          {% csrf_token %}
+          <input type="hidden" id="edit_staff_id">
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Full Name</label>
+                <input type="text" class="form-control border rounded" id="edit_name" required>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Mobile Number</label>
+                <input type="text" class="form-control border rounded" id="edit_mobile" required>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Date of Birth</label>
+                <input type="date" class="form-control border rounded" id="edit_dob">
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Gender</label>
+                <select class="form-select border rounded" id="edit_gender">
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+    
+              <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0">Designation</label>
+                  <button type="button" class="btn btn-sm btn-link text-primary p-0 text-decoration-none fw-semibold" style="font-size:12px;" onclick="openQuickDesignationModal('edit')">
+                    <i class="ri-add-line"></i> Quick Add
+                  </button>
+                </div>
+                <select class="form-select border rounded" id="edit_designation">
+                  <option value="">Select Designation</option>
+                  {% for desig in designations %}
+                    <option value="{{ desig.id }}">{{ desig.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Salary Frequency</label>
+                <select class="form-select border rounded" id="edit_sal_freq">
+                  <option value="">Select Salary Frequency</option>
+                  <option value="Daily">Daily</option>
+                  <option value="Monthly">Monthly</option>
+                  <option value="Weekly">Weekly</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Salary</label>
+                <input type="text" class="form-control border rounded" id="edit_salary" placeholder="5000" required>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Document Type</label>
+                <select class="form-select border rounded" id="edit_doctype">
+                  <option value="">Select Document</option>
+                  <option value="Aadhaar Card">Aadhaar Card</option>
+                  <option value="PAN Card">PAN Card</option>
+                  <option value="Driving License">Driving License</option>
+                  <option value="Voter ID">Voter ID</option>
+                </select>
+              </div>
+    
+              <div class="col-md-6">
+                <label class="form-label">Upload Document</label>
+                <input type="file" class="form-control border rounded" id="edit_docfile">
+                <small class="text-muted" id="edit_doc_link"></small>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Profile Image</label>
+                <div class="d-flex align-items-center gap-2">
+                  <img id="edit_profile_image_preview" src="" alt="Profile" class="rounded-circle object-fit-cover shadow-sm d-none flex-shrink-0" style="width: 38px; height: 38px; border: 1.5px solid #e2e8f0;">
+                  <input type="file" class="form-control border rounded" id="edit_profile_image" accept="image/*">
+                </div>
+              </div>
+    
+              <div class="col-md-12">
+                <label class="form-label">Status</label>
+                <select class="form-select border rounded" id="edit_status">
+                  <option value="0">Active</option>
+                  <option value="1">Suspended locked</option>
+                </select>
+              </div>
+
+
+              <div class="col-md-12">
+                <label class="form-label">Address</label>
+                <textarea class="form-control border rounded" rows="2" id="edit_address"></textarea>
+              </div>
+
+              <!-- Login Access Info Section -->
+              <!-- <div class="col-12 mt-3">
+                <div class="bg-gray-100 border rounded-4 p-3 d-flex align-items-center gap-3">
+                  <div class="p-2 bg-primary-subtle text-primary rounded-3">
+                    <i class="ri-smartphone-line fs-4"></i>
+                  </div>
+                  <div>
+                    <h6 class="fw-bold text-dark mb-0">OTP Login Access</h6>
+                    <small class="text-muted">Login authentication is managed via <strong>Mobile Number</strong> + OTP.</small>
+                  </div>
+                </div>
+              </div> -->
+
+              <!-- Role & Permissions Section -->
+              <div class="col-12 mt-3">
+                <div class="permissions-card">
+                    <div class="mb-2">
+                      <label class="custom-checkbox-orange fw-bold text-orange-main" for="editRoleManagerCheck">
+                        <input type="checkbox" id="editRoleManagerCheck">
+                        <span class="checkbox-indicator"></span>
+                        <span>Assign as Manager (Role: Manager)</span>
+                      </label>
+                    </div>
+
+                    <div id="edit_permissions_wrapper" style="display: none;">
+                      <hr class="my-2" />
+
+                      <div class="d-flex align-items-center justify-content-between mb-3">
+                        <span class="fw-bold text-dark small"><i class="ri-key-2-line me-1 text-orange-main"></i> Module Access Permissions</span>
+                        <label class="custom-switch mb-0">
+                          <input type="checkbox" id="edit_perm_all">
+                          <span class="switch-slider"></span>
+                          <span class="fw-bold small text-success ms-1">All Modules</span>
+                        </label>
+                      </div>
+
+                      <div id="edit_permissions_container" class="row g-3 mt-1">
+                        {% for perm in permissions %}
+                        <div class="col-6 col-md-4">
+                          <label class="custom-checkbox-orange" for="edit_perm_{{ forloop.counter }}">
+                            <input type="checkbox" class="edit-perm-check" value="{{ perm }}" id="edit_perm_{{ forloop.counter }}">
+                            <span class="checkbox-indicator"></span>
+                            <span class="ms-1">{{ perm }}</span>
+                          </label>
+                        </div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer d-flex justify-content-between">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary">
+              <i class="ri-check-line me-1"></i> Update Registration
+            </button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Add Designation Modal -->
+<div class="modal fade" id="quick_add_designation_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-3">
+      <div class="modal-header border-bottom py-2">
+        <h6 class="modal-title fw-bold text-dark"><i class="ri-add-circle-line me-1 text-primary"></i> Quick Add Designation</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body py-3">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Designation Name <span class="text-danger">*</span></label>
+          <input type="text" id="quick_designation_name" class="form-control form-control-sm" placeholder="e.g. Field Supervisor">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Description</label>
+          <textarea id="quick_designation_desc" class="form-control form-control-sm" rows="2" placeholder="Optional description..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2 d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="submitQuickDesignation()">
+          <i class="ri-check-line me-1"></i> Add Designation
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete staff Modal -->
+<div class="modal fade" id="delete_staff_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title text-danger">Confirm Delete</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body text-center">
+        <p class="mb-0">
+          Are you sure you want to delete
+          <strong id="deleteFarmerName">this Staff</strong>?
+        </p>
+      </div>
+
+      <div class="modal-footer justify-content-center">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+          Yes, Delete
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="view_staff_offcanvas" style="width: 400px;">
+  <!-- HEADER -->
+  <div class="offcanvas-header border-bottom bg-gray-100">
+    <div class="d-flex align-items-center gap-3">
+      <div class="p-2 bg-primary-subtle text-primary rounded-3">
+        <i class="ri-user-line fs-5"></i>
+      </div>
+      <div>
+        <h5 class="mb-0 fw-bold">Staff Details</h5>
+        <small class="text-muted" id="view_staff_role">Role</small>
+      </div>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <!-- BODY -->
+  <div class="offcanvas-body p-4">
+    <div class="d-flex flex-column align-items-center mb-4">
+      <div class="avatar avatar-xl mb-3" style="width: 4.5rem; height: 4.5rem;">
+        <img id="view_staff_profile_img" src="" alt="Profile Image" class="rounded-circle object-fit-cover w-100 h-100 shadow-sm d-none" style="border: 2px solid #e2e8f0;">
+        <div class="avatar-initial rounded-circle bg-primary text-white fs-3 d-flex align-items-center justify-content-center shadow-sm" id="view_staff_initials" style="width: 100%; height: 100%;">?</div>
+      </div>
+      <h5 class="mb-1 fw-bold text-dark" id="view_staff_name">Staff Name</h5>
+      <span class="badge bg-label-primary rounded-pill mt-1" id="view_staff_status_badge">Status</span>
+    </div>
+
+
+    <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem;">Information</h6>
+    <ul class="list-unstyled mb-4">
+      <li class="d-flex align-items-center mb-3">
+        <i class="ri-award-line ri-20px text-primary me-2"></i>
+        <span class="fw-medium text-heading me-2">Designation:</span>
+        <span id="view_staff_designation" class="badge bg-label-info">Not Assigned</span>
+      </li>
+      <li class="d-flex align-items-center mb-3">
+        <i class="ri-phone-line ri-20px text-primary me-2"></i>
+        <span class="fw-medium text-heading me-2">Contact:</span>
+        <span id="view_staff_mobile">Mobile Number</span>
+      </li>
+      <li class="d-flex align-items-center mb-3">
+        <i class="ri-calendar-line ri-20px text-primary me-2"></i>
+        <span class="fw-medium text-heading me-2">Date of Birth:</span>
+        <span id="view_staff_dob">DOB</span>
+      </li>
+      <li class="d-flex align-items-center mb-3">
+        <i class="ri-men-line ri-20px text-primary me-2"></i>
+        <span class="fw-medium text-heading me-2">Gender:</span>
+        <span id="view_staff_gender">Gender</span>
+      </li>
+      <li class="d-flex align-items-center mb-3">
+        <i class="ri-calendar-2-line ri-20px text-primary me-2"></i>
+        <span class="fw-medium text-heading me-2">Salary Freq:</span>
+        <span id="view_staff_sal_freq">Weekly</span>
+      </li>
+      <li class="d-flex align-items-center mb-3">
+        <i class="ri-cash-line ri-20px text-primary me-2"></i>
+        <span class="fw-medium text-heading me-2">Salary:</span>
+        <span id="view_staff_salary">₹ 5000/-</span>
+      </li>
+      <li class="d-flex align-items-center mb-3">
+        <i class="ri-map-pin-4-line ri-20px text-primary me-2"></i>
+        <span class="fw-medium text-heading me-2">Address:</span>
+        <span id="view_staff_address"></span>
+      </li>
+      <li class="d-flex align-items-center">
+        <i class="ri-file-list-3-line ri-20px text-primary me-2"></i>
+        <span class="fw-medium text-heading me-2">Document Type:</span>
+        <span id="view_staff_doctype">Doc Type</span>
+      </li>
+    </ul>
+
+    <div class="mt-4" id="view_staff_doc_container" style="display: none;">
+      <a href="#" id="view_staff_doc_btn" target="_blank" class="btn btn-outline-primary w-100">
+        <i class="ri-file-download-line me-2"></i> View / Download Document
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Add Execute Payout Modal -->
+<div class="modal fade" id="execute_paycheck_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Execute Paycheck: <span id="execute_emp_name"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <div class="payout-wrapper">
+              <div class="summary-box">
+                <div class="d-flex justify-content-between small-text">
+                  <span>Base Daily Rate:</span>
+                  <strong id="execute_base_rate"></strong>
+                </div>
+                <div class="d-flex justify-content-between small-text">
+                  <span>Worked Attendance:</span>
+                  <strong id="execute_present_days"></strong>
+                </div>
+                <div class="d-flex justify-content-between small-text border-bottom pb-2">
+                  <span>Gross Salary Earned:</span>
+                  <strong class="fw-bold text-dark" id="execute_gross"></strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                  <span class="fw-bold text-primary small-text">
+                    Estimated Net Payout:
+                  </span>
+                  <strong class="net-amount" id="execute_net_pay"></strong>
+                </div>
+              </div>
+              <div class="mt-3">
+                <label class="label-title"><i class="ri-bank-card-fill text-warning"></i> Disbursement Payment Type *</label>
+                <div class="d-grid gap-2" id="execute_payment_method">
+                  <label class="radio-card active">
+                    <input type="radio" name="exec_pay" value="Bank Transfer Wire" checked>
+                    <span><i class="ri-bank-line me-1"></i> Bank Transfer Wire</span>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="exec_pay" value="Hard Cash Handout">
+                    <span><i class="ri-cash-line me-1"></i>Hard Cash Handout</span>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="exec_pay" value="Instant UPI">
+                    <span><i class="ri-smartphone-line me-1"></i>Instant UPI / PhonePe</span>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="exec_pay" value="Certified Paper Cheque">
+                    <span><i class="ri-edit-line me-1"></i> Certified Paper Cheque</span>
+                  </label>
+                </div>
+              </div>
+              <div class="mt-3">
+                <label class="label-title">
+                  Update Salary Advance Deduction (₹)
+                </label>
+                <div class="input-icon">
+                  <span>₹</span>
+                  <input type="number" id="execute_advance_input" class="form-control" value="0">
+                </div>
+                <p class="hint" id="execute_advance_hint">
+                  Previous setting was <strong>₹0</strong>
+                </p>
+              </div>
+              <div class="mt-3">
+                <label class="label-title">
+                   Update Incentives & Bonuses (₹)
+                </label>
+                <div class="input-icon">
+                  <span>₹</span>
+                  <input type="number" id="execute_incentive_input" class="form-control" value="0">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="execute_submit_btn">
+          <i class="ri-check-line me-1"></i> Confirm & Disburse Payout
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Advance Amount Modal -->
+<div class="modal fade" id="add_advance_amount" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Advance Amount</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <div class="payout-wrapper">
+              <div class="col-md-12">
+                <label class="form-label">Employee</label>
+                <select id="advance_employee_id" class="form-select">
+                  {% for staff in staff_members %}
+                  {% if staff.status != '1' %}
+                  <option value="{{ staff.id }}">{{ staff.name }}</option>
+                  {% endif %}
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mt-3">
+                <label class="label-title"><i class="ri-bank-card-fill text-warning"></i> Disbursement Payment Type *</label>
+                <div class="d-grid gap-2" id="advance_payment_method">
+                  <label class="radio-card active">
+                    <input type="radio" name="adv_pay" value="Bank Transfer Wire" checked>
+                    <span><i class="ri-bank-line me-1"></i> Bank Transfer Wire</span>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="adv_pay" value="Hard Cash Handout">
+                    <span><i class="ri-cash-line me-1"></i>Hard Cash Handout</span>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="adv_pay" value="Instant UPI">
+                    <span><i class="ri-smartphone-line me-1"></i>Instant UPI / PhonePe</span>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="adv_pay" value="Certified Paper Cheque">
+                    <span><i class="ri-edit-line me-1"></i> Certified Paper Cheque</span>
+                  </label>
+                </div>
+              </div>
+              <div class="mt-3">
+                <label class="label-title">
+                  Advance Amount (₹)
+                </label>
+                <div class="input-icon">
+                  <span>₹</span>
+                  <input type="number" id="advance_amount" class="form-control" value="0">
+                </div>
+              </div>
+              <div class="mt-3">
+                <label class="label-title">
+                   Description
+                </label>
+                <div class="input-icon">
+                  <textarea class="form-control" rows="3"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitAdvance()">
+          <i class="ri-check-line me-1"></i> Pay Advance
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Void Advance Confirmation Modal -->
+<div class="modal fade" id="delete_advance_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold text-danger d-flex align-items-center gap-2">
+          <i class="ri-error-warning-line"></i> Void Advance
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center py-3">
+        <div class="mb-3 text-danger fs-1">
+          <i class="ri-delete-bin-line"></i>
+        </div>
+        <p class="mb-1 text-dark fw-semibold">Are you sure you want to void this advance payment?</p>
+        <p class="small text-muted mb-0" id="delete_advance_details"></p>
+        <input type="hidden" id="delete_advance_id">
+      </div>
+      <div class="modal-footer border-0 pt-0 justify-content-center">
+        <button type="button" class="btn btn-light btn-sm px-3" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger btn-sm px-3" onclick="confirmDeleteAdvance()">Void Advance</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Employee Modal -->
+<div class="modal fade" id="add_labour" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Deploy Contract Labor Parameters</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Worker Full Name</label>
+            <input type="text" name="name" class="form-control"
+                    placeholder="Eg: Ramalingam" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Contact Phone</label>
+            <input type="text" id="" class="form-control" placeholder="+91 9874561230">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Job Classification Role</label>
+            <select name="demand" class="form-select">
+              <option>General Labour</option>
+              <option>Heavy Tractor Operator</option>
+              <option>Irrigation Hand</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Assign Supervisor Manager</label>
+            <select name="demand" class="form-select">
+              <option>Owner: Rajesh Patel</option>
+              <option>Manager: Sunita Devi</option>
+              <option>Consultant: Rao</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Daily Shift Schedule</label>
+            <select name="demand" class="form-select">
+              <option>07:00 - 15:00</option>
+              <option>06:00 - 18:00</option>
+              <option>13:00 - 21:00</option>
+            </select>
+          </div>
+          <div class="col-md-12">
+            <div class="bg-gray-100 p-4 rounded-3 border">
+              <span class="d-block text-uppercase small fw-bold text-secondary mb-2">
+                Assign Multiple Lands / Plots
+              </span>
+              <div class="row g-2" style="overflow-y:auto;max-height: 200px;">
+                {% for plot in plots %}
+                <div class="col-12 col-sm-6">
+                  <label class="w-100">
+                    <input type="checkbox"
+                          class="d-none plot-checkbox"
+                          value="{{ plot.id }}"
+                          onchange="togglePlot(this)">
+                    <div class="plot-card border rounded-3 p-2 d-flex align-items-center gap-2 cursor-pointer">
+                      <!-- check icon -->
+                      <div class="check-icon text-primary d-none">
+                        <i class="ri-check-line"></i>
+                      </div>
+                      <div class="flex-grow-1 text-truncate">
+                        <p class="mb-0 fw-bold small text-truncate">
+                          {{ plot.name }}
+                        </p>
+                        <span class="text-muted" style="font-size:10px;">
+                          {{ plot.crop }}
+                        </span>
+                      </div>
+                    </div>
+                  </label>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          <div class="col-md-12">
+            <label class="form-label">Operational Task (General Duty)</label>
+            <input type="text" id="" class="form-control" placeholder="General Cultivation Maintenance">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Roaster Status</label>
+            <select name="demand" class="form-select">
+              <option>Active Duty</option>
+              <option>Off Duty</option>
+              <option>Sick Leave</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Daily Rate (₹)</label>
+            <input type="text" id="" class="form-control" placeholder="65">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Advance Paid (₹)</label>
+            <input type="text" id="" class="form-control" placeholder="65">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Incentives (₹)</label>
+            <input type="text" id="" class="form-control" placeholder="52">
+          </div>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary">
+          <i class="ri-check-line me-1"></i> Register Location
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Edit Employee Modal -->
+<div class="modal fade" id="edit_employee_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Configure Fieldhand: <span>Ramalingam</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Worker Full Name</label>
+            <input type="text" name="name" class="form-control"
+                    placeholder="Eg: Ramalingam" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Contact Phone</label>
+            <input type="text" id="" class="form-control" placeholder="+91 9874561230">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Job Classification Role</label>
+            <select name="demand" class="form-select">
+              <option>General Labour</option>
+              <option>Heavy Tractor Operator</option>
+              <option>Irrigation Hand</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Assign Supervisor Manager</label>
+            <select name="demand" class="form-select">
+              <option>Owner: Rajesh Patel</option>
+              <option>Manager: Sunita Devi</option>
+              <option>Consultant: Rao</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Daily Shift Schedule</label>
+            <select name="demand" class="form-select">
+              <option>07:00 - 15:00</option>
+              <option>06:00 - 18:00</option>
+              <option>13:00 - 21:00</option>
+            </select>
+          </div>
+          <div class="col-md-12">
+            <div class="bg-gray-100 p-4 rounded-3 border">
+              <span class="d-block text-uppercase small fw-bold text-secondary mb-2">
+                Assign Multiple Lands / Plots
+              </span>
+              <div class="row g-2" style="overflow-y:auto;max-height: 200px;">
+                {% for plot in plots %}
+                <div class="col-12 col-sm-6">
+                  <label class="w-100">
+                    <input type="checkbox"
+                          class="d-none plot-checkbox"
+                          value="{{ plot.id }}"
+                          onchange="togglePlot(this)">
+                    <div class="plot-card border rounded-3 p-2 d-flex align-items-center gap-2 cursor-pointer">
+                      <!-- check icon -->
+                      <div class="check-icon text-primary d-none">
+                        <i class="ri-check-line"></i>
+                      </div>
+                      <div class="flex-grow-1 text-truncate">
+                        <p class="mb-0 fw-bold small text-truncate">
+                          {{ plot.name }}
+                        </p>
+                        <span class="text-muted" style="font-size:10px;">
+                          {{ plot.crop }}
+                        </span>
+                      </div>
+                    </div>
+                  </label>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          <div class="col-md-12">
+            <label class="form-label">Operational Task (General Duty)</label>
+            <input type="text" id="" class="form-control" placeholder="General Cultivation Maintenance">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Roaster Status</label>
+            <select name="demand" class="form-select">
+              <option>Active Duty</option>
+              <option>Off Duty</option>
+              <option>Sick Leave</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Daily Rate (₹)</label>
+            <input type="text" id="" class="form-control" placeholder="65">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Advance Paid (₹)</label>
+            <input type="text" id="" class="form-control" placeholder="65">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Incentives (₹)</label>
+            <input type="text" id="" class="form-control" placeholder="52">
+          </div>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary">
+          <i class="ri-check-line me-1"></i> Register Location
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Delete Employee Modal -->
+<div class="modal fade" id="delete_labour" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title text-danger">Confirm Delete</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body text-center">
+        <p class="mb-0">
+          Are you sure you want to delete
+          <strong id="deleteFarmerName">this Employee</strong>?
+        </p>
+      </div>
+
+      <div class="modal-footer justify-content-center">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+          Yes, Delete
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<style>
+#staff_image_preview_modal {
+  z-index: 109999 !important;
+}
+#staff_image_preview_modal .modal-dialog {
+  z-index: 110000 !important;
+  position: relative;
+}
+</style>
+
+<!-- Staff Profile Image Lightbox Preview Modal -->
+<div class="modal fade" id="staff_image_preview_modal" tabindex="-1" aria-hidden="true" style="z-index: 109999 !important;">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header border-bottom py-3 px-4 bg-light">
+        <div class="d-flex align-items-center gap-2">
+          <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+            <i class="ri-image-line fs-5"></i>
+          </div>
+          <div>
+            <h6 class="modal-title fw-bold text-dark mb-0" id="preview_modal_staff_name">Profile Image Preview</h6>
+            <span class="text-muted small" id="preview_modal_staff_role">Staff Member</span>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4 text-center bg-white">
+        <div class="rounded-4 overflow-hidden shadow-sm mx-auto d-inline-block border" style="max-width: 100%; max-height: 400px; background-color: #f8fafc;">
+          <img id="preview_modal_img_src" src="" alt="Staff Profile" class="img-fluid object-fit-contain" style="max-height: 380px; width: auto; min-width: 220px; display: block; margin: 0 auto;">
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2.5 px-3 bg-light d-flex justify-content-between">
+        <a href="#" id="preview_modal_download_btn" target="_blank" download class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1">
+          <i class="ri-download-2-line"></i> Download Image
+        </a>
+        <button type="button" class="btn btn-sm btn-secondary px-3" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+
+let currentExecEmpId = null;
+let currentExecGross = 0;
+let currentExecNet = 0;
+let currentExecPresent = 0;
+
+  // Helper to calculate daily rate based on frequency
+  function getDailyRate(rate, freq) {
+      if (freq === 'Weekly') {
+          return rate / 6.0;
+      } else if (freq === 'Monthly') {
+          return rate / 30.0;
+      }
+      return rate; // 'Daily'
+  }
+
+  function updateRowNetPay(row) {
+      let rateInput = row.querySelector('.row-rate-input');
+      let advInput = row.querySelector('.row-adv-input');
+      let incInput = row.querySelector('.row-inc-input');
+      let freqSelect = row.querySelector('.row-freq-select');
+      
+      let rate = rateInput ? (parseFloat(rateInput.value) || 0) : 0;
+      let inc = incInput ? (parseFloat(incInput.value) || 0) : 0;
+      let present = rateInput ? (parseFloat(rateInput.dataset.present) || 0) : 0;
+      let advance = advInput ? (parseFloat(advInput.value) || 0) : (rateInput ? (parseFloat(rateInput.dataset.advance) || 0) : 0);
+      let freq = freqSelect ? freqSelect.value : 'Daily';
+      
+      let dailyRate = getDailyRate(rate, freq);
+      let gross = dailyRate * present;
+      let net = Math.max(0, gross - advance + inc);
+      
+      row.querySelector('.row-net-pay').innerText = '₹' + net.toFixed(2);
+  }
+
+document.addEventListener("DOMContentLoaded", function () {
+  // Add event listeners for inline editing on rows (instant update)
+  document.querySelectorAll('.row-rate-input, .row-adv-input, .row-inc-input, .row-freq-select').forEach(input => {
+      input.addEventListener('input', function() {
+          updateRowNetPay(this.closest('.payroll-row'));
+      });
+      input.addEventListener('change', function() {
+          updateRowNetPay(this.closest('.payroll-row'));
+      });
+  });
+
+  // Auto-save the base rate and frequency when the user finishes editing it
+  document.querySelectorAll('.row-rate-input, .row-freq-select').forEach(input => {
+      input.addEventListener('change', function() {
+          let row = this.closest('.payroll-row');
+          let rateInput = row.querySelector('.row-rate-input');
+          let freqSelect = row.querySelector('.row-freq-select');
+          
+          let empId = rateInput.dataset.id;
+          let newRate = rateInput.value;
+          let newFreq = freqSelect ? freqSelect.value : 'Daily';
+          
+          $.ajax({
+              url: '/farmer/employee/update_employee_rate/',
+              method: 'POST',
+              data: {
+                  'employee_id': empId,
+                  'rate': newRate,
+                  'frequency': newFreq
+              },
+              success: function(res) {
+                 if(res.success) {
+                     showAppToast("Wage rate and frequency permanently saved", "success", 1000);
+                     // Also update the dataset rate and frequency on the Disburse button so it stays in sync
+                     let btn = row.querySelector('.execute-modal-btn');
+                     if(btn) {
+                         btn.dataset.rate = newRate;
+                         btn.dataset.frequency = newFreq;
+                     }
+                     updateRowNetPay(row);
+                 } else {
+                     showAppToast("Failed to save: " + res.error, "error");
+                 }
+              }
+          });
+      });
+  });
+
+  document.querySelectorAll(".execute-modal-btn").forEach(btn => {
+    btn.addEventListener("click", function () {
+      currentExecEmpId = this.dataset.id;
+      let name = this.dataset.name;
+      
+      let row = this.closest('.payroll-row');
+      let rowRateInput = row.querySelector('.row-rate-input');
+      let rowIncInput = row.querySelector('.row-inc-input');
+      let rowFreqSelect = row.querySelector('.row-freq-select');
+      
+      let rate = rowRateInput ? (parseFloat(rowRateInput.value) || 0) : parseFloat(this.dataset.rate);
+      let inc = rowIncInput ? (parseFloat(rowIncInput.value) || 0) : 0;
+      let freq = rowFreqSelect ? rowFreqSelect.value : (this.dataset.frequency || 'Daily');
+      
+      let present = parseFloat(this.dataset.present);
+      let advance = parseFloat(this.dataset.advance);
+      
+      let dailyRate = getDailyRate(rate, freq);
+      let gross = dailyRate * present;
+      let net = gross - advance + inc;
+      
+      currentExecGross = gross;
+      currentExecPresent = present;
+      currentExecNet = net;
+
+      document.getElementById('execute_emp_name').innerText = name;
+      document.getElementById('execute_base_rate').innerText = '₹' + dailyRate.toFixed(2) + ' / Day (₹' + rate.toFixed(2) + ' / ' + freq + ')';
+      document.getElementById('execute_present_days').innerText = present + ' Days Present';
+      document.getElementById('execute_gross').innerText = '₹' + gross.toFixed(2);
+      document.getElementById('execute_net_pay').innerText = '₹' + net.toFixed(2);
+      
+      document.getElementById('execute_advance_input').value = advance;
+      document.getElementById('execute_advance_hint').innerHTML = 'Previous setting was <strong>₹' + advance + '</strong>';
+      
+      document.getElementById('execute_incentive_input').value = inc;
+      
+      updateNetPay();
+    });
+  });
+  
+  function updateNetPay() {
+      let adv = parseFloat(document.getElementById('execute_advance_input').value) || 0;
+      let inc = parseFloat(document.getElementById('execute_incentive_input').value) || 0;
+      let newNet = currentExecGross - adv + inc;
+      document.getElementById('execute_net_pay').innerText = '₹' + newNet.toFixed(2);
+  }
+  
+  if (document.getElementById('execute_advance_input')) {
+      document.getElementById('execute_advance_input').addEventListener('input', updateNetPay);
+  }
+  if (document.getElementById('execute_incentive_input')) {
+      document.getElementById('execute_incentive_input').addEventListener('input', updateNetPay);
+  }
+  
+  if (document.getElementById('execute_submit_btn')) {
+      document.getElementById('execute_submit_btn').addEventListener('click', function() {
+          let adv = parseFloat(document.getElementById('execute_advance_input').value) || 0;
+          let inc = parseFloat(document.getElementById('execute_incentive_input').value) || 0;
+          let net = currentExecGross - adv + inc;
+          let method = document.querySelector('input[name="exec_pay"]:checked').value;
+          
+          $.ajax({
+              url: '/farmer/employee/execute_paycheck/',
+              method: 'POST',
+              data: {
+                  'employee_id': currentExecEmpId,
+                  'advance': adv,
+                  'incentive': inc,
+                  'method': method,
+                  'net_pay': net,
+                  'gross': currentExecGross,
+                  'present': currentExecPresent
+              },
+              success: function(res) {
+                 if(res.success) {
+                     let closeBtn = document.querySelector('#execute_paycheck_modal .btn-close');
+                     if (closeBtn) closeBtn.click();
+                     
+                     showAppToast("Paycheck executed successfully", "success", 1500);
+                     setTimeout(() => location.reload(), 1500);
+                 } else {
+                     showAppToast(res.error || "Failed to execute paycheck", "error");
+                 }
+              }
+          });
+      });
+  }
+});
+
+function submitAdvance() {
+    let empId = document.getElementById('advance_employee_id').value;
+    let methodRadio = document.querySelector('input[name="adv_pay"]:checked');
+    let method = methodRadio ? methodRadio.value : 'Bank Transfer Wire';
+    let amount = document.getElementById('advance_amount').value;
+
+    if (!empId) {
+        showAppToast("Please select an employee", "error");
+        return;
+    }
+
+    if (!amount || parseFloat(amount) <= 0) {
+        showAppToast("Please enter an advance amount greater than 0", "error");
+        return;
+    }
+
+    // Set active tab so reload returns to advance tab
+    localStorage.setItem('activeFarmerTab', '#employee_advance');
+
+    $.ajax({
+          url: '{% url "add_advance" %}',
+          method: 'POST',
+          data: {
+              'employee_id': empId,
+              'method': method,
+              'amount': amount,
+              'csrfmiddlewaretoken': '{{ csrf_token }}'
+          },
+          success: function(res) {
+             if(res.success) {
+                 let closeBtn = document.querySelector('#add_advance_amount .btn-close');
+                 if (closeBtn) closeBtn.click();
+
+                 showAppToast("Advance added successfully", "success", 1500);
+                 setTimeout(() => location.reload(), 1200);
+             } else {
+                 showAppToast(res.error || "Failed to add advance", "error");
+             }
+          },
+          error: function() {
+              showAppToast("An error occurred while adding advance", "error");
+          }
+    });
+}
+
+function openDeleteAdvanceModal(advId, staffName, amount) {
+    document.getElementById('delete_advance_id').value = advId;
+    document.getElementById('delete_advance_details').textContent = "Staff: " + staffName + " | Amount: ₹" + parseFloat(amount).toFixed(2);
+    var modal = new bootstrap.Modal(document.getElementById('delete_advance_modal'));
+    modal.show();
+}
+
+function confirmDeleteAdvance() {
+    var advId = document.getElementById('delete_advance_id').value;
+    if (!advId) return;
+
+    localStorage.setItem('activeFarmerTab', '#employee_advance');
+
+    $.ajax({
+        url: '{% url "delete_advance" %}',
+        method: "POST",
+        data: {
+            'advance_id': advId,
+            'csrfmiddlewaretoken': '{{ csrf_token }}'
+        },
+        success: function(res) {
+            var modalEl = document.getElementById('delete_advance_modal');
+            var modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+
+            if (res.success) {
+                showAppToast("Advance payment voided successfully", "success", 1500);
+                setTimeout(function() {
+                    location.reload();
+                }, 1200);
+            } else {
+                showAppToast(res.error || "Failed to void advance", "error", 2500);
+            }
+        },
+        error: function() {
+            showAppToast("An error occurred while voiding advance", "error", 2500);
+        }
+    });
+}
+
+function filterAdvanceTable() {
+    var searchTerm = ($('#advance_search_input').val() || '').toLowerCase().trim();
+    var statusFilter = ($('#advance_status_filter').val() || 'all').toLowerCase();
+    var methodFilter = ($('#advance_method_filter').val() || 'all').toLowerCase();
+
+    var visibleCount = 0;
+    var $rows = $('#advance_table_body tr.advance-row');
+
+    $rows.each(function() {
+        var $row = $(this);
+        var staffName = ($row.data('staff') || '').toString().toLowerCase();
+        var role = ($row.data('role') || '').toString().toLowerCase();
+        var method = ($row.data('method') || '').toString().toLowerCase();
+        var status = ($row.data('status') || '').toString().toLowerCase();
+
+        var matchesSearch = !searchTerm || staffName.includes(searchTerm) || role.includes(searchTerm) || method.includes(searchTerm);
+        var matchesStatus = (statusFilter === 'all') || (status === statusFilter);
+        var matchesMethod = (methodFilter === 'all') || (method === methodFilter);
+
+        if (matchesSearch && matchesStatus && matchesMethod) {
+            $row.show();
+            visibleCount++;
+        } else {
+            $row.hide();
+        }
+    });
+
+    if ($rows.length > 0) {
+        if (visibleCount === 0) {
+            $('#advance_no_results').show();
+        } else {
+            $('#advance_no_results').hide();
+        }
+    }
+}
+
+function resetAdvanceFilters() {
+    $('#advance_search_input').val('');
+    $('#advance_status_filter').val('all');
+    $('#advance_method_filter').val('all');
+    filterAdvanceTable();
+}
+
+$(document).on('keyup input', '#advance_search_input', filterAdvanceTable);
+$(document).on('change', '#advance_status_filter, #advance_method_filter', filterAdvanceTable);
+</script>
+{% endblock %}

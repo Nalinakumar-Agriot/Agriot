@@ -1,0 +1,299 @@
+<!-- templates/layout/partials/menu/superadmin/vertical_menu.html -->
+{% load static %}
+<style>
+.menu .menu-item.active > .menu-link:not(.menu-toggle) {
+  background: #ffffff !important;
+  color: #EC9C56 !important;
+  font-weight: 900;
+  box-shadow: none !important;
+}
+
+.menu-link {
+  color: #0b1d31 !important;
+}
+.menu-link:hover {
+  color: #EC9C56 !important;
+  background-color: #FEF5EF !important;
+  border: 1px solid #DAA06D !important;
+}
+
+/* Suppress duplicate theme CSS pseudo-arrow */
+.menu-toggle::after,
+.menu-link::after,
+.menu-item > .menu-link::after,
+.layout-menu .menu-link.menu-toggle::after,
+.layout-menu .menu-item.open:not(.menu-item-closing) > .menu-toggle::after,
+.layout-menu .menu-item.open > .menu-link::after {
+  display: none !important;
+  content: none !important;
+}
+.menu-inner {
+  height: 100vh;              /* Full screen height */
+  overflow-y: auto;           /* Enable vertical scroll */
+  overflow-x: hidden;
+  margin-bottom: 20px;
+}
+
+/* Optional: smooth scrollbar */
+.menu-inner::-webkit-scrollbar {
+  width: 6px;
+}
+.menu-inner::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 10px;
+}
+
+/* Top-right dark orange circle */
+#layout-menu::before {
+  content: "";
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  top: -120px;
+  right: -120px;
+  border-radius: 50%;
+  background: rgba(180, 100, 20, 0.12);
+  box-shadow:
+    inset 0 0 40px rgba(180, 100, 20, 0.10),
+    0 0 0 12px rgba(180, 100, 20, 0.06),   /* gap/padding ring */
+    0 0 0 16px rgba(180, 100, 20, 0.12);   /* thick border ring */
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Bottom-left dark yellow circle */
+#layout-menu::after {
+  content: "";
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  bottom: -80px;
+  left: -80px;
+  border-radius: 50%;
+  background: rgba(180, 140, 10, 0.12);
+  box-shadow:
+    inset 0 0 40px rgba(180, 140, 10, 0.10),
+    0 0 0 12px rgba(180, 140, 10, 0.06),   /* gap/padding ring */
+    0 0 0 16px rgba(180, 140, 10, 0.12);   /* thick border ring */
+  pointer-events: none;
+  z-index: 0;
+}
+</style>
+<aside id="layout-menu" class="layout-menu menu-vertical menu bg-menu-theme"
+  style="
+    background:
+      radial-gradient(circle at -20% -50%, #F7B57C 0%, transparent 55%),
+      radial-gradient(circle at -30% 50%,  #C0EEE8 0%, transparent 50%),
+      radial-gradient(circle at 150% 95%,  #FFECB5 0%, transparent 50%),
+      #ffffff;
+  ">
+  <!-- ── App Brand ── -->
+  <div class="app-brand demo" style="display:flex; align-items:center; justify-content:space-between; padding: 0.75rem 1rem; min-height: 64px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+    <a href="{% url 'home' %}" class="app-brand-link" style="text-decoration:none;">
+      <span id="brand-logo-full">
+        <img src="{% static 'img/auth/agri_logo_3.png' %}" width="200" id="logo-full" style="display:block;" />
+      </span>
+      <span id="brand-logo-icon" style="display:none;">
+        <img src="{% static 'img/auth/agri_icon.png' %}" width="30" id="logo-icon" class="bg-white rounded" />
+      </span>
+    </a>
+
+    <!-- Toggle — desktop only -->
+    <button
+      id="menu-collapse-btn"
+      onclick="toggleSidebarCollapse()"
+      title="Toggle menu"
+      style="
+        background: rgba(255,255,255,0.07);
+        border: none;
+        border-radius: 8px;
+        width: 32px; height: 32px;
+        color: #0b1d31;
+        cursor: pointer;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: background 0.2s;
+      "
+    >
+      <i class="ri-menu-fold-line" style="font-size:18px;" id="collapse-icon"></i>
+    </button>
+
+    <!-- Close — mobile only -->
+    <a href="javascript:void(0);" class="layout-menu-toggle menu-link d-xl-none" style="color:#b0b0c3; font-size:1.5rem; margin-left:auto;">
+      <i class="ri-close-fill"></i>
+    </a>
+  </div>
+
+  <div class="menu-inner-shadow"></div>
+
+  <!-- ── Menu Items ── -->
+  <ul class="menu-inner py-1" id="main-menu-list">
+    {% for item in menu_data.menu %}
+
+      {% if "menu_header" in item %}
+        <!-- Section Header -->
+        <li class="menu-header small mt-3" data-header="true">
+          <span class="menu-header-text" style="color:#7983bb; font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;">
+            {{ item.menu_header }}
+          </span>
+        </li>
+
+      {% elif item.submenu %}
+        <!-- Collapsible parent -->
+        {% with is_group=item.submenu|filter_by_url:request %}
+        <li class="menu-item {% if is_group or item.url == request.resolver_match.url_name %}active open{% endif %}"
+            data-title="{{ item.name }}"
+            style="list-style:none;">
+          <a href="{% if item.url %}{% url item.url %}{% else %}javascript:void(0);{% endif %}"
+             class="menu-link custom-menu-link {% if not item.url %}menu-toggle{% endif %}" style="color: #0b1d31; display: flex; align-items: center; justify-content: space-between;">
+            <div class="d-flex align-items-center gap-2" style="min-width: 0;">
+              <i class="{{ item.icon }} menu-icon" style="width:20px; text-align:center; font-size:15px; flex-shrink:0;"></i>
+              <span class="menu-text" style="font-size:13.5px; font-weight:500; white-space:nowrap; overflow:hidden;">{{ item.name }}</span>
+            </div>
+            <span class="menu-chevron-btn p-1 rounded d-flex align-items-center justify-content-center"
+                  onclick="toggleSubmenuAccordion(event, this);"
+                  style="cursor: pointer;"
+                  title="Toggle submenu">
+              <i class="ri-arrow-right-s-line menu-chevron" style="font-size:16px; transition: transform 0.2s; {% if is_group or item.url == request.resolver_match.url_name %}transform: rotate(90deg);{% endif %}"></i>
+            </span>
+          </a>
+          <ul class="menu-sub" style="padding-left:16px; {% if not is_group and item.url != request.resolver_match.url_name %}display:none;{% endif %}">
+            {% for sub in item.submenu %}
+              {% if not sub.permission or request.user|has_permission:sub.permission %}
+              <li class="menu-item {% if sub.url == request.resolver_match.url_name %}active{% endif %}"
+                  style="list-style:none;">
+                <a href="{% url sub.url %}"
+                   class="menu-link" >
+
+                  <span class="menu-text">{{ sub.name }}</span>
+                </a>
+              </li>
+              {% endif %}
+            {% endfor %}
+          </ul>
+        </li>
+        {% endwith %}
+
+      {% else %}
+        <!-- Plain link -->
+        {% if not item.permission or request.user|has_permission:item.permission %}
+        <li class="menu-item {% if item.url == request.resolver_match.url_name %}active{% endif %}"
+            data-title="{{ item.name }}"
+            style="list-style:none;">
+          <a href="{% url item.url %}" class="menu-link custom-menu-link">
+            <i class="{{ item.icon }} menu-icon" style="width:20px; text-align:center; font-size:15px; flex-shrink:0;"></i>
+            <span class="menu-text" style="font-size:13.5px; font-weight:500; white-space:nowrap; overflow:hidden;">{{ item.name }}</span>
+            {% if item.badge %}
+              <div class="badge bg-{{ item.badge.0 }} rounded-pill ms-auto" style="font-size:10px;">{{ item.badge.1 }}</div>
+            {% endif %}
+          </a>
+        </li>
+        {% endif %}
+      {% endif %}
+
+    {% endfor %}
+  </ul>
+
+</aside>
+
+
+
+<script>
+/* ── Desktop toggle button visibility ── */
+(function showToggleOnDesktop() {
+  const btn = document.getElementById('menu-collapse-btn');
+  if (btn) {
+    if (window.innerWidth >= 1200) {
+      btn.style.display = 'flex';
+    }
+    window.addEventListener('resize', function () {
+      btn.style.display = window.innerWidth >= 1200 ? 'flex' : 'none';
+    });
+  }
+})();
+
+/* ── Toggle collapse ── */
+function toggleSidebarCollapse() {
+  const html = document.documentElement;
+  const icon = document.getElementById('collapse-icon');
+  const isCollapsed = html.classList.toggle('layout-menu-collapsed');
+
+  icon.className = isCollapsed
+    ? 'ri-menu-unfold-line'
+    : 'ri-menu-fold-line';
+  icon.style.fontSize = '18px';
+
+  localStorage.setItem('menuCollapsed', isCollapsed ? '1' : '0');
+}
+
+/* ── Restore saved state ── */
+(function restoreCollapse() {
+  if (localStorage.getItem('menuCollapsed') === '1') {
+    document.documentElement.classList.add('layout-menu-collapsed');
+    const icon = document.getElementById('collapse-icon');
+    if (icon) {
+      icon.className = 'ri-menu-unfold-line';
+      icon.style.fontSize = '18px';
+    }
+  }
+})();
+
+/* ── Submenu accordion toggle button ── */
+function toggleSubmenuAccordion(event, el) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const li = el.closest('.menu-item');
+  if (!li) return;
+  const sub = li.querySelector('.menu-sub');
+  const chevron = el.querySelector('.menu-chevron') || el.querySelector('i');
+  const isOpen = li.classList.contains('open');
+
+  if (isOpen) {
+    li.classList.remove('open');
+    if (sub) sub.style.display = 'none';
+    if (chevron) chevron.style.transform = 'rotate(0deg)';
+  } else {
+    li.classList.add('open');
+    if (sub) sub.style.display = 'block';
+    if (chevron) chevron.style.transform = 'rotate(90deg)';
+  }
+}
+
+/* ── Submenu accordion fallback for menu-toggle ── */
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('.menu-toggle').forEach(function (toggle) {
+    toggle.addEventListener('click', function () {
+      const li       = this.closest('.menu-item');
+      const sub      = li.querySelector('.menu-sub');
+      const chevron  = this.querySelector('.menu-chevron');
+      const isOpen   = li.classList.contains('open');
+
+      /* Close all siblings */
+      const siblings = li.parentElement.querySelectorAll('.menu-item.open');
+      siblings.forEach(function (s) {
+        if (s !== li) {
+          s.classList.remove('open');
+          const sib_sub = s.querySelector('.menu-sub');
+          const sib_chev = s.querySelector('.menu-chevron');
+          if (sib_sub)  sib_sub.style.display  = 'none';
+          if (sib_chev) sib_chev.style.transform = 'rotate(0deg)';
+        }
+      });
+
+      if (isOpen) {
+        li.classList.remove('open');
+        if (sub)    sub.style.display    = 'none';
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+      } else {
+        li.classList.add('open');
+        if (sub)    sub.style.display    = 'block';
+        if (chevron) chevron.style.transform = 'rotate(90deg)';
+      }
+    });
+  });
+});
+</script>

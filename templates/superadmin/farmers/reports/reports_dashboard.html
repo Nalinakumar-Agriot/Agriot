@@ -1,0 +1,741 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+
+{% block title %}Reports Dashboard{% endblock title %}
+
+{% block page_css %}
+{{ block.super }}
+<style>
+  .nav-pills .nav-link.active,
+  .nav-pills .show > .nav-link {
+    background-color: #F69C55 !important;
+    color: #fff !important;
+    border-radius: 8px;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(246, 156, 85, 0.25);
+  }
+  .nav-pills .nav-link {
+    border-radius: 8px;
+    font-weight: 500;
+    color: #566a7f;
+    padding: 0.5rem 1.25rem;
+    transition: all 0.2s ease;
+  }
+  .nav-pills .nav-link:hover:not(.active) {
+    background-color: #f5f5f9;
+    color: #F69C55;
+  }
+  .search-collapse-wrapper {
+    position: relative;
+  }
+  .search-input-group {
+    width: 0;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-width 0.25s ease, opacity 0.2s ease;
+    white-space: nowrap;
+  }
+  .search-input-group.expanded {
+    max-width: 420px;
+    width: 420px;
+    opacity: 1;
+    margin-left: 8px;
+  }
+  @media (max-width: 576px) {
+    .search-input-group.expanded {
+      max-width: 220px;
+      width: 220px;
+    }
+  }
+  .report-hub-card {
+    border: 1.5px solid #ebedf0;
+    border-radius: 18px;
+    background: #ffffff;
+    transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  }
+  .report-hub-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.08);
+    border-color: #DAA06D;
+    color: inherit;
+  }
+  .report-hub-icon-wrapper {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .report-metric-badge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+  }
+  .recent-record-row {
+    padding: 6px 10px;
+    border-radius: 8px;
+    background-color: #f8fafc;
+    border: 1px solid #f1f5f9;
+    font-size: 12.5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    transition: background-color 0.15s ease;
+  }
+  .recent-record-row:hover {
+    background-color: #f1f5f9;
+  }
+  .report-hub-card .action-btn {
+    transition: all 0.2s ease;
+  }
+  .report-hub-card:hover .action-btn {
+    background-color: #EC9C56 !important;
+    border-color: #EC9C56 !important;
+    color: #ffffff !important;
+  }
+</style>
+{% endblock page_css %}
+
+{% block content %}
+
+<!-- Navigation Tabs -->
+<div class="mb-3">
+  <ul class="nav nav-pills gap-2 flex-wrap" role="tablist">
+    <li class="nav-item">
+      <a href="{% url 'superadmin_reports' %}" class="nav-link active">
+        <i class="ri-dashboard-line me-1"></i> Overview
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'customer_report' %}" class="nav-link">
+        Customer
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'land_report' %}" class="nav-link">
+        Land
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'expense_report' %}" class="nav-link">
+        Expense
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'vendor_report' %}" class="nav-link">
+        Vendor
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'salary_report' %}" class="nav-link">
+        Salary
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'attendance_report' %}" class="nav-link">
+        Attendance
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'advance_report' %}" class="nav-link">
+        Advance
+      </a>
+    </li>
+  </ul>
+</div>
+
+<!-- Title Header Card -->
+<div class="card mb-3 border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 p-3 border-bottom">
+        <div>
+            <h4 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="ri-file-chart-line text-primary"></i>
+                {% trans "Agricultural Reports Hub" %}
+            </h4>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-primary-subtle text-primary border px-3 py-2 fs-7 fw-semibold">
+                {{ farmers_count }} Registered Farmer{{ farmers_count|pluralize }} · 07 Report Modules
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Statistics KPI Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <span class="text-uppercase small fw-bold text-muted" style="font-size:11px; letter-spacing:0.8px;">Total Farm Lands</span>
+          <div class="fs-4 fw-bold text-dark mt-1">{{ farms_count }} Farms</div>
+          <small class="text-success fw-semibold">{{ total_area }} Total Acres</small>
+        </div>
+        <div class="rounded-3 p-3 bg-success bg-opacity-10 text-success d-flex align-items-center justify-content-center" style="width:48px; height:48px;">
+          <i class="ri-landscape-line fs-4"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <span class="text-uppercase small fw-bold text-muted" style="font-size:11px; letter-spacing:0.8px;">Commercial Clients</span>
+          <div class="fs-4 fw-bold text-dark mt-1">{{ customers_count }} Buyers</div>
+          <small class="text-info fw-semibold">{{ vendors_count }} Supply Vendors</small>
+        </div>
+        <div class="rounded-3 p-3 bg-info bg-opacity-10 text-info d-flex align-items-center justify-content-center" style="width:48px; height:48px;">
+          <i class="ri-contacts-book-line fs-4"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <span class="text-uppercase small fw-bold text-muted" style="font-size:11px; letter-spacing:0.8px;">Expenses Logged</span>
+          <div class="fs-4 fw-bold text-danger mt-1">₹{{ total_expense_amount|floatformat:2 }}</div>
+          <small class="text-muted">{{ expenses_count }} Entries</small>
+        </div>
+        <div class="rounded-3 p-3 bg-danger bg-opacity-10 text-danger d-flex align-items-center justify-content-center" style="width:48px; height:48px;">
+          <i class="ri-money-dollar-circle-line fs-4"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <span class="text-uppercase small fw-bold text-muted" style="font-size:11px; letter-spacing:0.8px;">Workforce Payroll</span>
+          <div class="fs-4 fw-bold text-primary mt-1">₹{{ total_salary_amount|floatformat:2 }}</div>
+          <small class="text-muted">{{ payroll_count }} Slips · {{ attendance_count }} Logs</small>
+        </div>
+        <div class="rounded-3 p-3 bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center" style="width:48px; height:48px;">
+          <i class="ri-wallet-3-line fs-4"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filter & Search Toolbar Card -->
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+  <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3">
+
+    <!-- Collapsible Search -->
+    <div class="d-flex align-items-center search-collapse-wrapper" id="search_collapse_wrapper">
+      <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="search_toggle_btn" onclick="toggleSearchBox()" style="width: 38px; height: 38px;">
+        <i class="ri-search-line"></i>
+      </button>
+      <div class="input-group search-input-group d-none" id="search_input_group">
+        <span class="input-group-text bg-white border-end-0">
+          <i class="ri-search-line text-muted"></i>
+        </span>
+        <input type="text"
+            id="reportSearchInput"
+            class="form-control border-start-0"
+            placeholder="Search reports by keyword (e.g. Land, Expense, Salary)..."
+            onkeyup="filterReportCards(this.value)">
+        <button class="btn btn-outline-secondary border-start-0" type="button" id="search_close_btn" onclick="closeSearchBox()">
+          <i class="ri-close-line"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right side category filter -->
+    <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+      <select id="moduleCategoryFilter" class="form-select form-select-sm w-auto" onchange="filterByCategory(this.value)">
+        <option value="all">All Report Modules</option>
+        <option value="commercial">Commercial (Customer, Land)</option>
+        <option value="financial">Financial (Expense, Vendor)</option>
+        <option value="workforce">Workforce (Salary, Attendance, Advance)</option>
+      </select>
+    </div>
+
+  </div>
+</div>
+
+<!-- Reports Grid -->
+<div class="row g-4" id="reportsGridContainer">
+
+  <!-- 1. Customer Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="commercial" data-keywords="customer report buyer credit sales balance party buyers client">
+    <a href="{% url 'customer_report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #e0f2fe; color: #0284c7;">
+            <i class="ri-contacts-book-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Customer Report</h5>
+            <small class="text-muted">Buyers & Clients</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-info-subtle text-info">
+          {{ customers_count }} Customer{{ customers_count|pluralize }}
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_customers %}
+          {% for c in recent_customers %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-user-3-line text-primary" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ c.name }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-1">
+              {% if c.farmer %}
+              <small class="text-muted text-truncate" style="max-width: 80px;">{{ c.farmer.user.first_name|default:c.farmer.user.username }}</small>
+              {% endif %}
+              <span class="badge {% if c.status == 'Active' %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %}" style="font-size: 10px;">
+                {{ c.status|default:'Active' }}
+              </span>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-user-unfollow-line d-block fs-5 text-secondary mb-1"></i>
+            No customer records added yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">View full directory</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+  <!-- 2. Land Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="commercial" data-keywords="land report farm acreage field splits soil irrigation acres acreage">
+    <a href="{% url 'land_report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #dcfce7; color: #16a34a;">
+            <i class="ri-landscape-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Land Report</h5>
+            <small class="text-muted">Acreage & Fields</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-success-subtle text-success">
+          {{ farms_count }} Farm{{ farms_count|pluralize }} · {{ total_area }} Ac
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_farms %}
+          {% for f in recent_farms %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-plant-line text-success" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ f.land_name }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-1">
+              {% if f.farmer %}
+              <small class="text-muted text-truncate" style="max-width: 80px;">{{ f.farmer.user.first_name|default:f.farmer.user.username }}</small>
+              {% endif %}
+              <span class="badge bg-light text-dark fw-bold" style="font-size: 10.5px;">
+                {{ f.total_area }}
+              </span>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-landscape-line d-block fs-5 text-secondary mb-1"></i>
+            No farm lands registered yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">View land parcels</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+  <!-- 3. Expense Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="financial" data-keywords="expense report spending cash outflow ledger costs payment bills purchase">
+    <a href="{% url 'expense_report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #fee2e2; color: #dc2626;">
+            <i class="ri-money-dollar-circle-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Expense Report</h5>
+            <small class="text-muted">Ledger Outflows</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-danger-subtle text-danger">
+          ₹{{ total_expense_amount|floatformat:2 }}
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_expenses %}
+          {% for e in recent_expenses %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-arrow-right-down-line text-danger" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ e.category|default:e.description|default:"Farm Outflow" }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-1">
+              {% if e.farmer %}
+              <small class="text-muted text-truncate" style="max-width: 80px;">{{ e.farmer.user.first_name|default:e.farmer.user.username }}</small>
+              {% endif %}
+              <span class="badge bg-danger-subtle text-danger fw-bold" style="font-size: 10px;">
+                ₹{{ e.amount|stringformat:".2f" }}
+              </span>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-secure-payment-line d-block fs-5 text-secondary mb-1"></i>
+            No expense transactions logged yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">Audit expenditure</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+  <!-- 4. Vendor Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="financial" data-keywords="vendor report suppliers distributors dealer shops stores procurement bills invoice">
+    <a href="{% url 'vendor_report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #fef3c7; color: #d97706;">
+            <i class="ri-store-2-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Vendor Report</h5>
+            <small class="text-muted">Suppliers & Shops</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-warning-subtle text-warning">
+          {{ vendors_count }} Vendor{{ vendors_count|pluralize }}
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_vendors %}
+          {% for v in recent_vendors %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-building-line text-warning" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ v.vendor_name }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-1">
+              {% if v.farmer %}
+              <small class="text-muted text-truncate" style="max-width: 80px;">{{ v.farmer.user.first_name|default:v.farmer.user.username }}</small>
+              {% endif %}
+              <small class="text-muted">{{ v.shop_name|default:"Partner" }}</small>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-store-line d-block fs-5 text-secondary mb-1"></i>
+            No vendor partners added yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">View suppliers</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+  <!-- 5. Salary Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="workforce" data-keywords="salary report payroll wages staff employees compensation monthly payment net pay">
+    <a href="{% url 'salary_report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #ede9fe; color: #7c3aed;">
+            <i class="ri-wallet-3-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Salary Report</h5>
+            <small class="text-muted">Staff Payroll</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-primary-subtle text-primary">
+          ₹{{ total_salary_amount|floatformat:2 }}
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_payrolls %}
+          {% for p in recent_payrolls %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-user-follow-line text-primary" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ p.staff.name }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-1">
+              {% if p.staff.farmer %}
+              <small class="text-muted text-truncate" style="max-width: 80px;">{{ p.staff.farmer.user.first_name|default:p.staff.farmer.user.username }}</small>
+              {% endif %}
+              <span class="badge bg-primary-subtle text-primary fw-bold" style="font-size: 10px;">
+                ₹{{ p.net_pay|stringformat:".2f" }}
+              </span>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-user-star-line d-block fs-5 text-secondary mb-1"></i>
+            No payroll entries recorded yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">Review wages</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+  <!-- 6. Attendance Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="workforce" data-keywords="attendance report worker daily present absent halfday logs checkin registry crew">
+    <a href="{% url 'attendance_report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #ccfbf1; color: #0f766e;">
+            <i class="ri-calendar-check-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Attendance Report</h5>
+            <small class="text-muted">Daily Workforce</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-success-subtle text-success">
+          {{ attendance_count }} Logs
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_attendances %}
+          {% for att in recent_attendances %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-calendar-event-line text-success" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ att.staff.name }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-1">
+              {% if att.staff.farmer %}
+              <small class="text-muted text-truncate" style="max-width: 80px;">{{ att.staff.farmer.user.first_name|default:att.staff.farmer.user.username }}</small>
+              {% endif %}
+              <span class="badge {% if att.status == 'P' %}bg-success-subtle text-success{% elif att.status == 'A' %}bg-danger-subtle text-danger{% else %}bg-warning-subtle text-warning{% endif %}" style="font-size: 10px;">
+                {% if att.status == 'P' %}Present{% elif att.status == 'A' %}Absent{% else %}Half Day{% endif %}
+              </span>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-calendar-line d-block fs-5 text-secondary mb-1"></i>
+            No attendance entries logged yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">Track staff attendance</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+  <!-- 7. Advance Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="workforce" data-keywords="advance report worker loan prepayment recovery employee borrow balance">
+    <a href="{% url 'advance_report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #fce7f3; color: #be185d;">
+            <i class="ri-hand-coin-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Advance Report</h5>
+            <small class="text-muted">Loans & Advances</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-danger-subtle text-danger">
+          ₹{{ total_advance_amount|floatformat:2 }}
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_advances %}
+          {% for adv in recent_advances %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-coins-line text-danger" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ adv.staff.name }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-1">
+              {% if adv.staff.farmer %}
+              <small class="text-muted text-truncate" style="max-width: 80px;">{{ adv.staff.farmer.user.first_name|default:adv.staff.farmer.user.username }}</small>
+              {% endif %}
+              <span class="badge bg-danger-subtle text-danger fw-bold" style="font-size: 10px;">
+                ₹{{ adv.amount|stringformat:".2f" }}
+              </span>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-hand-coin-line d-block fs-5 text-secondary mb-1"></i>
+            No advance disbursements recorded yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">Manage staff advances</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+function toggleSearchBox() {
+  var group = document.getElementById('search_input_group');
+  var isExpanded = group.classList.contains('expanded');
+
+  if (isExpanded) {
+    closeSearchBox();
+  } else {
+    group.classList.remove('d-none');
+    setTimeout(function () {
+      group.classList.add('expanded');
+      document.getElementById('reportSearchInput').focus();
+    }, 10);
+  }
+}
+
+function closeSearchBox() {
+  var group = document.getElementById('search_input_group');
+  var input = document.getElementById('reportSearchInput');
+  group.classList.remove('expanded');
+  input.value = '';
+  filterReportCards('');
+  setTimeout(function () {
+    group.classList.add('d-none');
+  }, 250);
+}
+
+document.addEventListener('click', function (e) {
+  var wrapper = document.getElementById('search_collapse_wrapper');
+  var group = document.getElementById('search_input_group');
+  if (wrapper && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+    closeSearchBox();
+  }
+});
+
+function filterReportCards(keyword) {
+  var query = keyword.toLowerCase().trim();
+  var cols = document.querySelectorAll('.report-grid-col');
+
+  cols.forEach(function (col) {
+    var keywords = (col.getAttribute('data-keywords') || '').toLowerCase();
+    var cardText = col.innerText.toLowerCase();
+    var selectedCat = document.getElementById('moduleCategoryFilter').value;
+    var colCat = col.getAttribute('data-category') || '';
+
+    var matchesQuery = !query || keywords.includes(query) || cardText.includes(query);
+    var matchesCat = selectedCat === 'all' || colCat === selectedCat;
+
+    if (matchesQuery && matchesCat) {
+      col.style.display = 'block';
+    } else {
+      col.style.display = 'none';
+    }
+  });
+}
+
+function filterByCategory(category) {
+  var query = (document.getElementById('reportSearchInput').value || '').toLowerCase().trim();
+  var cols = document.querySelectorAll('.report-grid-col');
+
+  cols.forEach(function (col) {
+    var keywords = (col.getAttribute('data-keywords') || '').toLowerCase();
+    var cardText = col.innerText.toLowerCase();
+    var colCat = col.getAttribute('data-category') || '';
+
+    var matchesQuery = !query || keywords.includes(query) || cardText.includes(query);
+    var matchesCat = category === 'all' || colCat === category;
+
+    if (matchesQuery && matchesCat) {
+      col.style.display = 'block';
+    } else {
+      col.style.display = 'none';
+    }
+  });
+}
+</script>
+{% endblock page_js %}

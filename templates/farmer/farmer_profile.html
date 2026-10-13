@@ -1,0 +1,1880 @@
+{% extends "farmer/base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Farmer Profile & Subscription Billing{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<style>
+.bg-gray-100 { background-color: #F8FAFC; }
+.custom-tabs .nav-link {
+    border-radius: 8px;
+    font-weight: 500;
+    color: #566a7f;
+    padding: 0.55rem 1.25rem;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+.custom-tabs .nav-link:hover:not(.active) {
+    background-color: #f5f5f9;
+    color: #F69C55;
+}
+.custom-tabs .nav-link.active {
+    background-color: #F69C55 !important;
+    color: #fff !important;
+    border-radius: 8px;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(246, 156, 85, 0.25);
+    border-color: #F69C55 !important;
+}
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+function toggleFarmerType() {
+    const individualRadio = document.getElementById('farmer_type_individual');
+    const companySection = document.getElementById('companyInformationSection');
+
+    const companyName = document.getElementById('company_name');
+    const companyMobile = document.getElementById('company_mobile_number');
+    const msmeNumber = document.getElementById('msme_number');
+    const msmeCertificate = document.getElementById('msme_certificate');
+
+    if (!individualRadio || !companySection) {
+        return;
+    }
+
+    if (individualRadio.checked) {
+        companySection.style.display = 'none';
+        companyName.required = false;
+        companyMobile.required = false;
+        msmeNumber.required = false;
+        msmeCertificate.required = false;
+    } else {
+        companySection.style.display = 'block';
+        companyName.required = true;
+        companyMobile.required = true;
+        msmeNumber.required = true;
+        {% if not profile.msme_certificate %}
+            msmeCertificate.required = true;
+        {% endif %}
+    }
+}
+
+function toggleEdit(showEdit) {
+    var view = document.getElementById('viewMode');
+    var edit = document.getElementById('editMode');
+    if (view) view.style.display = showEdit ? 'none' : 'block';
+    if (edit) edit.style.display = showEdit ? 'block' : 'none';
+}
+
+function togglePersonalEdit(showEdit) {
+    document.getElementById('personalViewMode').style.display = showEdit ? 'none' : 'block';
+    document.getElementById('personalEditMode').style.display = showEdit ? 'block' : 'none';
+}
+
+function previewProfileImage(input) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var img = document.getElementById('profileAvatarImg');
+            var initials = document.getElementById('profileAvatarInitials');
+            if (img) {
+                img.src = e.target.result;
+            } else if (initials) {
+                initials.outerHTML = '<img src="' + e.target.result + '" id="profileAvatarImg" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">';
+            }
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function activateFarmerTab() {
+    var hash = window.location.hash;
+    var urlParams = new URLSearchParams(window.location.search);
+    var tabParam = urlParams.get('tab');
+    
+    var targetTabId = '';
+    if (tabParam) {
+        targetTabId = '#' + tabParam;
+    } else if (hash) {
+        targetTabId = hash;
+    }
+
+    if (targetTabId) {
+        // Handle alias mappings
+        if (targetTabId === '#profile' || targetTabId === '#profile-tab' || targetTabId === '#basic' || targetTabId === '#basic_info') {
+            targetTabId = '#basic_info';
+        } else if (targetTabId === '#documentation' || targetTabId === '#documents' || targetTabId === '#docs' || targetTabId === '#farmer-documents') {
+            targetTabId = '#documents';
+        } else if (targetTabId === '#subscription' || targetTabId === '#billing' || targetTabId === '#plans' || targetTabId === '#my_plans') {
+            targetTabId = '#subscription';
+        }
+
+        var tabLink = document.querySelector('#farmerTabs a[data-bs-target="' + targetTabId + '"]');
+        if (tabLink) {
+            var tabInstance = bootstrap.Tab.getOrCreateInstance(tabLink);
+            tabInstance.show();
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    toggleFarmerType();
+    activateFarmerTab();
+
+    // In-page tab click → update url hash without jumping
+    document.querySelectorAll('#farmerTabs a[data-bs-toggle="tab"]').forEach(function (tabEl) {
+        tabEl.addEventListener('shown.bs.tab', function (e) {
+            var target = e.target.getAttribute('data-bs-target');
+            if (target) {
+                history.replaceState(null, null, target);
+            }
+        });
+    });
+});
+
+window.addEventListener('hashchange', function() {
+    activateFarmerTab();
+});
+</script>
+{% endblock page_js %}
+
+{% block page_content %}
+
+<div class="card mb-3 border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+        <div class="d-flex align-items-start flex-column">
+            <h4 class="mb-2 fw-bold text-dark d-flex align-items-center">
+                <i class="ri-user-line me-2 text-primary"></i>
+                Farmer Profile & Subscription Billing
+            </h4>
+            <ul class="nav custom-tabs gap-2 flex-wrap" id="farmerTabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" data-bs-toggle="tab" data-bs-target="#basic_info" href="#basic_info">
+                        <i class="ri-group-line me-1"></i>Basic Info
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" data-bs-target="#documents" href="#documents">
+                        <i class="ri-calendar-todo-line me-1"></i>Documents
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" data-bs-target="#subscription" href="#subscription">
+                        <i class="ri-wallet-3-line me-1"></i>Subscription
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <div class="d-flex align-items-center justify-content-end gap-2">
+            <div class="badge rounded-pill d-flex align-items-center justify-content-end gap-2 px-3 py-2" style="background: #F0FDF4;border: 1px solid #D0FAE5;color: #008236;">
+                <span>
+                    <i class="ri-shield-flash-line fs-5"></i>
+                </span>
+                <span class="fs-7 fw-semibold">Active Sowing Plan Verified</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="tab-content p-2">
+    <div class="tab-pane fade show active" id="basic_info">
+        <div class="row g-4">
+            <div class="col-lg-5">
+                <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                    <div class="position-relative" style="height: 100px; background: linear-gradient(90deg, #e05a10, #f59e0b, #059669);">
+                        <div class="position-absolute" style="bottom: -40px; left: 20px;">
+                            <div class="bg-white border border-3 rounded-3 overflow-hidden d-flex align-items-center justify-content-center fw-bold shadow-sm"
+                                style="width: 80px; height: 80px; font-size: 24px; position: relative;">
+                                {% if profile.profile_image %}
+                                <img src="{{ profile.profile_image.url }}" id="profileAvatarImg" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
+                                {% else %}
+                                <div id="profileAvatarInitials" class="w-100 h-100 bg-primary text-white d-flex align-items-center justify-content-center fs-3 fw-bold">
+                                    {{ request.user.first_name|default:request.user.username|slice:":2"|upper }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body pt-10 px-4">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <h5 class="fw-bold mb-0" id="profileNameDisplay">{{ request.user.first_name|default:request.user.username }}</h5>
+                                <small class="text-muted" style="font-size: 11px; letter-spacing: 1px;">
+                                    ID: KH-8831-{{ request.user.id }}
+                                </small>
+                            </div>
+                            <span class="badge bg-label-success rounded-pill px-3 py-1 text-uppercase" style="font-size: 11px;">
+                                {{ profile.farmer_type|default:'Individual'|capfirst }}
+                            </span>
+                        </div>
+                        <div id="viewMode">
+                            <table class="table table-borderless mb-0" style="font-size: 12px;">
+                                <tbody>
+                                    <tr class="border-top" style="border-bottom: 1px solid #eee;">
+                                        <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
+                                            <i class="ri-map-pin-line me-2 fs-6"></i>Regional location
+                                        </td>
+                                        <td class="text-end fw-semibold">
+                                            {% if profile.district %}{{ profile.district.name }}, {% endif %}
+                                            {% if profile.state %}{{ profile.state.name }}{% else %}Tamil Nadu{% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
+                                            <i class="ri-plant-line me-2 fs-6"></i>Main harvest crop
+                                        </td>
+                                        <td class="text-end fw-semibold">{{ main_crop }}</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
+                                            <i class="ri-pulse-line me-2 fs-6"></i>Active acreage
+                                        </td>
+                                        <td class="text-end fw-bold">{{ total_acreage }} Acres</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
+                                            <i class="ri-award-line me-2 fs-6"></i>Soil Health Index
+                                        </td>
+                                        <td class="text-end fw-bold text-primary">{{ health_index }}{% if health_index != 'N/A' %}/100 index{% endif %}</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
+                                            <i class="ri-phone-line me-2 fs-6"></i>Phone contact
+                                        </td>
+                                        <td class="text-end" id="profileMobileDisplay">{{ profile.mobile_number|default:request.user.username }}</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
+                                            <i class="ri-calendar-2-line fs-6 me-2"></i>Date registered
+                                        </td>
+                                        <td class="text-end">{{ profile.created_at|date:"d-M-Y"|default:"24-Aug-2026" }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="mt-3 text-end">
+                                <button type="button" onclick="toggleEdit(true)" class="btn btn-outline-primary btn-sm px-3 rounded-3">
+                                    <i class="ri-edit-line me-1"></i> Quick Edit
+                                </button>
+                            </div>
+                        </div>
+                        <div id="editMode" style="display: none;">
+                            <form id="profileUpdateForm" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label class="text-muted small fw-semibold">Farmer / Company Name</label>
+                                        <input type="text" name="name" class="form-control form-control-sm" value="{{ request.user.first_name|default:request.user.username }}" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="text-muted small fw-semibold">Profile Photo</label>
+                                        <input type="file" name="profile_image" id="profileImageInput" class="form-control form-control-sm" accept="image/*" onchange="previewProfileImage(this)">
+                                        <small class="text-muted" style="font-size: 11px;">Upload JPG, PNG or WebP image (max 10MB).</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="text-muted small fw-semibold">Primary Email</label>
+                                        <input type="email" name="email" class="form-control form-control-sm" value="{{ request.user.email|default:profile.email|default:'' }}">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="text-muted small fw-semibold">Contact Mobile No</label>
+                                        <input type="text" name="mobile_number" class="form-control form-control-sm" value="{{ profile.mobile_number|default:request.user.username }}">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="text-muted small fw-semibold">Primary Crop</label>
+                                        <input type="text" class="form-control form-control-sm" value="{{ main_crop }}" readonly>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="text-muted small fw-semibold">Acreage Size</label>
+                                        <input type="text" class="form-control form-control-sm" value="{{ total_acreage }} Acres" readonly>
+                                    </div>
+                                </div>
+                                <!-- ACTIONS -->
+                                <div class="mt-4 d-flex gap-2">
+                                    <button type="button" onclick="submitProfileUpdate()" class="btn btn-primary btn-sm px-4">
+                                        <i class="ri-save-line me-1"></i> Save Profile
+                                    </button>
+                                    <button type="button" onclick="toggleEdit(false)" class="btn btn-outline-secondary btn-sm px-4">Dismiss</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- RIGHT COLUMN -->
+            <div class="col-lg-7">
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-body p-4">
+
+                        <div class="d-flex align-items-center gap-2 mb-4">
+                            <span class="d-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-10 text-warning" style="width:28px; height:28px;">
+                                <i class="ri-shield-user-line"></i>
+                            </span>
+                            <span class="fw-bold text-uppercase text-dark" style="font-size:13px; letter-spacing:0.5px;">
+                                Personal Information
+                            </span>
+                        </div>
+
+                        <!-- ============ VIEW MODE ============ -->
+                        <div id="personalViewMode">
+                            <div class="row g-4">
+                            <!-- Farmer Type -->
+                                <div class="col-12">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-2" style="font-size:11px;">
+                                        Farmer Type *
+                                    </label>
+
+                                    <div class="d-flex gap-4">
+
+                                        <div class="form-check">
+                                            <input
+                                                class="form-check-input"
+                                                type="radio"
+                                                name="farmer_type"
+                                                id="farmer_type_individual"
+                                                value="individual"
+                                                {% if profile.farmer_type == 'individual' or not profile.farmer_type %}
+                                                    checked
+                                                {% endif %}
+                                                onchange="toggleFarmerType()"
+                                            >
+                                            <label class="form-check-label fw-semibold" for="farmer_type_individual">
+                                                <i class="ri-user-line me-1 text-primary"></i>
+                                                Individual
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            <input
+                                                class="form-check-input"
+                                                type="radio"
+                                                name="farmer_type"
+                                                id="farmer_type_company"
+                                                value="company"
+                                                {% if profile.farmer_type == 'company' %}
+                                                    checked
+                                                {% endif %}
+                                                onchange="toggleFarmerType()"
+                                            >
+                                            <label class="form-check-label fw-semibold" for="farmer_type_company">
+                                                <i class="ri-building-line me-1 text-primary"></i>
+                                                Company
+                                            </label>
+                                        </div>
+
+                                    </div>
+                                </div>
+                                <!-- Company Information -->
+                                <div
+                                    class="col-12"
+                                    id="companyInformationSection"
+                                    style="{% if profile.farmer_type != 'company' %}display:none;{% endif %}"
+                                >
+
+                                    <div class="border rounded-3 p-3 bg-light">
+
+                                        <div class="d-flex align-items-center gap-2 mb-3">
+                                            <span class="d-flex align-items-center justify-content-center rounded-circle bg-primary bg-opacity-10 text-primary"
+                                                style="width:28px;height:28px;">
+                                                <i class="ri-building-line"></i>
+                                            </span>
+
+                                            <div>
+                                                <div class="fw-bold text-dark" style="font-size:13px;">
+                                                    Company Information
+                                                </div>
+                                                <small class="text-muted">
+                                                    Enter your registered company and MSME details.
+                                                </small>
+                                            </div>
+                                        </div>
+
+                                        <div class="row g-3">
+
+                                            <!-- Company Name -->
+                                            <div class="col-md-6">
+                                                <label class="text-muted text-uppercase fw-bold d-block mb-1"
+                                                    style="font-size:11px;">
+                                                    Company Name *
+                                                </label>
+
+                                                <input
+                                                    type="text"
+                                                    name="company_name"
+                                                    id="company_name"
+                                                    class="form-control form-control-sm"
+                                                    value="{{ profile.company_name|default:'' }}"
+                                                    placeholder="Enter company name"
+                                                >
+                                            </div>
+
+                                            <!-- Company Mobile -->
+                                            <div class="col-md-6">
+                                                <label class="text-muted text-uppercase fw-bold d-block mb-1"
+                                                    style="font-size:11px;">
+                                                    Company Mobile No *
+                                                </label>
+
+                                                <input
+                                                    type="text"
+                                                    name="company_mobile_number"
+                                                    id="company_mobile_number"
+                                                    class="form-control form-control-sm"
+                                                    value="{{ profile.company_mobile_number|default:'' }}"
+                                                    maxlength="10"
+                                                    pattern="[0-9]{10}"
+                                                    placeholder="10 digit mobile number"
+                                                >
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Full Name (English) *
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_full_name">
+                                        {{ request.user.first_name|default:request.user.username }}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Father's / Husband's Name *
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_guardian_name">
+                                        {{ profile.guardian_name|default:'N/A' }}
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Gender *
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_gender">
+                                        {{ profile.gender|default:'N/A' }}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Date of Birth
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_dob">
+                                        {% if profile.date_of_birth %}{{ profile.date_of_birth|date:"d-m-Y" }}{% else %}N/A{% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Mobile No (Aadhaar Linked) *
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_mobile">
+                                        {{ profile.mobile_number|default:'N/A' }}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Educational Qualification
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_education">
+                                        {{ profile.educational_qualification|default:'N/A' }}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Section 2 -->
+                            <div class="d-flex align-items-center justify-content-between mt-5 mb-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="d-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-10 text-warning" style="width:26px; height:26px;">
+                                        <i class="ri-shield-keyhole-line"></i>
+                                    </span>
+                                    <span class="fw-bold text-uppercase text-dark" style="font-size:13px; letter-spacing:0.5px;">
+                                        Indian Government Identity Numbers
+                                    </span>
+                                </div>
+                                <span class="text-muted" style="font-size:11px;">Section 2 of 3</span>
+                            </div>
+
+                            <div class="row g-4">
+                                <div class="col-md-3">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Aadhaar No (12 Digit) *
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_aadhaar_number">
+                                        {{ profile.aadhaar_number|default:'N/A' }}
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        PAN Card No
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_pan_number">
+                                        {{ profile.pan_number|default:'N/A' }}
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        PM-KISAN Reg. ID
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_pmkisan_id">
+                                        {{ profile.pmkisan_id|default:'N/A' }}
+                                    </div>
+                                </div>
+                                <!-- MSME Number -->
+                                <div class="col-md-6">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1"
+                                        style="font-size:11px;">
+                                        MSME / Udyam Registration No *
+                                    </label>
+
+                                    <input
+                                        type="text"
+                                        name="msme_number"
+                                        id="msme_number"
+                                        class="form-control form-control-sm text-uppercase"
+                                        value="{{ profile.msme_number|default:'' }}"
+                                        placeholder="Example: UDYAM-TN-00-0000000"
+                                    >
+
+                                    <small class="text-muted">
+                                        Enter your Udyam/MSME registration number.
+                                    </small>
+                                </div>
+
+                                <!-- MSME Certificate -->
+                                <div class="col-md-6">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1"
+                                        style="font-size:11px;">
+                                        MSME Certificate *
+                                    </label>
+
+                                    <input
+                                        type="file"
+                                        name="msme_certificate"
+                                        id="msme_certificate"
+                                        class="form-control form-control-sm"
+                                        accept=".pdf,.jpg,.jpeg,.png"
+                                    >
+
+                                    <small class="text-muted">
+                                        PDF, JPG or PNG — maximum 10MB.
+                                    </small>
+
+                                    {% if profile.msme_certificate %}
+                                        <div class="mt-2 d-flex align-items-center gap-2">
+                                            <span class="badge bg-success-subtle text-success">
+                                                <i class="ri-checkbox-circle-line me-1"></i>
+                                                Certificate Uploaded
+                                            </span>
+
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm btn-outline-primary"
+                                                onclick="previewDocument(
+                                                    '{{ profile.msme_certificate.url }}',
+                                                    'MSME Certificate'
+                                                )"
+                                            >
+                                                <i class="ri-eye-line me-1"></i>
+                                                View
+                                            </button>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Section 3 -->
+                            <div class="d-flex align-items-center justify-content-between mt-5 mb-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="d-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-10 text-warning" style="width:26px; height:26px;">
+                                        <i class="ri-map-pin-line"></i>
+                                    </span>
+                                    <span class="fw-bold text-uppercase text-dark" style="font-size:13px; letter-spacing:0.5px;">
+                                        Location &amp; Gram Panchayat Address
+                                    </span>
+                                </div>
+                                <span class="text-muted" style="font-size:11px;">Section 3 of 3</span>
+                            </div>
+
+                            <div class="row g-4">
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        State *
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_state">
+                                        {{ profile.state|default:'N/A' }}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        District *
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_district">
+                                        {{ profile.district|default:'N/A' }}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Taluka / Tehsil / Block *
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_taluka">
+                                        {{ profile.taluka|default:'N/A' }}
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Pincode (6 Digit) *
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_pincode">
+                                        {{ profile.pincode|default:'N/A' }}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 d-flex align-items-center justify-content-between">
+                                <span class="text-muted d-flex align-items-center gap-1" style="font-size:12px;">
+                                    <i class="ri-shield-check-line text-success"></i>
+                                    Data encrypted and synchronized with state land portal registries.
+                                </span>
+                                <button type="button" onclick="togglePersonalEdit(true)" class="btn btn-outline-primary btn-sm px-4">
+                                    <i class="ri-edit-line me-1"></i> Edit Details
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- ============ EDIT MODE ============ -->
+                        <div id="personalEditMode" style="display:none;">
+                            <form id="personalInfoForm">
+                                {% csrf_token %}
+                                <div class="row g-3">
+                                    <!-- Farmer Type -->
+                                    <div class="col-12">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-2" style="font-size:11px;">
+                                            Farmer Type *
+                                        </label>
+
+                                        <div class="d-flex gap-4">
+
+                                            <div class="form-check">
+                                                <input
+                                                    class="form-check-input"
+                                                    type="radio"
+                                                    name="farmer_type"
+                                                    id="farmer_type_individual"
+                                                    value="individual"
+                                                    {% if profile.farmer_type == 'individual' or not profile.farmer_type %}
+                                                        checked
+                                                    {% endif %}
+                                                    onchange="toggleFarmerType()"
+                                                >
+                                                <label class="form-check-label fw-semibold" for="farmer_type_individual">
+                                                    <i class="ri-user-line me-1 text-primary"></i>
+                                                    Individual
+                                                </label>
+                                            </div>
+
+                                            <div class="form-check">
+                                                <input
+                                                    class="form-check-input"
+                                                    type="radio"
+                                                    name="farmer_type"
+                                                    id="farmer_type_company"
+                                                    value="company"
+                                                    {% if profile.farmer_type == 'company' %}
+                                                        checked
+                                                    {% endif %}
+                                                    onchange="toggleFarmerType()"
+                                                >
+                                                <label class="form-check-label fw-semibold" for="farmer_type_company">
+                                                    <i class="ri-building-line me-1 text-primary"></i>
+                                                    Company
+                                                </label>
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                    <!-- Company Information -->
+                                    <div
+                                        class="col-12"
+                                        id="companyInformationSection"
+                                        style="{% if profile.farmer_type != 'company' %}display:none;{% endif %}"
+                                    >
+
+                                        <div class="border rounded-3 p-3 bg-light">
+
+                                            <div class="d-flex align-items-center gap-2 mb-3">
+                                                <span class="d-flex align-items-center justify-content-center rounded-circle bg-primary bg-opacity-10 text-primary"
+                                                    style="width:28px;height:28px;">
+                                                    <i class="ri-building-line"></i>
+                                                </span>
+
+                                                <div>
+                                                    <div class="fw-bold text-dark" style="font-size:13px;">
+                                                        Company Information
+                                                    </div>
+                                                    <small class="text-muted">
+                                                        Enter your registered company and MSME details.
+                                                    </small>
+                                                </div>
+                                            </div>
+
+                                            <div class="row g-3">
+
+                                                <!-- Company Name -->
+                                                <div class="col-md-6">
+                                                    <label class="text-muted text-uppercase fw-bold d-block mb-1"
+                                                        style="font-size:11px;">
+                                                        Company Name *
+                                                    </label>
+
+                                                    <input
+                                                        type="text"
+                                                        name="company_name"
+                                                        id="company_name"
+                                                        class="form-control form-control-sm"
+                                                        value="{{ profile.company_name|default:'' }}"
+                                                        placeholder="Enter company name"
+                                                    >
+                                                </div>
+
+                                                <!-- Company Mobile -->
+                                                <div class="col-md-6">
+                                                    <label class="text-muted text-uppercase fw-bold d-block mb-1"
+                                                        style="font-size:11px;">
+                                                        Company Mobile No *
+                                                    </label>
+
+                                                    <input
+                                                        type="text"
+                                                        name="company_mobile_number"
+                                                        id="company_mobile_number"
+                                                        class="form-control form-control-sm"
+                                                        value="{{ profile.company_mobile_number|default:'' }}"
+                                                        maxlength="10"
+                                                        pattern="[0-9]{10}"
+                                                        placeholder="10 digit mobile number"
+                                                    >
+                                                </div>
+
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Full Name (English) *</label>
+                                        <input type="text" name="full_name" class="form-control form-control-sm"
+                                            value="{{ request.user.first_name|default:request.user.username }}" required>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Father's / Husband's Name *</label>
+                                        <input type="text" name="guardian_name" class="form-control form-control-sm"
+                                            value="{{ profile.guardian_name|default:'' }}" required>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Gender *</label>
+                                        <select name="gender" class="form-select form-select-sm" required>
+                                            <option value="Male" {% if profile.gender == 'Male' %}selected{% endif %}>Male</option>
+                                            <option value="Female" {% if profile.gender == 'Female' %}selected{% endif %}>Female</option>
+                                            <option value="Other" {% if profile.gender == 'Other' %}selected{% endif %}>Other</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Date of Birth</label>
+                                        <input type="date" name="date_of_birth" class="form-control form-control-sm"
+                                            value="{% if profile.date_of_birth %}{{ profile.date_of_birth|date:'Y-m-d' }}{% endif %}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Mobile No (Aadhaar Linked) *</label>
+                                        <input type="text" name="mobile_number" class="form-control form-control-sm"
+                                            value="{{ profile.mobile_number|default:'' }}" maxlength="10" required>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Educational Qualification</label>
+                                        <input type="text" name="educational_qualification" class="form-control form-control-sm"
+                                            value="{{ profile.educational_qualification|default:'' }}" placeholder="e.g. Higher Secondary (12th Pass)">
+                                    </div>
+                                </div>
+
+                                <!-- Section 2 -->
+                                <div class="d-flex align-items-center justify-content-between mt-5 mb-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="d-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-10 text-warning" style="width:26px; height:26px;">
+                                            <i class="ri-shield-keyhole-line"></i>
+                                        </span>
+                                        <span class="fw-bold text-uppercase text-dark" style="font-size:13px; letter-spacing:0.5px;">
+                                            Indian Government Identity Numbers
+                                        </span>
+                                    </div>
+                                    <span class="text-muted" style="font-size:11px;">Section 2 of 3</span>
+                                </div>
+
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Aadhaar No (12 Digit) *</label>
+                                        <input type="text" name="aadhaar_number" class="form-control form-control-sm"
+                                            value="{{ profile.aadhaar_number|default:'' }}" maxlength="12" pattern="\d{12}" required>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">PAN Card No</label>
+                                        <input type="text" name="pan_number" class="form-control form-control-sm text-uppercase"
+                                            value="{{ profile.pan_number|default:'' }}" maxlength="10" pattern="[A-Z]{5}[0-9]{4}[A-Z]{1}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">PM-KISAN Reg ID</label>
+                                        <input type="text" name="pmkisan_id" class="form-control form-control-sm"
+                                            value="{{ profile.pmkisan_id|default:'' }}">
+                                    </div>
+                                    <!-- MSME Number -->
+                                    <div class="col-md-6">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1"
+                                            style="font-size:11px;">
+                                            MSME / Udyam Registration No *
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            name="msme_number"
+                                            id="msme_number"
+                                            class="form-control form-control-sm text-uppercase"
+                                            value="{{ profile.msme_number|default:'' }}"
+                                            placeholder="Example: UDYAM-TN-00-0000000"
+                                        >
+
+                                        <small class="text-muted">
+                                            Enter your Udyam/MSME registration number.
+                                        </small>
+                                    </div>
+
+                                    <!-- MSME Certificate -->
+                                    <div class="col-md-6">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1"
+                                            style="font-size:11px;">
+                                            MSME Certificate *
+                                        </label>
+
+                                        <input
+                                            type="file"
+                                            name="msme_certificate"
+                                            id="msme_certificate"
+                                            class="form-control form-control-sm"
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                        >
+
+                                        <small class="text-muted">
+                                            PDF, JPG or PNG — maximum 10MB.
+                                        </small>
+
+                                        {% if profile.msme_certificate %}
+                                            <div class="mt-2 d-flex align-items-center gap-2">
+                                                <span class="badge bg-success-subtle text-success">
+                                                    <i class="ri-checkbox-circle-line me-1"></i>
+                                                    Certificate Uploaded
+                                                </span>
+
+                                                <button
+                                                    type="button"
+                                                    class="btn btn-sm btn-outline-primary"
+                                                    onclick="previewDocument(
+                                                        '{{ profile.msme_certificate.url }}',
+                                                        'MSME Certificate'
+                                                    )"
+                                                >
+                                                    <i class="ri-eye-line me-1"></i>
+                                                    View
+                                                </button>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <!-- Section 3 -->
+                                <div class="d-flex align-items-center justify-content-between mt-5 mb-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="d-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-10 text-warning" style="width:26px; height:26px;">
+                                            <i class="ri-map-pin-line"></i>
+                                        </span>
+                                        <span class="fw-bold text-uppercase text-dark" style="font-size:13px; letter-spacing:0.5px;">
+                                            Location &amp; Gram Panchayat Address
+                                        </span>
+                                    </div>
+                                    <span class="text-muted" style="font-size:11px;">Section 3 of 3</span>
+                                </div>
+
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">State *</label>
+                                        <select name="state" id="select_state" class="form-select form-select-sm" required>
+                                            <option value="">Select State</option>
+                                            {% for state in states %}
+                                            <option value="{{ state.code }}" {% if profile.state == state.code %}selected{% endif %}>{{ state.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">District *</label>
+                                        <select name="district" id="select_district" class="form-select form-select-sm" required {% if not profile.state %}disabled{% endif %}>
+                                            <option value="">{% if profile.state %}Select District{% else %}Select State First{% endif %}</option>
+                                            {% for district in districts %}
+                                            <option value="{{ district.code }}" {% if profile.district == district.code %}selected{% endif %}>{{ district.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Taluka / Tehsil / Block *</label>
+                                        <select name="taluka" id="select_taluka" class="form-select form-select-sm" required {% if not profile.district %}disabled{% endif %}>
+                                            <option value="">{% if profile.district %}Select Taluka{% else %}Select District First{% endif %}</option>
+                                            {% for taluka in talukas %}
+                                            <option value="{{ taluka.code }}" {% if profile.taluka == taluka.code %}selected{% endif %}>{{ taluka.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+            
+                                    <div class="col-md-4">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Village / Gram Panchayat *</label>
+                                        <input type="text" name="village" class="form-control form-control-sm"
+                                            value="{{ profile.village|default:'' }}" required>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Pincode (6 Digit) *</label>
+                                        <input type="text" name="pincode" class="form-control form-control-sm"
+                                            value="{{ profile.pincode|default:'' }}" maxlength="6" pattern="\d{6}" required>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4 d-flex gap-2 justify-content-end">
+                                    <button type="button" onclick="togglePersonalEdit(false)" class="btn btn-outline-secondary btn-sm px-4">
+                                        Dismiss
+                                    </button>
+                                    <button type="button" onclick="submitPersonalInfoUpdate()" class="btn btn-primary btn-sm px-4">
+                                        <i class="ri-save-3-line me-1"></i> Save Personal KYC Changes
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="tab-pane fade" id="documents">
+        <div class="card border-0 shadow-sm rounded-4 mt-3">
+            <div class="card-body p-4">
+    
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="d-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-10 text-warning" style="width:28px; height:28px;">
+                            <i class="ri-folder-2-line"></i>
+                        </span>
+                        <div>
+                            <span class="fw-bold text-uppercase text-dark d-block" style="font-size:13px; letter-spacing:0.5px;">
+                                My Documents
+                            </span>
+                            <small class="text-muted" style="font-size:11px;">
+                                Land records, KYC proofs, and scheme certificates on file.
+                            </small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#uploadDocumentModal">
+                        <i class="ri-upload-2-line me-1"></i> Upload Document
+                    </button>
+                </div>
+    
+                <div class="row g-3" id="documentsCardGrid">
+                    {% for doc in documents %}
+                    <div class="col-md-4" id="doc_card_{{ doc.id }}">
+                        <div class="border rounded-4 p-3 h-100 d-flex flex-column position-relative bg-white shadow-sm">
+                            <div class="dropdown position-absolute" style="top:8px; right:8px;">
+                                <button class="btn btn-sm btn-light border-0 p-1 rounded-circle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="ri-more-2-fill"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                                    <li>
+                                        <button class="dropdown-item d-flex align-items-center gap-2 text-danger" type="button"
+                                                onclick="deleteDocument('{{ doc.id }}', '{{ doc.title|escapejs }}')">
+                                            <i class="ri-delete-bin-line"></i> Delete
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="d-flex align-items-start gap-2 mb-3 pe-4">
+                                <span class="d-flex align-items-center justify-content-center rounded-3 bg-primary bg-opacity-10 text-primary flex-shrink-0" style="width:40px; height:40px;">
+                                    {% if doc.file.url|slice:"-4:" == ".pdf" %}
+                                        <i class="ri-file-pdf-2-line fs-5"></i>
+                                    {% elif doc.file.url|slice:"-4:" == ".png" or doc.file.url|slice:"-4:" == ".jpg" or doc.file.url|slice:"-5:" == ".jpeg" %}
+                                        <i class="ri-image-2-line fs-5"></i>
+                                    {% else %}
+                                        <i class="ri-file-3-line fs-5"></i>
+                                    {% endif %}
+                                </span>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <div class="fw-bold text-truncate text-dark" style="font-size:13px;" title="{{ doc.title }}">
+                                        {{ doc.title }}
+                                    </div>
+                                    <small class="text-muted" style="font-size:11px;">
+                                        Uploaded {{ doc.created_at|date:"d-M-Y" }}
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="mt-auto d-flex gap-2 pt-2">
+                                <button type="button" class="btn btn-outline-secondary btn-sm flex-fill rounded-3"
+                                        onclick="previewDocument('{{ doc.file.url }}', '{{ doc.title|escapejs }}')">
+                                    <i class="ri-eye-line me-1"></i> Preview
+                                </button>
+                                <a href="{{ doc.file.url }}" download class="btn btn-outline-primary btn-sm flex-fill rounded-3">
+                                    <i class="ri-download-2-line me-1"></i> Download
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12" id="documentsEmptyState">
+                        <div class="text-center text-muted py-5 bg-light rounded-4 border">
+                            <i class="ri-folder-open-line text-secondary" style="font-size:42px;"></i>
+                            <h6 class="mt-3 mb-1 fw-bold text-dark">No documents uploaded yet</h6>
+                            <p class="text-muted small mb-3">Upload your Aadhaar, Land records (Patta/Chitta), or MSME certificates.</p>
+                            <button type="button" class="btn btn-primary btn-sm px-3 rounded-3" data-bs-toggle="modal" data-bs-target="#uploadDocumentModal">
+                                <i class="ri-upload-2-line me-1"></i> Upload First Document
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+    
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="subscription">
+        <div class="row g-4">
+            <div class="col-lg-5">
+                <div class="card border-0 shadow-sm rounded-4 overflow-hidden mt-3">
+                    <div class="d-flex justify-content-between align-items-center px-4 py-3 border-bottom" 
+                        style="background: linear-gradient(to right, #f8fafc, #ffffff);">
+                        <div>
+                            <h6 class="fw-bold text-uppercase mb-1" style="letter-spacing: 1px;">
+                                <i class="ri-coins-line me-2 text-secondary"></i>
+                                Subscription Payment History
+                            </h6>
+                            <p class="text-muted mb-0" style="font-size: 11px;">
+                                Chronological statements generated for direct service fees, hardware leases, and active gateway rentals.
+                            </p>
+                        </div>
+                        <span class="badge bg-light text-dark fw-bold px-3 py-2">
+                            {{ subscriptions|length }} entries
+                        </span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0">
+                            <thead class="bg-light text-muted text-uppercase" style="font-size: 10px;">
+                                <tr>
+                                    <th class="ps-4">Plan Tier</th>
+                                    <th class="text-center">Status</th>
+                                    <th class="text-end">Amount</th>
+                                    <th class="text-center pe-4">Receipt</th>
+                                </tr>
+                            </thead>
+                            <tbody style="font-size: 13px;">
+                                {% for sub in subscriptions %}
+                                <tr class="border-top">
+                                    <td class="ps-4 fw-semibold">{{ sub.package.name|default:"Custom Plan" }}</td>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-1">
+                                            <i class="ri-check-line me-1"></i>{% if sub.payment_status == 'success' %}Settled{% else %}Pending{% endif %}
+                                        </span>
+                                    </td>
+                                    <td class="text-end fw-bold">₹{{ sub.monthly_amount|floatformat:0 }}</td>
+                                    <td class="text-center pe-4">
+                                        <button class="btn btn-sm btn-light border" data-bs-toggle="modal" data-bs-target="#payment_view_modal" onclick="populateInvoiceModal('INV-{{ sub.created_at|date:'Y' }}-{{ sub.id|stringformat:'04d' }}', '{{ sub.created_at|date:'Y-m-d' }}', '{{ sub.package.name|default:'Custom Plan' }}', '₹{{ sub.monthly_amount|floatformat:0 }}')">
+                                            <i class="ri-download-line me-1"></i>View
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-4">No billing history found.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- RIGHT COLUMN -->
+            <div class="col-lg-7">
+                <!-- Farmer Info Card -->
+                <div class="card border-0 shadow-sm rounded-4 mb-4">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap border-bottom pb-3 mb-3">
+                            <div>
+                                <small class="text-muted fw-bold text-uppercase" style="font-size:10px; letter-spacing:1px;">
+                                    Active Subscription Service
+                                </small>
+                                <h5 class="fw-bold mt-1 mb-1 d-flex align-items-center gap-2">
+                                    {% if active_subscription and active_subscription.package %}
+                                        {{ active_subscription.package.name }}
+                                    {% else %}
+                                        No Active Subscription
+                                    {% endif %}
+                                    <span class="badge bg-primary-subtle text-primary border" style="font-size:10px;">
+                                        Current tier
+                                    </span>
+                                </h5>
+                                <p class="text-muted small mb-0" style="max-width: 500px;">
+                                    {% if active_subscription and active_subscription.package %}
+                                        {{ active_subscription.package.description|default:"The standard choice for medium-scale commercial farms." }}
+                                    {% else %}
+                                        Please select a package from the catalog below to subscribe.
+                                    {% endif %}
+                                </p>
+                            </div>
+                            <div class="bg-dark text-white rounded-3 p-3 text-end">
+                                <small class="text-uppercase text-white" style="font-size:9px;">
+                                    Service Fee
+                                </small>
+                                <h4 class="fw-bold mb-0 text-white">
+                                    {% if active_subscription %}
+                                        ₹{{ active_subscription.monthly_amount|floatformat:0 }}
+                                    {% else %}
+                                        ₹0
+                                    {% endif %}
+                                </h4>
+                                <small class="text-white">per billing period</small>
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <div class="p-3 bg-gray-100 rounded border">
+                                    <small class="text-muted text-uppercase fw-bold" style="font-size:9px;">Billing Status</small>
+                                    <div class="fw-bold text-primary mt-1">
+                                        {% if active_subscription and active_subscription.payment_status == 'success' %}
+                                            <i class="ri-checkbox-circle-line me-1"></i> Standard Paid
+                                        {% else %}
+                                            <i class="ri-error-warning-line me-1 text-danger"></i> Pending/None
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted">Cleared on statement</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="p-3 bg-gray-100 rounded border">
+                                    <small class="text-muted text-uppercase fw-bold" style="font-size:9px;">Next Renewal</small>
+                                    <div class="fw-bold mt-1 text-black">
+                                        <i class="ri-calendar-line me-1"></i> 
+                                        {% if active_subscription %}
+                                            {{ active_subscription.end_date|date:"d-M-Y" }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted">Automatic digital roll</small>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+                <div class="card border-0 shadow-sm rounded-4 mb-4">
+                    <div class="card-body p-4">
+                        <div class="mb-3">
+                            <h6 class="fw-bold text-uppercase d-flex align-items-center gap-2" style="letter-spacing:1px;">
+                                <i class="ri-sparkling-line text-warning"></i>
+                                Agriot Krishi Plan Upgrades Catalog
+                            </h6>
+                            <p class="text-muted small mb-0">
+                                Toggle other operational plans to upgrade subplots limits, deploy high-gain weather nodes, or sync workforce management parameters.
+                            </p>
+                        </div>
+                        <div class="row g-3">
+                            {% for pkg in packages %}
+                            <div class="col-md-4">
+                                <div class="border rounded-4 p-3 h-100 d-flex flex-column justify-content-between {% if active_subscription and active_subscription.package.id == pkg.id %}border-primary bg-primary bg-opacity-10 position-relative{% endif %}">
+                                    {% if active_subscription and active_subscription.package.id == pkg.id %}
+                                    <span class="position-absolute top-0 end-0 m-2 badge bg-primary">
+                                        Active
+                                    </span>
+                                    {% endif %}
+                                    <div>
+                                        <small class="text-muted text-uppercase fw-bold" style="font-size:10px;">
+                                            Package ID: PKG-{{ pkg.id }}
+                                        </small>
+                                        <h6 class="fw-bold mt-1">{{ pkg.name }}</h6>
+                                        <div class="d-flex align-items-end gap-1 mt-2 mb-2">
+                                            <h5 class="fw-bold mb-0">₹{{ pkg.price|floatformat:0 }}</h5>
+                                            <small class="text-muted">/ Month</small>
+                                        </div>
+                                        <p class="text-muted small mb-2">
+                                            {{ pkg.description|default:"Great package for your farm operations." }}
+                                        </p>
+                                        <button class="btn btn-link p-0 small fw-bold text-decoration-none" style="font-size: 12px;"
+                                                data-bs-toggle="collapse" 
+                                                data-bs-target="#spec{{ pkg.id }}">
+                                            View Core Specs <i class="ri-arrow-down-s-line"></i>
+                                        </button>
+                                        <div class="collapse mt-2 small text-muted" id="spec{{ pkg.id }}">
+                                            <span class="text-uppercase fw-semibold" style="font-size: 11px;">Key Features</span>
+                                            <div class="d-flex flex-column">
+                                                <div class="d-flex align-items-center justify-content-start gap-1">
+                                                    <i class="ri-check-line text-primary"></i>
+                                                    <span style="font-size: 11px;">Up to {{ pkg.max_acre_support|default:"50" }} Acres support</span>
+                                                </div>
+                                                <div class="d-flex align-items-center justify-content-start gap-1">
+                                                    <i class="ri-check-line text-primary"></i>
+                                                    <span style="font-size: 11px;">Detailed Analytics</span>
+                                                </div>
+                                                <div class="d-flex align-items-center justify-content-start gap-1">
+                                                    <i class="ri-check-line text-primary"></i>
+                                                    <span style="font-size: 11px;">Email & SMS Alerts</span>
+                                                </div>
+                                            </div>
+                                            <span class="text-uppercase fw-semibold" style="font-size: 11px;">Max Field Limits</span>
+                                            <span class="bg-gray-100 text-black badge rounded-3">Up to {{ pkg.max_acre_support|default:"50" }} Acres supported</span>                                    
+                                        </div>
+                                    </div>
+                                    {% if active_subscription and active_subscription.package.id == pkg.id %}
+                                    <div class="text-center mt-3">
+                                        <span class="badge bg-primary-subtle text-primary border w-100 py-2">
+                                            <i class="ri-check-line"></i> Currently Active
+                                        </span>
+                                    </div>
+                                    {% else %}
+                                    <button class="btn btn-dark btn-sm mt-3" onclick="switchPlan({{ pkg.id }})">
+                                        Switch & Upgrade
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Payment View-->
+<div class="modal fade" id="payment_view_modal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content border-0 rounded-4 overflow-hidden">
+      <div class="d-flex justify-content-between align-items-center px-4 py-3"
+           style="background:#020617; color:#cbd5f5; border-bottom:1px solid #022c22;">
+    
+        <div class="d-flex align-items-center gap-2">
+          <span style="color:#f59e0b;font-size:18px;"><i class="ri-plant-line text-white"></i></span>
+          <span class="fw-bold text-uppercase" style="font-size:11px; letter-spacing:1px;">
+            Agriot Digital Statement Invoice
+          </span>
+        </div>
+        <button class="btn btn-sm text-light border"
+                style="background:#020617;border-color:#1e293b;"
+                data-bs-dismiss="modal">
+          Close Statement
+        </button>
+      </div>
+      <div class="p-4" style="background:#fafafa;">
+        <div class="d-flex justify-content-between border-bottom pb-3 mb-3">
+          <div>
+            <div class="d-flex align-items-center gap-2">
+              <strong class="text-uppercase">Agriot Krishi Ltd</strong>
+              <span class="badge bg-primary text-white" style="font-size:9px;">Tax Invoice</span>
+            </div>
+            <p class="mb-0 text-muted small">
+              Krishi Bhawan Complex, Sector 4<br>
+              Malka Ganj, New Delhi - 110007<br>
+              CIN: L01222DL2024PLC883190
+            </p>
+          </div>
+          <div class="text-end">
+            <small class="text-muted text-uppercase">Statement Code</small>
+            <div class="fw-bold" id="modal-invoice-id">INV-2026-5804</div>
+            <small class="text-muted" id="modal-invoice-date">Date: 2026-06-09</small>
+          </div>
+        </div>
+        <div class="row border-bottom pb-3 mb-3 small">
+          <div class="col-md-6">
+            <small class="text-muted text-uppercase">Registered Licensee</small>
+            <div class="fw-bold">{{ request.user.first_name|default:request.user.username }}</div>
+            <div class="text-muted">Email: {{ request.user.profile.email|default:"N/A" }}</div>
+            <div class="text-muted">Phone: +91 {{ request.user.username }}</div>
+          </div>
+
+          <div class="col-md-6 text-md-end">
+            <small class="text-muted text-uppercase">Field Holdings</small>
+            <div class="fw-bold">{{ farm_region|default:"N/A" }}</div>
+            <div class="text-muted">{{ active_acreage|default:"0" }} Cultivated Acres</div>
+            <div class="text-muted">Soil Health: {{ soil_health_index|default:"N/A" }}</div>
+          </div>
+        </div>
+        <div class="mb-3">
+          <small class="text-muted text-uppercase">Line Item Specifications</small>
+          <div class="table-responsive mt-2">
+            <table class="table table-bordered bg-white">
+              <thead class="table-light text-uppercase small">
+                <tr>
+                  <th>Description</th>
+                  <th class="text-center">Duration</th>
+                  <th class="text-end">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <strong id="modal-package-name">Industrial Mega-Farm IoT Subscription</strong>
+                    <div class="text-muted small">
+                      Active wireless telemetry & automated irrigation control
+                    </div>
+                  </td>
+                  <td class="text-center">1 Month</td>
+                  <td class="text-end fw-bold" id="modal-package-cost">₹28,967</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center p-3 rounded"
+             style="background:#f1f5f9;">
+          <div>
+            <small class="text-primary text-uppercase">Settlement State</small>
+            <div class="fw-bold text-primary">
+              <i class="ri-checkbox-circle-line me-1"></i>Paid & Cleared
+            </div>
+            <small class="text-muted">Paid via UPI</small>
+          </div>
+          <div class="text-end">
+            <small class="text-muted text-uppercase">Total</small>
+            <div class="fw-bold fs-5" id="modal-total-cost">₹28,967</div>
+          </div>
+        </div>
+        <div class="text-center mt-3 border-top pt-2">
+          <small class="text-muted">
+            System Authorized Digital Ledger Slip • Verified Security Seal • Keep this receipt.
+          </small>
+        </div>
+      </div>
+      <!-- FOOTER -->
+      <div class="d-flex justify-content-end gap-2 p-3 border-top bg-light">
+        <button class="btn btn-outline-secondary btn-sm" onclick="printInvoice()">
+          <i class="ri-printer-line me-1"></i>Print
+        </button>
+        <button class="btn btn-dark btn-sm" data-bs-dismiss="modal">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Upload Document Modal -->
+<div class="modal fade" id="uploadDocumentModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 overflow-hidden">
+            <div class="modal-header">
+                <h6 class="modal-title fw-bold d-flex align-items-center gap-2">
+                    <i class="ri-upload-2-line text-primary"></i> Upload Document
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="documentUploadForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">
+                            Document Title *
+                        </label>
+                        <input type="text" name="title" id="doc_title_input" class="form-control form-control-sm"
+                            placeholder="e.g. 7/12 Land Extract" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">
+                            Choose File *
+                        </label>
+                        <input type="file" name="file" id="doc_file_input" class="form-control form-control-sm"
+                            accept=".pdf,.jpg,.jpeg,.png" required>
+                        <small class="text-muted">PDF, JPG or PNG — up to 10MB.</small>
+                    </div>
+                    <div id="uploadProgressWrap" class="mt-3" style="display:none;">
+                        <div class="progress" style="height:6px;">
+                            <div id="uploadProgressBar" class="progress-bar bg-primary" style="width:0%;"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm px-4" data-bs-dismiss="modal">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-primary btn-sm px-4" id="uploadSubmitBtn" onclick="submitDocumentUpload()">
+                    <i class="ri-save-3-line me-1"></i> Submit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editDocumentModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 overflow-hidden">
+            <div class="modal-header border-bottom">
+                <h6 class="modal-title fw-bold d-flex align-items-center gap-2">
+                    <i class="ri-edit-line text-primary"></i> Edit Document
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="documentEditForm">
+                    {% csrf_token %}
+                    <input type="hidden" name="document_id" id="edit_doc_id">
+                    <div class="mb-3">
+                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">
+                            Document Title *
+                        </label>
+                        <input type="text" name="title" id="edit_doc_title_input" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">
+                            Replace File (optional)
+                        </label>
+                        <input type="file" name="file" id="edit_doc_file_input" class="form-control form-control-sm"
+                               accept=".pdf,.jpg,.jpeg,.png">
+                        <small class="text-muted">Leave empty to keep the existing file.</small>
+                    </div>
+                    <div id="editUploadProgressWrap" class="mt-3" style="display:none;">
+                        <div class="progress" style="height:6px;">
+                            <div id="editUploadProgressBar" class="progress-bar bg-primary" style="width:0%;"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-outline-secondary btn-sm px-4" data-bs-dismiss="modal">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-primary btn-sm px-4" id="editSubmitBtn" onclick="submitDocumentEdit()">
+                    <i class="ri-save-3-line me-1"></i> Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Document Modal -->
+<div class="modal fade" id="previewDocumentModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 rounded-4 overflow-hidden">
+            <div class="modal-header p-2">
+                <h6 class="modal-title fw-bold d-flex align-items-center gap-2">
+                    <i class="ri-eye-line text-primary"></i>
+                    <span id="previewDocTitle">Document Preview</span>
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0 bg-dark d-flex align-items-center justify-content-center" style="min-height:70vh;">
+                <div id="previewDocBody" class="w-100 h-100 d-flex align-items-center justify-content-center">
+                    <!-- image / iframe injected here -->
+                </div>
+            </div>
+            <div class="modal-footer p-4">
+                <a href="#" id="previewDownloadLink" download class="btn btn-outline-primary btn-sm px-4">
+                    <i class="ri-download-2-line me-1"></i> Download
+                </a>
+                <button type="button" class="btn btn-dark btn-sm px-4" data-bs-dismiss="modal">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+function previewDocument(fileUrl, title) {
+    document.getElementById('previewDocTitle').textContent = title;
+    document.getElementById('previewDownloadLink').href = fileUrl;
+
+    const body = document.getElementById('previewDocBody');
+    const lowerUrl = fileUrl.toLowerCase();
+
+    if (lowerUrl.endsWith('.pdf')) {
+        body.innerHTML = `<iframe src="${fileUrl}" style="width:100%; height:70vh; border:0;"></iframe>`;
+    } else if (lowerUrl.endsWith('.png') || lowerUrl.endsWith('.jpg') || lowerUrl.endsWith('.jpeg') || lowerUrl.endsWith('.webp')) {
+        body.innerHTML = `<img src="${fileUrl}" alt="${title}" style="max-width:100%; max-height:70vh; object-fit:contain;">`;
+    } else {
+        body.innerHTML = `<div class="text-white text-center p-4">
+                             <i class="ri-file-3-line" style="font-size:40px;"></i>
+                             <p class="mt-2 mb-0">Preview not available for this file type.</p>
+                           </div>`;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('previewDocumentModal'));
+    modal.show();
+}
+
+function submitDocumentUpload() {
+    const form = document.getElementById('documentUploadForm');
+    const titleInput = document.getElementById('doc_title_input');
+    const fileInput = document.getElementById('doc_file_input');
+
+    if (!titleInput || !titleInput.value.trim()) {
+        Swal.fire('Required', 'Please enter a document title.', 'warning');
+        return;
+    }
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        Swal.fire('Required', 'Please select a file to upload.', 'warning');
+        return;
+    }
+
+    const formData = new FormData(form);
+    formData.append('action', 'upload');
+
+    const submitBtn = document.getElementById('uploadSubmitBtn');
+    if (submitBtn) submitBtn.disabled = true;
+
+    Swal.fire({
+        title: 'Uploading Document...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+
+    fetch("{% url 'farmer-documents' %}", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (submitBtn) submitBtn.disabled = false;
+        if (data.success || data.status === 'success') {
+            const modalEl = document.getElementById('uploadDocumentModal');
+            const modalInstance = bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) modalInstance.hide();
+            form.reset();
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Uploaded!',
+                text: 'Document uploaded successfully.',
+                confirmButtonColor: '#F69C55',
+                timer: 1500,
+                showConfirmButton: false
+            }).then(() => {
+                window.location.hash = '#documents';
+                window.location.reload();
+            });
+        } else {
+            Swal.fire('Error', data.message || 'Failed to upload document.', 'error');
+        }
+    })
+    .catch(err => {
+        if (submitBtn) submitBtn.disabled = false;
+        console.error(err);
+        Swal.fire('Error', 'An unexpected error occurred during upload.', 'error');
+    });
+}
+
+function deleteDocument(docId, docTitle) {
+    Swal.fire({
+        title: 'Delete Document?',
+        text: `Are you sure you want to delete "${docTitle}"?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Yes, Delete'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const formData = new FormData();
+            formData.append('action', 'delete');
+            formData.append('id', docId);
+
+            fetch("{% url 'farmer-documents' %}", {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success || data.status === 'success') {
+                    const card = document.getElementById(`doc_card_${docId}`);
+                    if (card) card.remove();
+
+                    const grid = document.getElementById('documentsCardGrid');
+                    if (grid && grid.querySelectorAll('[id^="doc_card_"]').length === 0) {
+                        grid.innerHTML = `
+                            <div class="col-12" id="documentsEmptyState">
+                                <div class="text-center text-muted py-5 bg-light rounded-4 border">
+                                    <i class="ri-folder-open-line text-secondary" style="font-size:42px;"></i>
+                                    <h6 class="mt-3 mb-1 fw-bold text-dark">No documents uploaded yet</h6>
+                                    <p class="text-muted small mb-3">Upload your Aadhaar, Land records (Patta/Chitta), or MSME certificates.</p>
+                                    <button type="button" class="btn btn-primary btn-sm px-3 rounded-3" data-bs-toggle="modal" data-bs-target="#uploadDocumentModal">
+                                        <i class="ri-upload-2-line me-1"></i> Upload First Document
+                                    </button>
+                                </div>
+                            </div>`;
+                    }
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Deleted!',
+                        text: 'Document has been removed.',
+                        confirmButtonColor: '#F69C55',
+                        timer: 1200,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire('Error', data.message || 'Failed to delete document.', 'error');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                Swal.fire('Error', 'An error occurred while deleting the document.', 'error');
+            });
+        }
+    });
+}
+</script>
+
+<script>
+    function populateInvoiceModal(invoiceId, date, package, amount) {
+        document.getElementById('modal-invoice-id').innerText = invoiceId;
+        document.getElementById('modal-invoice-date').innerText = 'Date: ' + date;
+        document.getElementById('modal-package-name').innerText = package;
+        document.getElementById('modal-package-cost').innerText = amount;
+        document.getElementById('modal-total-cost').innerText = amount;
+    }
+
+    function printInvoice() {
+        var printContents = document.querySelector('#payment_view_modal .p-4').innerHTML;
+        var printWindow = window.open('', '', 'height=600,width=800');
+        printWindow.document.write('<html><head><title>Print Invoice</title>');
+        // Load bootstrap to keep the styling intact
+        printWindow.document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">');
+        printWindow.document.write('<style>');
+        printWindow.document.write('body { padding: 20px; font-family: sans-serif; background: #fff !important; }');
+        printWindow.document.write('.badge { border: 1px solid #000; color: #000 !important; background: transparent !important; }');
+        printWindow.document.write('</style>');
+        printWindow.document.write('</head><body>');
+        
+        printWindow.document.write('<div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px;">');
+        printWindow.document.write('<h3 style="margin: 0; text-transform: uppercase;">Agriot Digital Statement Invoice</h3>');
+        printWindow.document.write('</div>');
+        
+        printWindow.document.write(printContents);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        
+        // Wait for styles to load
+        setTimeout(function() {
+            printWindow.print();
+            printWindow.close();
+        }, 300);
+    }
+
+    function submitProfileUpdate() {
+        const form = document.getElementById('profileUpdateForm');
+        const formData = new FormData(form);
+
+        Swal.fire({
+            title: 'Updating Profile...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        fetch("{% url 'update_profile' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success || data.status === 'success') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Profile Updated!',
+                    text: 'Your profile details have been saved successfully.',
+                    confirmButtonColor: '#F69C55',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                Swal.fire('Error', data.error || data.message || "Failed to update profile", 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'An unexpected error occurred.', 'error');
+        });
+    }
+
+    function submitPersonalInfoUpdate() {
+        const form = document.getElementById('personalInfoForm');
+        const formData = new FormData(form);
+
+        Swal.fire({
+            title: 'Saving KYC Details...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        fetch("{% url 'update_profile' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success || data.status === 'success') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'KYC Details Saved!',
+                    text: 'Your individual / company KYC details have been updated.',
+                    confirmButtonColor: '#F69C55',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                Swal.fire('Error', data.error || data.message || "Failed to save KYC details", 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'An unexpected error occurred while saving KYC.', 'error');
+        });
+    }
+    function switchPlan(packageId) {
+        Swal.fire({
+            title: 'Confirm Plan Switch',
+            text: 'Are you sure you want to upgrade/switch to this package?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#63771F',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Yes, proceed!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                fetch("{% url 'farmer-switch-plan' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({ package_id: packageId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.amount === 0) {
+                            verifySwitchPayment({
+                                 razorpay_payment_id: "pay_free_mock",
+                                 razorpay_order_id: data.order_id,
+                                 razorpay_signature: "free_tier_bypass"
+                            }, data.package_id, data.mobile_number);
+                        } else {
+                            const options = {
+                              "key": data.key_id,
+                              "amount": data.amount,
+                              "currency": "INR",
+                              "name": "AgriOT WiFarm",
+                              "description": `Upgrade to ${data.package_name}`,
+                              "order_id": data.order_id,
+                              "handler": function (response) {
+                                verifySwitchPayment(response, data.package_id, data.mobile_number);
+                              },
+                              "prefill": {
+                                "name": data.fullname,
+                                "contact": data.mobile_number
+                              },
+                              "theme": {
+                                "color": "#63771F"
+                              }
+                            };
+                            const rzp = new Razorpay(options);
+                            rzp.on('payment.failed', function (response) {
+                                Swal.fire("Payment failed", response.error.description, "error");
+                            });
+                            rzp.open();
+                        }
+                    } else {
+                        Swal.fire('Error', 'Error initiating switch: ' + data.error, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'An unexpected error occurred.', 'error');
+                });
+            }
+        });
+    }
+
+    function verifySwitchPayment(rzpResponse, packageId, mobileNumber) {
+        const formData = new FormData();
+        formData.append('razorpay_payment_id', rzpResponse.razorpay_payment_id);
+        formData.append('razorpay_order_id', rzpResponse.razorpay_order_id);
+        formData.append('razorpay_signature', rzpResponse.razorpay_signature);
+        formData.append('package_id', packageId);
+        formData.append('mobile_number', mobileNumber);
+
+        fetch('/farmer/verify_payment/', {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+          },
+          body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                Swal.fire({
+                    title: 'Payment Successful!',
+                    text: 'Your subscription has been upgraded.',
+                    icon: 'success',
+                    confirmButtonColor: '#63771F'
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                Swal.fire('Error', data.message || "Payment verification failed.", 'error');
+            }
+        });
+    }
+</script>
+{% endblock %}

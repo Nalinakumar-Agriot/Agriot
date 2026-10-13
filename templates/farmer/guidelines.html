@@ -1,0 +1,247 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Farm Management{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+<style>
+.clamp-3 {
+  font-size: 0.75rem;        /* text-xs */
+  line-height: 1.625;        /* leading-relaxed */
+
+  display: -webkit-box;
+  -webkit-line-clamp: 3;     /* limit to 3 lines */
+  -webkit-box-orient: vertical; 
+
+  overflow: hidden;
+}
+.bg-gray-100{
+    background-color: #F8FAFC;
+}
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+$(document).ready(function () {
+
+    $('.datatable').each(function () {
+
+        // 🔥 prevent double init
+        if ($.fn.dataTable.isDataTable(this)) {
+            $(this).DataTable().destroy();
+        }
+
+        $(this).DataTable({
+            pageLength: $(this).data('page-length') || 5,
+            lengthMenu: [5, 10, 25, 50],
+            responsive: true
+        });
+
+    });
+
+});
+
+let selectedRow = null;
+
+$(document).on('click', '.delete-btn', function () {
+    let farmerName = $(this).data('name');
+
+    // Set name in modal
+    $('#deleteFarm').text(farmerName);
+
+    // Store row reference
+    selectedRow = $(this).closest('tr');
+});
+
+$('#confirmDeleteBtn').on('click', function () {
+
+    // 🔥 Remove row (frontend)
+    if (selectedRow) {
+        selectedRow.remove();
+    }
+
+    // Close modal
+    $('#delete_farmer_modal').modal('hide');
+
+    // Optional: success toast
+    console.log("Farmer deleted");
+});
+
+$(document).ready(function() {
+    function filterGuidelines() {
+        let searchTerm = $('#searchInput').val().toLowerCase();
+        let selectedCategory = $('#categoryFilter').val();
+
+        $('.guideline-item').each(function() {
+            let itemSearchText = $(this).data('search');
+            let itemCategory = $(this).data('category');
+
+            let matchesSearch = itemSearchText.indexOf(searchTerm) > -1;
+            let matchesCategory = selectedCategory === "" || itemCategory === selectedCategory;
+
+            if (matchesSearch && matchesCategory) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    }
+
+    $('#searchInput').on('keyup', filterGuidelines);
+    $('#categoryFilter').on('change', filterGuidelines);
+});
+</script>
+
+{% endblock page_js %}
+
+{% block content %}
+
+<div class="card mb-2">
+    <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+            <h4 class="mb-1">
+            <i class="ri-lightbulb-line me-2 text-primary"></i>
+                Smart Farming Guide
+            </h4>
+        </div>
+    </div>
+</div>
+<div class="card mb-2">
+    <div class="card-body d-flex gap-2 flex-wrap p-2">
+        <div class="input-group w-75">
+            <span class="input-group-text bg-white">
+                <i class="ri-search-line"></i>
+            </span>
+            <input type="text" id="searchInput"
+                class="form-control"
+                placeholder="Search by title, tags, or content...">
+        </div>
+        <div class="d-flex align-items-center justify-content-between gap-3">
+            <select id="categoryFilter" class="form-select select3" data-placeholder="Select Category" style="width: 200px !important;">
+                <option value="">Categories: All</option>
+                {% for cat in categories %}
+                <option value="{{ cat.name }}">{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+</div>
+<div class="row g-3" id="guidelinesList">
+    {% for g in guidelines %}
+    <div class="col-lg-6 guideline-item" data-category="{{ g.farming_section.name|default:'Uncategorized' }}" data-search="{{ g.title|lower }} {{ g.search_tags|lower }} {{ g.detailed_content|lower }}">
+        <div class="card" style="border: 1px solid #696969;">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between gap-5 mb-2">
+                    <span class="badge fw-bold px-1 py-1 rounded text-uppercase" style="background: #F0FDF4;border: 1px solid #D0FAE5;color: #008236;font-size: 9px;">{{ g.farming_section.name|default:"Uncategorized" }}</span> 
+                    <span style="color: #99a1af;font-size: 12px;">{{ g.read_time|default:"-" }}</span> 
+                </div>
+                <label class="fw-semibold text-black" style="font-size: 14px;">{{ g.title }}</label>
+                <p class="text-muted mt-2 clamp-3">
+                    {{ g.detailed_content }}
+                </p>
+                <div class="d-flex align-items-center justify-content-between gap-5 mb-2 border-top py-2">
+                    <span style="color: #99a1af;font-size: 12px;">By : {{ g.author_name|default:"-" }}</span> 
+                    <div class="d-flex align-items-center justify-content-end gap-2">
+                        {% if g.document_file %}
+                        <a href="{{ g.document_file.url }}" target="_blank" class="btn btn-sm btn-gray-100 border text-primary" download>
+                            <i class="ri-download-2-line"></i>
+                        </a>
+                        {% endif %}
+                        <span class="fw-bold cursor-pointer" data-bs-toggle="modal"
+                                    data-bs-target="#view_full_guide_{{ g.id }}" style="color: #008236;font-size: 11px;">View full <i class="ri-arrow-right-double-line" style="color: #008236;"></i></span> 
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12 text-center py-5 text-muted">
+        No guidelines found.
+    </div>
+    {% endfor %}
+</div>
+
+
+{% for g in guidelines %}
+<!-- Full Guideline -->
+<div class="modal fade" id="view_full_guide_{{ g.id }}" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <!-- Header -->
+      <div class="modal-header border-bottom pb-2">
+        <div class="d-flex flex-column">
+            <label>
+                <span class="badge fw-bold px-1 py-1 rounded text-uppercase" style="background: #F0FDF4;border: 1px solid #D0FAE5;color: #008236;font-size: 9px;">{{ g.farming_section.name|default:"Uncategorized" }}</span> 
+            </label>
+            <h5 class="modal-title fw-semibold">{{ g.title }}</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <!-- Body -->
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12 border-bottom d-flex align-items-center justify-content-start gap-3 py-2">
+            <span class="fw-semibold" style="color: #696969;font-size: 12px;">Author : {{ g.author_name|default:"-" }}</span> 
+            <span class="fw-bold text-black">|</span>
+            <span class="fw-semibold" style="color: #696969;font-size: 12px;">{{ g.read_time|default:"-" }}</span>
+            <span class="fw-bold text-black">|</span>
+            <div class="d-flex align-items-center justify-content-start gap-2">
+                {% if g.search_tags %}
+                {% for tag in g.search_tags.split %}
+                <span class="badge bg-gray-100 rounded-3 fw-semibold" style="color: #353535;font-size: 12px;">#{{ tag }}</span>
+                {% endfor %}
+                {% endif %}
+            </div>
+          </div>
+          <div class="col-12">
+            <p class="text-muted mt-2 clamp-3">
+                {{ g.detailed_content }}
+            </p>
+          </div>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="modal-footer d-flex justify-content-between">
+        {% if g.document_file %}
+        <a href="{{ g.document_file.url }}" target="_blank" class="btn btn-secondary" download>
+          <i class="ri-download-2-line me-1"></i> Download Document
+        </a>
+        {% else %}
+        <div></div>
+        {% endif %}
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+          <i class="ri-check-line me-1"></i> Done Reading
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+
+
+
+
+{% endblock %}

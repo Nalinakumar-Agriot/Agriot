@@ -1,0 +1,6 @@
+
+{% if item.submenu %}
+  {% include "layout/partials/menu/superadmin/partials/menu_collapsible_template.html" with item=item %}
+{% else %}
+  {% include "layout/partials/menu/superadmin/partials/menu_link_template.html" with item=item %}
+{% endif %}

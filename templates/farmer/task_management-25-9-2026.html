@@ -1,0 +1,788 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Task{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+
+<script>
+$(document).ready(function () {
+
+    $('.datatable').each(function () {
+
+        // 🔥 prevent double init
+        if ($.fn.dataTable.isDataTable(this)) {
+            $(this).DataTable().destroy();
+        }
+
+        $(this).DataTable({
+            pageLength: $(this).data('page-length') || 5,
+            lengthMenu: [5, 10, 25, 50],
+            responsive: true
+        });
+
+    });
+
+});
+
+</script>
+
+{% endblock page_js %}
+
+{% block content %}
+<div class="row">
+  <div class="col-xxl-12 col-xl-12 col-lg-12 col-md-12 col-sm-12 col-xs-12">
+    <div class="card mb-2">
+        <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+          <div>
+            <h4 class="d-flex flex-column mb-1 text-dark">
+              <span class="text-primary fs-6">Operations & Labor Integration</span>
+              <span class="d-flex align-items-center gap-2 mt-1">
+                <i class="ri-checkbox-circle-line text-success"></i>
+                {% trans "Task" %}
+              </span>
+            </h4>
+
+            <p class="text-muted mb-0 small">
+              Assign field chores, verify schedules, and inspect agronomy checklists.
+            </p>
+          </div>
+
+          <a href="#"
+            class="btn btn-primary d-flex align-items-center gap-1"
+            data-bs-toggle="modal"
+            data-bs-target="#add_task_modal">
+
+            <i class="ri-add-line"></i>
+            Add new task
+          </a>
+        </div>
+    </div>
+
+    <div class="card mb-2">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-3 col-lg-3">
+            <div class="border rounded p-3" style="height: 93px;">
+              <p class="text-muted small">Total Tasks</p>
+              <div class="d-flex align-items-center mb-5">
+                <h4 class="fw-bold mb-0">{{ total_tasks }}</h4>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-3 col-lg-3">
+            <div class="border rounded p-3" style="height: 93px;">
+              <p class="text-muted small">Pending Queue</p>
+              <div class="d-flex align-items-center mb-5">
+                <h4 class="fw-bold mb-0 text-warning">{{ pending_tasks }}</h4>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-3 col-lg-3">
+            <div class="border rounded p-3" style="height: 93px;">
+              <p class="text-muted small">Active Progress</p>
+              <div class="d-flex align-items-center mb-5">
+                <h4 class="fw-bold mb-0" style="color: #1f3bda;">{{ active_tasks }}</h4>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-3 col-lg-3">
+            <div class="border rounded p-3" style="height: 93px;">
+              <p class="text-muted small">Completed Chores</p>
+              <div class="d-flex align-items-center mb-5">
+                <h4 class="fw-bold mb-0 text-primary">{{ completed_tasks }}</h4>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-2">
+      <div style="flex-grow-1">
+        <div class="rounded p-1" style="background: #ffffff; border: 1px solid #9ea0a1;">
+          <ul class="nav nav-pills gap-2" role="tablist">
+
+            <li class="nav-item">
+              <button class="nav-link active"
+                      data-bs-toggle="tab"
+                      data-bs-target="#all">
+                All Task ({{ total_tasks }})
+              </button>
+            </li>
+
+            <li class="nav-item">
+              <button class="nav-link"
+                      data-bs-toggle="tab"
+                      data-bs-target="#scheduled">
+                Pending Task ({{ pending_tasks }})
+              </button>
+            </li>
+
+            <li class="nav-item">
+              <button class="nav-link"
+                      data-bs-toggle="tab"
+                      data-bs-target="#other">
+                Active Task ({{ active_tasks }})
+              </button>
+            </li>
+
+            <li class="nav-item">
+              <button class="nav-link"
+                      data-bs-toggle="tab"
+                      data-bs-target="#Completed">
+                Completed Task ({{ completed_tasks }})
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-2">
+      <div class="rounded p-1" style="background: #ffffff;">
+        <div class="d-flex gap-2">
+          <div class="text-dark ms-2 py-3">
+            <i class="ri-list-check-2 me-2"></i>FILTERS:
+          </div>
+          <div class="d-flex ms-auto me-2 gap-3">
+              <div class="d-flex">
+                <label class="form=label py-3 me-2">Status:</label>
+                <select class="select3 form-select py-1" data-placeholder="All Status" style="width: 150px !important;">
+                  <option value="all">All Status</option>
+                  <option value="0">Pending</option>
+                  <option value="1">In progress</option>
+                  <option value="2">Completed</option>
+                  <option value="3">Deffered</option>
+                </select>
+              </div>
+              <div class="d-flex">
+                <label class="form=label py-3 me-2">Priority:</label>
+                <select class="select3 form-select py-1" data-placeholder="All Priorities" style="width: 150px !important;">
+                  <option value="all">All Priorities</option>
+                  <option value="0">High</option>
+                  <option value="1">Medium</option>
+                  <option value="2">Low</option>
+                </select>
+              </div>
+              <div class="d-flex">
+                <label class="form=label py-3 me-2">Worker:</label>
+                <select class="select3 form-select py-1" data-placeholder="All Workers" style="width: 150px !important;">
+                  <option value="all">All Workers</option>
+                  <option value="0">Unassigned</option>
+                  {% for worker in workers %}
+                  <option value="{{ worker.id }}">{{ worker.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-2">
+      <div class="card-body rounded">
+        <div class="tab-content">
+          <div class="tab-pane fade show active" id="all">
+            <div class="row g-4">
+              {% for task in tasks %}
+              <div class="col-md-6 col-lg-6">
+                <div class="border rounded p-3 h-100"  >
+                  <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                      {% if task.priority == 'High Priority' or task.priority == 'High' %}
+                      <span class="badge bg-danger-subtle border rounded-pill text-danger">{{ task.priority }}</span>
+                      {% elif task.priority == 'Low Priority' or task.priority == 'Low' %}
+                      <span class="badge bg-primary-subtle border rounded-pill text-primary">{{ task.priority }}</span>
+                      {% else %}
+                      <span class="badge bg-warning-subtle border rounded-pill text-warning">{{ task.priority }}</span>
+                      {% endif %}
+                      <h6 class="fw-bold mb-2 text-dark">{{ task.title }}</h6>
+                      <p class="text-muted small mb-0">{{ task.description|default:"No description provided." }}</p>
+                    </div>
+                    <div class="ms-auto me-2 top-4">
+                      {% if task.status == 'Completed' %}
+                      <label class="badge bg-primary-subtle border rounded-pill text-primary">Completed</label>
+                      {% elif task.status == 'In Progress' %}
+                      <label class="badge border rounded-pill" style="color: #2f39e7; background: #dedff0;">In Progress</label>
+                      {% else %}
+                      <label class="badge bg-secondary-subtle border rounded-pill text-secondary">Pending</label>
+                      {% endif %}
+                    </div>
+                  </div>
+                  <hr>
+                  <div class="d-flex justify-content-between">
+                    <div class="d-flex gap-1">
+                      <i class="ri-map-pin-line text-primary"></i>
+                      <span class="text-muted" style="font-size: 13px;">
+                        {{ task.associated_split.farm.land_name|default:"Farm Level Task" }}
+                      </span>
+                    </div>
+                    {% if task.associated_split %}
+                    <div class="ms-4 gap-1">
+                      <i class="ri-plant-line text-primary me-1"></i>
+                      <span class="text-muted" style="font-size: 13px;">
+                        {{ task.associated_split.crop.name }}
+                      </span>
+                    </div>
+                    {% endif %}
+                    <div class="ms-auto me-2 gap-1">
+                      <span class="text-muted">
+                        <i class="ri-calendar-line me-1"></i>
+                      </span>
+                      <label class="text-dark" style="font-size: 13px;">{{ task.created_at|date:"Y-m-d" }}</label>
+                    </div>
+                  </div>
+                  <hr>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex flex-column">
+                      <span class="text-dark" style="font-size: 11px;">ASSIGNED TO:</span>
+                      <label class="text-primary">{{ task.assigned_worker.name|default:"Unassigned" }}</label>
+                    </div>
+                    <div class="ms-auto">
+                      {% if task.status == 'Pending' %}
+                      <button class="btn btn-sm border text-primary" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'In Progress')">
+                        <i class="ri-play-fill me-1"></i>Start
+                      </button>
+                      {% elif task.status == 'In Progress' %}
+                      <button class="btn btn-sm border text-success" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'Completed')">
+                        <i class="ri-checkbox-circle-line me-1"></i>Complete
+                      </button>
+                      <button class="btn btn-sm border text-warning" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'Pending')">
+                        <i class="ri-arrow-go-back-line me-1"></i>Revert
+                      </button>
+                      {% elif task.status == 'Completed' %}
+                      <button class="btn btn-sm border text-warning" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'In Progress')">
+                        <i class="ri-arrow-go-back-line me-1"></i>Revert
+                      </button>
+                      {% endif %}
+                      <button class="btn btn-sm"
+                        style="font-size: 18px;"
+                        data-bs-toggle="modal" data-bs-target="#delete_task_modal" onclick="setDeleteTask({{ task.id }}, '{{ task.title|escapejs }}')">
+                        <i class="ri-delete-bin-line text-danger"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% empty %}
+              <div class="col-12 text-center py-5">
+                <h6 class="text-muted">No tasks found.</h6>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="scheduled">
+            <div class="row g-4">
+              {% for task in tasks %}
+              {% if task.status == 'Pending' %}
+              <div class="col-md-6 col-lg-6">
+                <div class="border rounded p-3 h-100"  >
+                  <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                      {% if task.priority == 'High Priority' or task.priority == 'High' %}
+                      <span class="badge bg-danger-subtle border rounded-pill text-danger">{{ task.priority }}</span>
+                      {% elif task.priority == 'Low Priority' or task.priority == 'Low' %}
+                      <span class="badge bg-primary-subtle border rounded-pill text-primary">{{ task.priority }}</span>
+                      {% else %}
+                      <span class="badge bg-warning-subtle border rounded-pill text-warning">{{ task.priority }}</span>
+                      {% endif %}
+                      <h6 class="fw-bold mb-2 text-dark">{{ task.title }}</h6>
+                      <p class="text-muted small mb-0">{{ task.description|default:"No description provided." }}</p>
+                    </div>
+                    <div class="ms-auto me-2 top-4">
+                      <label class="badge bg-secondary-subtle border rounded-pill text-secondary">Pending</label>
+                    </div>
+                  </div>
+                  <hr>
+                  <div class="d-flex justify-content-between">
+                    <div class="d-flex gap-1">
+                      <i class="ri-map-pin-line text-primary"></i>
+                      <span class="text-muted" style="font-size: 13px;">
+                        {{ task.associated_split.farm.land_name|default:"Farm Level Task" }}
+                      </span>
+                    </div>
+                    {% if task.associated_split %}
+                    <div class="ms-4 gap-1">
+                      <i class="ri-plant-line text-primary me-1"></i>
+                      <span class="text-muted" style="font-size: 13px;">
+                        {{ task.associated_split.crop.name }}
+                      </span>
+                    </div>
+                    {% endif %}
+                    <div class="ms-auto me-2 gap-1">
+                      <span class="text-muted">
+                        <i class="ri-calendar-line me-1"></i>
+                      </span>
+                      <label class="text-dark" style="font-size: 13px;">{{ task.created_at|date:"Y-m-d" }}</label>
+                    </div>
+                  </div>
+                  <hr>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex flex-column">
+                      <span class="text-dark" style="font-size: 11px;">ASSIGNED TO:</span>
+                      <label class="text-primary">{{ task.assigned_worker.name|default:"Unassigned" }}</label>
+                    </div>
+                    <div class="ms-auto">
+                      {% if task.status == 'Pending' %}
+                      <button class="btn btn-sm border text-primary" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'In Progress')">
+                        <i class="ri-play-fill me-1"></i>Start
+                      </button>
+                      {% elif task.status == 'In Progress' %}
+                      <button class="btn btn-sm border text-success" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'Completed')">
+                        <i class="ri-checkbox-circle-line me-1"></i>Complete
+                      </button>
+                      <button class="btn btn-sm border text-warning" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'Pending')">
+                        <i class="ri-arrow-go-back-line me-1"></i>Revert
+                      </button>
+                      {% elif task.status == 'Completed' %}
+                      <button class="btn btn-sm border text-warning" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'In Progress')">
+                        <i class="ri-arrow-go-back-line me-1"></i>Revert
+                      </button>
+                      {% endif %}
+                      <button class="btn btn-sm"
+                        style="font-size: 18px;"
+                        data-bs-toggle="modal" data-bs-target="#delete_task_modal" onclick="setDeleteTask({{ task.id }}, '{{ task.title|escapejs }}')">
+                        <i class="ri-delete-bin-line text-danger"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% endif %}
+              {% endfor %}
+              {% if pending_tasks == 0 %}
+              <div class="col-12 text-center py-5">
+                <h6 class="text-muted">No pending tasks found.</h6>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="other">
+            <div class="row g-4">
+              {% for task in tasks %}
+              {% if task.status == 'In Progress' %}
+              <div class="col-md-6 col-lg-6">
+                <div class="border rounded p-3 h-100"  >
+                  <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                      {% if task.priority == 'High Priority' or task.priority == 'High' %}
+                      <span class="badge bg-danger-subtle border rounded-pill text-danger">{{ task.priority }}</span>
+                      {% elif task.priority == 'Low Priority' or task.priority == 'Low' %}
+                      <span class="badge bg-primary-subtle border rounded-pill text-primary">{{ task.priority }}</span>
+                      {% else %}
+                      <span class="badge bg-warning-subtle border rounded-pill text-warning">{{ task.priority }}</span>
+                      {% endif %}
+                      <h6 class="fw-bold mb-2 text-dark">{{ task.title }}</h6>
+                      <p class="text-muted small mb-0">{{ task.description|default:"No description provided." }}</p>
+                    </div>
+                    <div class="ms-auto me-2 top-4">
+                      <label class="badge border rounded-pill" style="color: #2f39e7; background: #dedff0;">In Progress</label>
+                    </div>
+                  </div>
+                  <hr>
+                  <div class="d-flex justify-content-between">
+                    <div class="d-flex gap-1">
+                      <i class="ri-map-pin-line text-primary"></i>
+                      <span class="text-muted" style="font-size: 13px;">
+                        {{ task.associated_split.farm.land_name|default:"Farm Level Task" }}
+                      </span>
+                    </div>
+                    {% if task.associated_split %}
+                    <div class="ms-4 gap-1">
+                      <i class="ri-plant-line text-primary me-1"></i>
+                      <span class="text-muted" style="font-size: 13px;">
+                        {{ task.associated_split.crop.name }}
+                      </span>
+                    </div>
+                    {% endif %}
+                    <div class="ms-auto me-2 gap-1">
+                      <span class="text-muted">
+                        <i class="ri-calendar-line me-1"></i>
+                      </span>
+                      <label class="text-dark" style="font-size: 13px;">{{ task.created_at|date:"Y-m-d" }}</label>
+                    </div>
+                  </div>
+                  <hr>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex flex-column">
+                      <span class="text-dark" style="font-size: 11px;">ASSIGNED TO:</span>
+                      <label class="text-primary">{{ task.assigned_worker.name|default:"Unassigned" }}</label>
+                    </div>
+                    <div class="ms-auto">
+                      {% if task.status == 'Pending' %}
+                      <button class="btn btn-sm border text-primary" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'In Progress')">
+                        <i class="ri-play-fill me-1"></i>Start
+                      </button>
+                      {% elif task.status == 'In Progress' %}
+                      <button class="btn btn-sm border text-success" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'Completed')">
+                        <i class="ri-checkbox-circle-line me-1"></i>Complete
+                      </button>
+                      <button class="btn btn-sm border text-warning" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'Pending')">
+                        <i class="ri-arrow-go-back-line me-1"></i>Revert
+                      </button>
+                      {% elif task.status == 'Completed' %}
+                      <button class="btn btn-sm border text-warning" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'In Progress')">
+                        <i class="ri-arrow-go-back-line me-1"></i>Revert
+                      </button>
+                      {% endif %}
+                      <button class="btn btn-sm"
+                        style="font-size: 18px;"
+                        data-bs-toggle="modal" data-bs-target="#delete_task_modal" onclick="setDeleteTask({{ task.id }}, '{{ task.title|escapejs }}')">
+                        <i class="ri-delete-bin-line text-danger"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% endif %}
+              {% endfor %}
+              {% if active_tasks == 0 %}
+              <div class="col-12 text-center py-5">
+                <h6 class="text-muted">No in-progress tasks found.</h6>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="Completed">
+            <div class="row g-4">
+              {% for task in tasks %}
+              {% if task.status == 'Completed' %}
+              <div class="col-md-6 col-lg-6">
+                <div class="border rounded p-3 h-100"  >
+                  <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                      {% if task.priority == 'High Priority' or task.priority == 'High' %}
+                      <span class="badge bg-danger-subtle border rounded-pill text-danger">{{ task.priority }}</span>
+                      {% elif task.priority == 'Low Priority' or task.priority == 'Low' %}
+                      <span class="badge bg-primary-subtle border rounded-pill text-primary">{{ task.priority }}</span>
+                      {% else %}
+                      <span class="badge bg-warning-subtle border rounded-pill text-warning">{{ task.priority }}</span>
+                      {% endif %}
+                      <h6 class="fw-bold mb-2 text-dark">{{ task.title }}</h6>
+                      <p class="text-muted small mb-0">{{ task.description|default:"No description provided." }}</p>
+                    </div>
+                    <div class="ms-auto me-2 top-4">
+                      <label class="badge bg-primary-subtle border rounded-pill text-primary">Completed</label>
+                    </div>
+                  </div>
+                  <hr>
+                  <div class="d-flex justify-content-between">
+                    <div class="d-flex gap-1">
+                      <i class="ri-map-pin-line text-primary"></i>
+                      <span class="text-muted" style="font-size: 13px;">
+                        {{ task.associated_split.farm.land_name|default:"Farm Level Task" }}
+                      </span>
+                    </div>
+                    {% if task.associated_split %}
+                    <div class="ms-4 gap-1">
+                      <i class="ri-plant-line text-primary me-1"></i>
+                      <span class="text-muted" style="font-size: 13px;">
+                        {{ task.associated_split.crop.name }}
+                      </span>
+                    </div>
+                    {% endif %}
+                    <div class="ms-auto me-2 gap-1">
+                      <span class="text-muted">
+                        <i class="ri-calendar-line me-1"></i>
+                      </span>
+                      <label class="text-dark" style="font-size: 13px;">{{ task.created_at|date:"Y-m-d" }}</label>
+                    </div>
+                  </div>
+                  <hr>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex flex-column">
+                      <span class="text-dark" style="font-size: 11px;">ASSIGNED TO:</span>
+                      <label class="text-primary">{{ task.assigned_worker.name|default:"Unassigned" }}</label>
+                    </div>
+                    <div class="ms-auto">
+                      {% if task.status == 'Pending' %}
+                      <button class="btn btn-sm border text-primary" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'In Progress')">
+                        <i class="ri-play-fill me-1"></i>Start
+                      </button>
+                      {% elif task.status == 'In Progress' %}
+                      <button class="btn btn-sm border text-success" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'Completed')">
+                        <i class="ri-checkbox-circle-line me-1"></i>Complete
+                      </button>
+                      <button class="btn btn-sm border text-warning" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'Pending')">
+                        <i class="ri-arrow-go-back-line me-1"></i>Revert
+                      </button>
+                      {% elif task.status == 'Completed' %}
+                      <button class="btn btn-sm border text-warning" type="button" onclick="updateGlobalTaskStatus({{ task.id }}, 'In Progress')">
+                        <i class="ri-arrow-go-back-line me-1"></i>Revert
+                      </button>
+                      {% endif %}
+                      <button class="btn btn-sm"
+                        style="font-size: 18px;"
+                        data-bs-toggle="modal" data-bs-target="#delete_task_modal" onclick="setDeleteTask({{ task.id }}, '{{ task.title|escapejs }}')">
+                        <i class="ri-delete-bin-line text-danger"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add task Modal -->
+    <div class="modal fade" id="add_task_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+      <div class="modal-dialog modal-dialog-centered modal-md">
+        <div class="modal-content">
+
+          <!-- Header -->
+          <div class="modal-header">
+            <h5 class="modal-title fw-semibold">Log & Assign Operations Task</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+
+          <!-- Body -->
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-md-12">
+                <label class="form-label">Task Title</label>
+                <input type="text" id="task_title_input" class="form-control" placeholder="e.g. Clean Drip Filters Sector 3" />
+              </div>
+
+              <div class="col-md-12">
+                <label class="form-label">Task Description</label>
+                <textarea id="task_description_input" class="form-control" rows="3" placeholder="Describe exact coordinates, instruction checklists, or necessary Safety wear..." ></textarea>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Priority Level</label>
+                <select id="task_priority_input" class="select3 form-select">
+                  <option value="High Priority">High Priority</option>
+                  <option value="Medium Priority">Medium Priority</option>
+                  <option value="Low Priority">Low Priority</option>
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Work Timeline</label>
+                <select id="task_timeline_input" class="select3 form-select">
+                  <option value="Half Day">Half Day</option>
+                  <option value="Full Day">Full Day</option>
+                </select>
+              </div>
+
+              <div class="col-md-12">
+                <label class="form-label">Select Farm</label>
+                <select id="task_farm_input" class="select3 form-select" required>
+                  <option value="">Select a farm...</option>
+                  {% for farm in farms %}
+                  <option value="{{ farm.id }}">{{ farm.land_name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Associated Crop Field</label>
+                <select id="task_split_input" class="select3 form-select">
+                  <option value="">None / Farm Level</option>
+                  {% for split in crop_splits %}
+                  <option value="{{ split.id }}" data-farm="{{ split.farm.id }}">{{ split.farm.land_name }} - {{ split.crop.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Assign Worker</label>
+                <select id="task_worker_input" class="select3 form-select">
+                  <option value="">None / Unassigned</option>
+                  {% for worker in workers %}
+                  <option value="{{ worker.id }}">{{ worker.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="modal-footer d-flex justify-content-between">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+              Cancel
+            </button>
+            <button type="button" class="btn btn-primary" onclick="submitGlobalTask()">
+              <i class="ri-check-line me-1"></i>Confirm Assignment
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Task Modal -->
+    <div class="modal fade" id="delete_task_modal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+
+          <div class="modal-header">
+            <h5 class="modal-title text-danger">Confirm Delete</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+
+          <div class="modal-body text-center">
+            <p class="mb-0">
+              Are you sure you want to delete task
+              <strong id="deleteTaskTitle">this Task</strong>?
+            </p>
+          </div>
+
+          <div class="modal-footer justify-content-center">
+            <input type="hidden" id="deleteTaskId" />
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+              Cancel
+            </button>
+            <button type="button" class="btn btn-danger" onclick="confirmDeleteTask()">
+              Yes, Delete
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script>
+        function submitGlobalTask() {
+            var title = $('#task_title_input').val();
+            var desc = $('#task_description_input').val();
+            var priority = $('#task_priority_input').val();
+            var timeline = $('#task_timeline_input').val();
+            var farmId = $('#task_farm_input').val();
+            var splitId = $('#task_split_input').val();
+            var workerId = $('#task_worker_input').val();
+
+            if(!title || !farmId) {
+                window.showAppToast("Title and Farm are required.", "error");
+                return;
+            }
+
+            $.ajax({
+                url: "{% url 'add_farm_task' %}",
+                method: 'POST',
+                data: {
+                    'farm_id': farmId,
+                    'title': title,
+                    'description': desc,
+                    'priority': priority,
+                    'work_timeline': timeline,
+                    'split_id': splitId,
+                    'worker_id': workerId,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                },
+                success: function(response) {
+                    if(response.success) {
+                        window.showAppToast("Task added successfully!", "success");
+                        location.reload();
+                    } else {
+                        window.showAppToast(response.error, "error");
+                    }
+                }
+            });
+        }
+
+        function setDeleteTask(id, title) {
+            $('#deleteTaskId').val(id);
+            $('#deleteTaskTitle').text(title);
+        }
+
+        function confirmDeleteTask() {
+            var taskId = $('#deleteTaskId').val();
+
+            $.ajax({
+                url: "{% url 'delete_task' %}",
+                method: 'POST',
+                data: {
+                    'task_id': taskId,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                },
+                success: function(response) {
+                    if(response.success) {
+                        window.showAppToast("Task deleted successfully!", "success");
+                        $('#delete_task_modal').modal('hide');
+                        location.reload();
+                    } else {
+                        window.showAppToast(response.error, "error");
+                    }
+                }
+            });
+        }
+
+        // Filter crop fields dynamically when farm changes
+        $('#task_farm_input').change(function() {
+            var farmId = $(this).val();
+            if(farmId) {
+                $('#task_split_input option').each(function() {
+                    var sf = $(this).data('farm');
+                    if(!sf || sf == farmId) {
+                        $(this).show();
+                    } else {
+                        $(this).hide();
+                    }
+                });
+                $('#task_split_input').val('');
+            } else {
+                $('#task_split_input option').show();
+            }
+        });
+
+        function updateGlobalTaskStatus(taskId, status) {
+            $.ajax({
+                url: "{% url 'update_farm_task_status' %}",
+                method: 'POST',
+                data: {
+                    'task_id': taskId,
+                    'status': status,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                },
+                success: function(response) {
+                    if(response.success) {
+                        window.showAppToast("Task status updated to " + status + "!", "success");
+                        location.reload();
+                    } else {
+                        window.showAppToast(response.error, "error");
+                    }
+                }
+            });
+        }
+    </script>
+  </div>
+</div>
+{% endblock %}

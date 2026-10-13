@@ -1,0 +1,306 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+{% block title %}General Settings{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    function bindImagePreview(inputId, imgId) {
+        const input = document.getElementById(inputId);
+        const img = document.getElementById(imgId);
+
+        if (!input || !img) return;
+
+        input.addEventListener("change", function () {
+            const file = this.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+
+                reader.onload = function (e) {
+                    img.src = e.target.result;
+                };
+
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    bindImagePreview("logo-input", "logo-icon");
+    bindImagePreview("favicon-input", "fav-icon");
+
+    $('#id_country').on('change', function() {
+        var countryId = $(this).val();
+        $('#id_state').empty().append('<option value="">Select State</option>');
+        $('#id_city').empty().append('<option value="">Select City</option>');
+        
+        if (countryId) {
+            $.ajax({
+                url: '{% url "ajax_get_states" %}',
+                data: { 'country_id': countryId },
+                success: function(data) {
+                    $.each(data, function(index, state) {
+                        $('#id_state').append('<option value="' + state.id + '">' + state.name + '</option>');
+                    });
+                }
+            });
+        }
+    });
+
+    $('#id_state').on('change', function() {
+        var stateId = $(this).val();
+        $('#id_city').empty().append('<option value="">Select City</option>');
+        
+        if (stateId) {
+            $.ajax({
+                url: '{% url "ajax_get_cities" %}',
+                data: { 'state_id': stateId },
+                success: function(data) {
+                    $.each(data, function(index, city) {
+                        $('#id_city').append('<option value="' + city.id + '">' + city.name + '</option>');
+                    });
+                }
+            });
+        }
+    });
+
+});
+</script>
+
+{% endblock page_js %}
+
+{% block content %}
+
+
+  <form id="settings-form" method="POST" enctype="multipart/form-data">
+    {% csrf_token %}
+  <!-- Header -->
+  <div class="card mb-3">
+    <div class="card-body d-flex justify-content-between align-items-center">
+      <h4 class="mb-0">
+        <i class="ri-settings-3-line me-2 text-primary"></i>
+        General Settings
+      </h4>
+      <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#save_settings_modal">
+        <i class="ri-check-line me-1"></i> Save Changes
+      </button>
+    </div>
+  </div>
+  <!-- Form Card -->
+  <div class="card">
+    <div class="card-body">
+      <div class="row g-3">
+        <!-- Logo -->
+        <div class="col-lg-6">
+            <label class="form-label">Logo</label>
+            <div class="d-flex flex-column align-items-center">
+                <!-- Avatar -->
+                <div class="position-relative">
+                    <!-- Image -->
+                    <div class="rounded-circle overflow-hidden border shadow-sm"
+                        style="width: 110px; height: 110px; background-color: #f3f6f9;">
+                        {% if setting.logo %}
+                        <img src="{{ setting.logo.url }}" width="30" id="logo-icon" class="bg-white" style="width: 100%; height: 100%; object-fit: cover;"/>
+                        {% else %}
+                        <img src="{% static 'img/auth/agri_logo_3.png' %}" width="30" id="logo-icon" class="bg-white" style="width: 100%; height: 100%; object-fit: cover;"/>
+                        {% endif %}
+                    </div>
+                    <!-- Upload Button -->
+                    <label class="btn btn-sm btn-icon btn-primary rounded-circle position-absolute"
+                            style="bottom: 0; right: 0;"
+                            title="Change profile image"
+                            for="logo-input">
+                        <i class="ri-pencil-line text-white"></i>
+                    </label>
+                    <input type="file" name="logo" id="logo-input" accept=".png,.jpg,.jpeg" hidden>
+                </div>
+                <!-- Hint -->
+                <div class="form-text mt-2 text-center">
+                JPG, PNG allowed
+                </div>
+            </div>
+        </div>
+        <!-- Favicon -->
+        <div class="col-lg-6">
+            <label class="form-label">Favicon</label>
+            <div class="d-flex flex-column align-items-center">
+                <!-- Avatar -->
+                <div class="position-relative">
+                    <!-- Image -->
+                    <div class="rounded-circle overflow-hidden border shadow-sm"
+                        style="width: 110px; height: 110px; background-color: #f3f6f9;">
+                        {% if setting.favicon %}
+                        <img src="{{ setting.favicon.url }}" width="30" id="fav-icon" class="bg-white" style="width: 100%; height: 100%; object-fit: cover;"/>
+                        {% else %}
+                        <img src="{% static 'img/auth/agriot_favicon.png' %}" width="30" id="fav-icon" class="bg-white" style="width: 100%; height: 100%; object-fit: cover;"/>
+                        {% endif %}
+                    </div>
+                    <!-- Upload Button -->
+                    <label class="btn btn-sm btn-icon btn-primary rounded-circle position-absolute"
+                            style="bottom: 0; right: 0;"
+                            title="Change profile image"
+                            for="favicon-input">
+                        <i class="ri-pencil-line text-white"></i>
+                    </label>
+                    <input type="file" name="favicon" id="favicon-input" accept=".png,.jpg,.jpeg" hidden>
+                </div>
+                <!-- Hint -->
+                <div class="form-text mt-2 text-center">
+                JPG, PNG allowed
+                </div>
+            </div>
+        </div>
+        <!-- Title -->
+        <div class="col-md-4">
+          <label class="form-label">Title</label>
+          <input type="text" name="title" class="form-control" value="{{ setting.title }}">
+        </div>
+        <!-- Website -->
+        <div class="col-md-4">
+          <label class="form-label">Website</label>
+          <input type="text" name="website" class="form-control" value="{{ setting.website }}">
+        </div>
+        <!-- Contact Person -->
+        <div class="col-md-4">
+          <label class="form-label">Contact Person</label>
+          <input type="text" name="contact_person" class="form-control" value="{{ setting.contact_person }}">
+        </div>
+        <!-- Email -->
+        <div class="col-md-4">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" class="form-control" value="{{ setting.email }}">
+        </div>
+        <!-- Date Format -->
+        <div class="col-md-4">
+          <label class="form-label">Date Format</label>
+          <select class="form-select select3" name="date_format">
+            <option value="dd-mm-yyyy" {% if setting.date_format == 'dd-mm-yyyy' %}selected{% endif %}>dd-mm-yyyy</option>
+            <option value="dd/mm/yyyy" {% if setting.date_format == 'dd/mm/yyyy' %}selected{% endif %}>dd/mm/yyyy</option>
+            <option value="yyyy-mm-dd" {% if setting.date_format == 'yyyy-mm-dd' %}selected{% endif %}>yyyy-mm-dd</option>
+          </select>
+        </div>
+        <!-- Timezone -->
+        <div class="col-md-4">
+          <label class="form-label">Timezone</label>
+          <select class="form-select" name="timezone">
+            <option value="Asia/Kolkata" {% if setting.timezone == 'Asia/Kolkata' %}selected{% endif %}>Asia/Kolkata</option>
+            <option value="UTC" {% if setting.timezone == 'UTC' %}selected{% endif %}>UTC</option>
+          </select>
+        </div>
+        <!-- Country -->
+        <div class="col-md-4">
+          <label class="form-label">Country</label>
+          <select class="form-select select2" name="country" id="id_country">
+            <option value="">Select Country</option>
+            {% for country in countries %}
+            <option value="{{ country.id }}" {% if setting.country_id == country.id %}selected{% endif %}>{{ country.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <!-- State -->
+        <div class="col-md-4">
+          <label class="form-label">State</label>
+          <select class="form-select select2" name="state" id="id_state">
+            <option value="">Select State</option>
+            {% for state in states %}
+            <option value="{{ state.id }}" {% if setting.state_id == state.id %}selected{% endif %}>{{ state.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <!-- City -->
+        <div class="col-md-4">
+          <label class="form-label">City</label>
+          <select class="form-select select2" name="city" id="id_city">
+            <option value="">Select City</option>
+            {% for city in cities %}
+            <option value="{{ city.id }}" {% if setting.city_id == city.id %}selected{% endif %}>{{ city.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <!-- Address -->
+        <div class="col-md-4">
+          <label class="form-label">Street</label>
+          <input type="text" name="street" class="form-control" value="{{ setting.street }}">
+        </div>
+        <!-- Door No -->
+        <div class="col-md-4">
+          <label class="form-label">Door No</label>
+          <input type="text" name="door_no" class="form-control" value="{{ setting.door_no }}">
+        </div>
+        <!-- Pincode -->
+        <div class="col-md-4">
+          <label class="form-label">Pincode</label>
+          <input type="text" name="pincode" class="form-control" value="{{ setting.pincode }}">
+        </div>
+        <!-- GST -->
+        <div class="col-md-4">
+          <label class="form-label">GST Number</label>
+          <input type="text" name="gst_number" class="form-control" value="{{ setting.gst_number|default:'' }}">
+        </div>
+        <!-- CIN -->
+        <div class="col-md-4">
+          <label class="form-label">CIN</label>
+          <input type="text" name="cin" class="form-control" value="{{ setting.cin|default:'' }}">
+        </div>
+        <!-- Weather API -->
+        <div class="col-md-4">
+          <label class="form-label">Weather API Key</label>
+          <input type="text" name="weather_api_key" class="form-control" value="{{ setting.weather_api_key|default:'' }}">
+        </div>
+      </div>
+    </div>
+  </div>
+  </form>
+
+
+<div class="modal fade" id="save_settings_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content text-center p-4">
+
+      <i class="ri-error-warning-line text-warning" style="font-size: 40px;"></i>
+
+      <h5 class="mt-3">Are you sure?</h5>
+      <p class="text-muted">
+        Do you want to update General Settings?
+      </p>
+
+      <div class="d-flex justify-content-center gap-3 mt-3">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('settings-form').submit();">Yes, Save</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+{% endblock %}

@@ -1,0 +1,593 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+
+{% block title %}Reports {% endblock title %}
+
+{% block page_css %}
+{{ block.super }}
+<style>
+  .nav-pills .nav-link.active,
+  .nav-pills .show > .nav-link {
+    background-color: #F69C55 !important;
+    color: #fff !important;
+    border-radius: 8px;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(246, 156, 85, 0.25);
+  }
+  .nav-pills .nav-link {
+    border-radius: 8px;
+    font-weight: 500;
+    color: #566a7f;
+    padding: 0.5rem 1.25rem;
+    transition: all 0.2s ease;
+  }
+  .nav-pills .nav-link:hover:not(.active) {
+    background-color: #f5f5f9;
+    color: #F69C55;
+  }
+  .search-collapse-wrapper {
+    position: relative;
+  }
+  .search-input-group {
+    width: 0;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-width 0.25s ease, opacity 0.2s ease;
+    white-space: nowrap;
+  }
+  .search-input-group.expanded {
+    max-width: 420px;
+    width: 420px;
+    opacity: 1;
+    margin-left: 8px;
+  }
+  @media (max-width: 576px) {
+    .search-input-group.expanded {
+      max-width: 220px;
+      width: 220px;
+    }
+  }
+  .report-hub-card {
+    border: 1.5px solid #ebedf0;
+    border-radius: 18px;
+    background: #ffffff;
+    transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  }
+  .report-hub-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.08);
+    border-color: #DAA06D;
+    color: inherit;
+  }
+  .report-hub-icon-wrapper {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .report-metric-badge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+  }
+  .recent-record-row {
+    padding: 6px 10px;
+    border-radius: 8px;
+    background-color: #f8fafc;
+    border: 1px solid #f1f5f9;
+    font-size: 12.5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    transition: background-color 0.15s ease;
+  }
+  .recent-record-row:hover {
+    background-color: #f1f5f9;
+  }
+  .report-hub-card .action-btn {
+    transition: all 0.2s ease;
+  }
+  .report-hub-card:hover .action-btn {
+    background-color: #EC9C56 !important;
+    border-color: #EC9C56 !important;
+    color: #ffffff !important;
+  }
+</style>
+{% endblock page_css %}
+
+{% block content %}
+
+<!-- Title Header Card -->
+<div class="card mb-3 border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+        <div>
+            <h4 class="mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="ri-file-chart-line text-primary"></i>
+                {% trans "Reports " %}
+            </h4>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-label-primary px-3 py-2 fs-7 fw-semibold">
+                07 Active Modules
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Filter & Search Toolbar Card -->
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+  <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3">
+
+    <!-- Collapsible Search -->
+    <div class="d-flex align-items-center search-collapse-wrapper" id="search_collapse_wrapper">
+      <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="search_toggle_btn" onclick="toggleSearchBox()">
+        <i class="ri-search-line"></i>
+      </button>
+      <div class="input-group search-input-group d-none" id="search_input_group">
+        <span class="input-group-text bg-white border-end-0">
+          <i class="ri-search-line text-muted"></i>
+        </span>
+        <input type="text"
+            id="reportSearchInput"
+            class="form-control border-start-0"
+            placeholder="Search reports by keyword (e.g. Land, Expense, Salary)..."
+            onkeyup="filterReportCards(this.value)">
+        <button class="btn btn-outline-secondary border-start-0" type="button" id="search_close_btn" onclick="closeSearchBox()">
+          <i class="ri-close-line"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right side category filter -->
+    <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+      <select id="moduleCategoryFilter" class="form-select w-auto" onchange="filterByCategory(this.value)">
+        <option value="all">All Report Modules</option>
+        <option value="commercial">Commercial (Customer, Land)</option>
+        <option value="financial">Financial (Expense, Vendor)</option>
+        <option value="workforce">Workforce (Salary, Attendance, Advance)</option>
+      </select>
+    </div>
+
+  </div>
+</div>
+
+<!-- Reports Grid -->
+<div class="row g-4" id="reportsGridContainer">
+
+  <!-- 1. Customer Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="commercial" data-keywords="customer report buyer credit sales balance party buyers client">
+    <a href="{% url 'farmer-customer-report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #e0f2fe; color: #0284c7;">
+            <i class="ri-contacts-book-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Customer Report</h5>
+            <small class="text-muted">Buyers & Clients</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-label-info text-info">
+          {{ customers_count }} Customer{{ customers_count|pluralize }}
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_customers %}
+          {% for c in recent_customers %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-user-3-line text-primary" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ c.name }}</span>
+            </div>
+            <span class="badge {% if c.status == 'Active' %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %}" style="font-size: 10px;">
+              {{ c.status|default:'Active' }}
+            </span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-user-unfollow-line d-block fs-5 text-secondary mb-1"></i>
+            No customer records added yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">View full directory</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+  <!-- 2. Land Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="commercial" data-keywords="land report farm acreage field splits soil irrigation acres acreage">
+    <a href="{% url 'farmer-land-report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #dcfce7; color: #16a34a;">
+            <i class="ri-landscape-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Land Report</h5>
+            <small class="text-muted">Acreage & Fields</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-label-success text-success">
+          {{ farms_count }} Farm{{ farms_count|pluralize }} · {{ total_area }} Ac
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_farms %}
+          {% for f in recent_farms %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-plant-line text-success" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ f.land_name }}</span>
+            </div>
+            <span class="badge bg-light text-dark fw-bold" style="font-size: 10.5px;">
+              {{ f.total_area }} Ac
+            </span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-landscape-line d-block fs-5 text-secondary mb-1"></i>
+            No farm lands registered yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">Acreage & crops breakdown</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+  <!-- 3. Expense Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="financial" data-keywords="expense report money cost outflow seed fertilizer tractor input outflow balance">
+    <a href="{% url 'farmer-expense-report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #fee2e2; color: #dc2626;">
+            <i class="ri-money-dollar-circle-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Expense Report</h5>
+            <small class="text-muted">Operational Costs</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-label-danger text-danger">
+          ₹ {{ total_expense_amount|floatformat:2 }}
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_expenses %}
+          {% for e in recent_expenses %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-money-dollar-circle-line text-danger" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ e.description|default:e.category|default:"Expense" }}</span>
+            </div>
+            <span class="fw-bold text-danger" style="font-size: 11px;">
+              ₹{{ e.amount }}
+            </span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-money-dollar-circle-line d-block fs-5 text-secondary mb-1"></i>
+            No expenses logged yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">{{ expenses_count }} Entries Logged</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+  <!-- 4. Vendor Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="financial" data-keywords="vendor report supplier procurement dealer store seller trade">
+    <a href="{% url 'farmer-vendor-report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #fef3c7; color: #d97706;">
+            <i class="ri-store-2-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Vendor Report</h5>
+            <small class="text-muted">Suppliers & Dealers</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-label-warning text-warning">
+          {{ vendors_count }} Vendor{{ vendors_count|pluralize }}
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_vendors %}
+          {% for v in recent_vendors %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-store-line text-warning" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ v.vendor_name }}</span>
+            </div>
+            <span class="text-muted small text-truncate" style="font-size: 11px;">
+              {{ v.business_name|default:v.state|default:"Supplier" }}
+            </span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-store-2-line d-block fs-5 text-secondary mb-1"></i>
+            No vendors registered yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">Supplier Network</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+  <!-- 5. Salary Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="workforce" data-keywords="salary report payroll wage wages worker payout staff pay payment slip">
+    <a href="{% url 'farmer-salary-report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #ede9fe; color: #7c3aed;">
+            <i class="ri-wallet-3-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Salary Report</h5>
+            <small class="text-muted">Staff Wage Slips</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-label-primary text-primary">
+          ₹ {{ total_salary_amount|floatformat:2 }}
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_payrolls %}
+          {% for p in recent_payrolls %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-user-smile-line text-primary" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ p.staff.name }}</span>
+            </div>
+            <span class="fw-bold text-success" style="font-size: 11px;">
+              ₹{{ p.net_pay }}
+            </span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-wallet-3-line d-block fs-5 text-secondary mb-1"></i>
+            No payroll statements yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">{{ payroll_count }} Payout Statements</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+  <!-- 6. Attendance Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="workforce" data-keywords="attendance report shift duty worker presence checkin log half full day">
+    <a href="{% url 'farmer-attendance-report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0;">
+            <i class="ri-calendar-check-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Attendance Report</h5>
+            <small class="text-muted">Daily Timecard</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-label-success text-success">
+          {{ attendance_count }} Logs
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_attendances %}
+          {% for a in recent_attendances %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-checkbox-circle-line text-success" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ a.staff.name }}</span>
+            </div>
+            <span class="badge {% if a.status == 'P' %}bg-primary-subtle text-primary{% elif a.status == 'A' %}bg-danger-subtle text-danger{% else %}bg-secondary-subtle text-secondary{% endif %}" style="font-size: 10px;">
+              {% if a.status == 'P' %}Present{% elif a.status == 'A' %}Absent{% elif a.status == 'H' %}Half Day{% else %}{{ a.status }}{% endif %}
+            </span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-calendar-check-line d-block fs-5 text-secondary mb-1"></i>
+            No attendance entries yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">Daily Shifts Log</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+  <!-- 7. Advance Report -->
+  <div class="col-12 col-md-6 col-lg-4 report-grid-col" data-category="workforce" data-keywords="advance report loan staff borrowing deduction emergency payment">
+    <a href="{% url 'farmer-advance-report' %}" class="report-hub-card p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="background: #fefce8; color: #ca8a04; border: 1px solid #fef08a;">
+            <i class="ri-hand-coin-line"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold text-dark mb-0">Advance Report</h5>
+            <small class="text-muted">Staff Advance Dues</small>
+          </div>
+        </div>
+        <span class="report-metric-badge bg-label-warning text-warning">
+          ₹ {{ total_advance_amount|floatformat:2 }}
+        </span>
+      </div>
+
+      <!-- Recent Records Mini List -->
+      <div class="d-flex flex-column gap-2 mb-3 flex-grow-1">
+        {% if recent_advances %}
+          {% for ad in recent_advances %}
+          <div class="recent-record-row">
+            <div class="d-flex align-items-center gap-2 text-truncate">
+              <i class="ri-hand-coin-line text-warning" style="font-size: 13px;"></i>
+              <span class="fw-semibold text-dark text-truncate">{{ ad.staff.name }}</span>
+            </div>
+            <span class="fw-bold text-dark" style="font-size: 11px;">
+              ₹{{ ad.amount }}
+            </span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-3 text-muted small bg-light rounded-3">
+            <i class="ri-hand-coin-line d-block fs-5 text-secondary mb-1"></i>
+            No staff advance entries yet
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-auto">
+        <span class="small fw-semibold text-muted">{{ advance_count }} Advance Entries</span>
+        <span class="btn btn-sm btn-outline-primary rounded-pill px-3 action-btn">
+          View Report <i class="ri-arrow-right-line ms-1"></i>
+        </span>
+      </div>
+    </a>
+  </div>
+
+</div>
+{% endblock content %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+function toggleSearchBox() {
+  var group = document.getElementById('search_input_group');
+  var toggleBtn = document.getElementById('search_toggle_btn');
+  var input = document.getElementById('reportSearchInput');
+  if (!group) return;
+  if (group.classList.contains('expanded')) {
+    closeSearchBox();
+  } else {
+    group.classList.remove('d-none');
+    setTimeout(function () {
+      group.classList.add('expanded');
+      if (toggleBtn) toggleBtn.classList.add('d-none');
+      if (input) input.focus();
+    }, 10);
+  }
+}
+
+function closeSearchBox() {
+  var group = document.getElementById('search_input_group');
+  var toggleBtn = document.getElementById('search_toggle_btn');
+  var input = document.getElementById('reportSearchInput');
+  if (!group) return;
+  group.classList.remove('expanded');
+  if (input) {
+    input.value = '';
+    filterReportCards('');
+  }
+  if (toggleBtn) toggleBtn.classList.remove('d-none');
+  setTimeout(function () {
+    group.classList.add('d-none');
+  }, 250);
+}
+
+document.addEventListener('click', function (e) {
+  var wrapper = document.getElementById('search_collapse_wrapper');
+  var group = document.getElementById('search_input_group');
+  if (wrapper && group && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+    closeSearchBox();
+  }
+});
+
+function filterReportCards(query) {
+  query = (query || '').toLowerCase().trim();
+  const category = document.getElementById('moduleCategoryFilter')?.value || 'all';
+  const cards = document.querySelectorAll('.report-grid-col');
+
+  cards.forEach(card => {
+    const text = card.textContent.toLowerCase();
+    const keywords = (card.getAttribute('data-keywords') || '').toLowerCase();
+    const cardCat = card.getAttribute('data-category') || '';
+    
+    const matchesSearch = !query || text.includes(query) || keywords.includes(query);
+    const matchesCategory = (category === 'all' || cardCat === category);
+
+    if (matchesSearch && matchesCategory) {
+      card.style.display = '';
+    } else {
+      card.style.display = 'none';
+    }
+  });
+}
+
+function filterByCategory(cat) {
+  var searchVal = document.getElementById('reportSearchInput')?.value || '';
+  filterReportCards(searchVal);
+}
+</script>
+{% endblock page_js %}

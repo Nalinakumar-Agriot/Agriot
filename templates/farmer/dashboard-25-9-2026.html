@@ -1,0 +1,4206 @@
+{% extends "farmer/base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+
+{% block title %}{% trans "Farm Expenses" %}{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+{% endblock vendor_js %}
+
+{% block page_js %}
+{{ block.super }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/apexcharts/3.45.1/apexcharts.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+  // ---- Sales vs Expenses ----
+  var financeEl = document.querySelector('#eliteFinanceChart');
+  if (financeEl && typeof ApexCharts !== 'undefined') {
+    new ApexCharts(financeEl, {
+      chart: { type: 'bar', height: 260, toolbar: { show: false } },
+      series: [{ name: 'Amount (₹)', data: [{{ total_sales|default:0 }}, {{ total_expenses|default:0 }}] }],
+      xaxis: { categories: ['Sales', 'Expenses'] },
+      colors: ['#0f9d6c', '#d1436b'],
+      plotOptions: { bar: { borderRadius: 8, columnWidth: '45%', distributed: true } },
+      legend: { show: false },
+      dataLabels: { enabled: true },
+      grid: { borderColor: '#eef0f6' }
+    }).render();
+  }
+
+  // ---- Task Status Donut ----
+  var taskEl = document.querySelector('#eliteTaskChart');
+  if (taskEl && typeof ApexCharts !== 'undefined') {
+    new ApexCharts(taskEl, {
+      chart: { type: 'donut', height: 260 },
+      series: [{{ pending_tasks|default:0 }}, {{ in_progress_tasks|default:0 }}, {{ completed_tasks|default:0 }}],
+      labels: ['Pending', 'In Progress', 'Completed'],
+      colors: ['#e18b1f', '#4338ca', '#0f9d6c'],
+      legend: { position: 'bottom' },
+      dataLabels: { enabled: false }
+    }).render();
+  }
+
+  // ---- Workforce Donut ----
+  var staffEl = document.querySelector('#eliteStaffChart');
+  if (staffEl && typeof ApexCharts !== 'undefined') {
+    new ApexCharts(staffEl, {
+      chart: { type: 'donut', height: 150, width: 150 },
+      series: [{{ active_staff|default:0 }}, {{ suspended_staff|default:0 }}],
+      labels: ['Active', 'Suspended'],
+      colors: ['#0f9d6c', '#d1436b'],
+      legend: { show: false },
+      dataLabels: { enabled: false }
+    }).render();
+  }  // Global Farm & Crop Dataset Mappings
+  var farmCropsMap = {{ farm_crops_map_json|default:"{}"|safe }};
+  var dashboardFarms = {{ dashboard_farms_json|default:"[]"|safe }};
+  var dashboardCrops = {{ dashboard_crops_json|default:"[]"|safe }};
+
+  function syncCropOptions(farmSelectEl, cropSelectEl, defaultSelectedCrop) {
+    if (!farmSelectEl || !cropSelectEl) return;
+    var farmId = farmSelectEl.value;
+    var crops = (farmId === 'all' || !farmCropsMap[farmId]) ? (farmCropsMap['all'] || dashboardCrops) : farmCropsMap[farmId];
+    var currentVal = defaultSelectedCrop || cropSelectEl.value || 'all';
+
+    cropSelectEl.innerHTML = '<option value="all">All Crops</option>';
+    crops.forEach(function(c) {
+      var opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      if (c === currentVal) opt.selected = true;
+      cropSelectEl.appendChild(opt);
+    });
+    if (currentVal !== 'all' && !crops.includes(currentVal)) {
+      cropSelectEl.value = 'all';
+    }
+  }
+
+  // ==========================================
+  // Market Price & Trading Mandis Analytics
+  // ==========================================
+  (function initMandiPriceAnalytics() {
+    var chartContainer = document.querySelector('#mandiDynamicChart');
+    if (!chartContainer || typeof ApexCharts === 'undefined') return;
+
+    var mandiChartInstance = null;
+    var colorPalette = ['#0e7fb8', '#0f9d6c', '#4338ca', '#e18b1f', '#d1436b', '#7c3aed', '#059669', '#f59e0b', '#ec4899', '#0284c7'];
+    var mandiDatabase = {{ mandi_analytics_json|safe }};
+    var cropBaseRates = {{ crop_base_rates_json|safe }};
+
+    function formatRate(val, unit) {
+      unit = unit || '₹/Quintal';
+      return (unit.includes('Kg') ? '₹' + Number(val).toFixed(1) : '₹' + Number(val).toLocaleString('en-IN')) + ' <span style="font-size:0.75rem; font-weight:normal; color:#6b7280;">' + unit + '</span>';
+    }
+
+    function getActiveDataset(period, farmId, crop, market) {
+      var items = [];
+      var total = 0;
+      var currentUnit = (crop !== 'all' && cropBaseRates[crop]) ? cropBaseRates[crop].unit : '₹/Quintal';
+      var rawRecords = mandiDatabase.raw_records || [];
+      var startVal = document.querySelector('#mandiStartDate') ? document.querySelector('#mandiStartDate').value : '';
+      var endVal = document.querySelector('#mandiEndDate') ? document.querySelector('#mandiEndDate').value : '';
+
+      var now = new Date();
+      var startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      var startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
+      var endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+      var startOf90Days = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
+      var finYearYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+      var startOfFinYear = new Date(finYearYear, 3, 1).toISOString().split('T')[0];
+
+      var farmCrops = (farmId !== 'all' && farmCropsMap[farmId]) ? farmCropsMap[farmId].map(function(c){ return c.toLowerCase(); }) : null;
+
+      var filteredRecords = rawRecords.filter(function(r) {
+        if (period === 'custom') {
+          if (startVal && r.date < startVal) return false;
+          if (endVal && r.date > endVal) return false;
+        } else if (period === 'this_month') {
+          if (r.date && r.date < startOfThisMonth) return false;
+        } else if (period === 'last_month') {
+          if (r.date && (r.date < startOfLastMonth || r.date > endOfLastMonth)) return false;
+        } else if (period === 'last_90_days') {
+          if (r.date && r.date < startOf90Days) return false;
+        } else if (period === 'this_year') {
+          if (r.date && r.date < startOfFinYear) return false;
+        }
+
+        if (crop && crop !== 'all') {
+          if (r.crop && r.crop.toLowerCase() !== crop.toLowerCase()) return false;
+        } else if (farmCrops && farmCrops.length > 0) {
+          var match = farmCrops.some(function(fc){ return r.crop && (r.crop.toLowerCase().includes(fc) || fc.includes(r.crop.toLowerCase())); });
+          if (!match && r.farm_id && String(r.farm_id) !== String(farmId) && r.farm_id !== 'all') return false;
+        }
+
+        if (market && market !== 'all' && r.name && r.name !== market) return false;
+        return true;
+      });
+
+      var mktMap = {};
+      var mktCounts = {};
+      filteredRecords.forEach(function(r) {
+        var mName = r.name || 'Regional Mandi';
+        mktMap[mName] = (mktMap[mName] || 0) + (parseFloat(r.amount) || 0);
+        mktCounts[mName] = (mktCounts[mName] || 0) + 1;
+      });
+
+      var sortedMkts = Object.keys(mktMap).map(function(k) {
+        var avgRate = (mktMap[k] / Math.max(1, mktCounts[k]));
+        return { name: k, amount: parseFloat(avgRate.toFixed(1)), unit: currentUnit };
+      }).sort(function(a, b) { return b.amount - a.amount; });
+
+      total = sortedMkts.length;
+      var maxAmt = Math.max.apply(Math, sortedMkts.map(function(o) { return o.amount; }).concat([1]));
+      items = sortedMkts.map(function(item, idx) {
+        var pct = Math.min(100, ((item.amount / (maxAmt * 1.1)) * 100)).toFixed(1);
+        return {
+          name: item.name,
+          amount: item.amount,
+          pct: pct,
+          unit: item.unit,
+          color: colorPalette[idx % colorPalette.length]
+        };
+      });
+
+      return { items: items, total: total, unit: currentUnit };
+    }
+
+    function updateFocusCard(label, amount, pct, unit, color) {
+      var dot = document.querySelector('#hoverMandiDot');
+      var labelEl = document.querySelector('#hoverMandiLabel');
+      var pctBadge = document.querySelector('#hoverMandiPctBadge');
+      var amtEl = document.querySelector('#hoverMandiAmount');
+      var barEl = document.querySelector('#hoverMandiProgressBar');
+      var card = document.querySelector('#mandiHoverFocusCard');
+
+      if (dot) dot.style.background = color;
+      if (labelEl) labelEl.textContent = label;
+      if (pctBadge) {
+        pctBadge.innerHTML = '₹' + amount + ' ' + (unit || '');
+        pctBadge.style.background = color;
+      }
+      if (amtEl) amtEl.innerHTML = formatRate(amount, unit);
+      if (barEl) {
+        barEl.style.width = pct + '%';
+        barEl.style.background = color;
+      }
+      if (card) {
+        card.style.borderColor = color;
+      }
+    }
+
+    function renderCategoryList(items) {
+      var listContainer = document.querySelector('#mandiCategoryListContainer');
+      if (!listContainer) return;
+
+      listContainer.innerHTML = '';
+      items.forEach(function(item, index) {
+        var row = document.createElement('div');
+        row.className = 'sales-category-item';
+        row.dataset.index = index;
+        row.innerHTML = '<div class="d-flex align-items-center gap-2" style="min-width:0;">' +
+          '<span class="cat-dot" style="background:' + item.color + ';"></span>' +
+          '<div class="text-truncate">' +
+            '<div class="cat-name text-truncate">' + item.name + '</div>' +
+            '<div class="cat-amount">' + formatRate(item.amount, item.unit) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="text-end ps-2">' +
+          '<span class="badge rounded-pill" style="background:' + item.color + '; color:#fff; font-size:0.75rem;">' + '₹' + item.amount + '</span>' +
+          '<div class="progress-elite mt-1" style="height:4px; width:60px;">' +
+            '<div class="progress-bar" style="width:' + item.pct + '%; background:' + item.color + ';"></div>' +
+          '</div>' +
+        '</div>';
+
+        row.addEventListener('mouseenter', function() {
+          updateFocusCard(item.name, item.amount, item.pct, item.unit, item.color);
+          document.querySelectorAll('#mandiCategoryListContainer .sales-category-item').forEach(function(el) { el.classList.remove('active'); });
+          row.classList.add('active');
+        });
+
+        listContainer.appendChild(row);
+      });
+
+      if (items.length > 0) {
+        updateFocusCard(items[0].name, items[0].amount, items[0].pct, items[0].unit, items[0].color);
+        var firstItem = listContainer.querySelector('.sales-category-item');
+        if (firstItem) firstItem.classList.add('active');
+      }
+    }
+
+    function renderChart(chartType, data) {
+      if (mandiChartInstance) {
+        mandiChartInstance.destroy();
+      }
+
+      var labels = data.items.map(function(d) { return d.name; });
+      var amounts = data.items.map(function(d) { return d.amount; });
+      var colors = data.items.map(function(d) { return d.color; });
+
+      var typeBadge = document.querySelector('#activeMandiChartTypeBadge');
+      var badgeTitles = {
+        'area': 'Spline Area Trend View',
+        'line': 'Line Trend View',
+        'bar': 'Vertical Bar View',
+        'horizontalBar': 'Horizontal Bar View',
+        'donut': 'Donut Overview'
+      };
+      if (typeBadge) typeBadge.textContent = badgeTitles[chartType] || 'Chart View';
+
+      var options = {};
+
+      if (chartType === 'donut') {
+        options = {
+          chart: {
+            type: 'donut',
+            height: 310,
+            animations: { enabled: true, easing: 'easeinout', speed: 500 },
+            events: {
+              dataPointMouseEnter: function(event, chartContext, config) {
+                var idx = config.dataPointIndex;
+                if (data.items[idx]) {
+                  var item = data.items[idx];
+                  updateFocusCard(item.name, item.amount, item.pct, item.unit, item.color);
+                  highlightListItem(idx);
+                }
+              }
+            }
+          },
+          series: amounts,
+          labels: labels,
+          colors: colors,
+          legend: { position: 'bottom', fontSize: '11px' },
+          dataLabels: { enabled: true, formatter: function(val) { return val.toFixed(0) + '%'; } },
+          tooltip: {
+            y: {
+              formatter: function(val) {
+                return '₹' + val + ' ' + (data.unit || '');
+              }
+            }
+          }
+        };
+      } else if (chartType === 'bar' || chartType === 'horizontalBar') {
+        var isHorizontal = (chartType === 'horizontalBar');
+        options = {
+          chart: {
+            type: 'bar',
+            height: 310,
+            toolbar: { show: false },
+            animations: { enabled: true, easing: 'easeinout', speed: 500 },
+            events: {
+              dataPointMouseEnter: function(event, chartContext, config) {
+                var idx = config.dataPointIndex;
+                if (data.items[idx]) {
+                  var item = data.items[idx];
+                  updateFocusCard(item.name, item.amount, item.pct, item.unit, item.color);
+                  highlightListItem(idx);
+                }
+              }
+            }
+          },
+          plotOptions: {
+            bar: {
+              horizontal: isHorizontal,
+              borderRadius: 6,
+              columnWidth: '45%',
+              barHeight: '55%',
+              distributed: true,
+              dataLabels: { position: 'top' }
+            }
+          },
+          series: [{ name: 'Trading Rate', data: amounts }],
+          xaxis: {
+            categories: labels,
+            labels: {
+              formatter: function(val) {
+                if (isHorizontal && typeof val === 'number') return '₹' + val;
+                return val;
+              }
+            }
+          },
+          yaxis: {
+            labels: {
+              formatter: function(val) {
+                if (!isHorizontal && typeof val === 'number') return '₹' + val;
+                return val;
+              }
+            }
+          },
+          colors: colors,
+          legend: { show: false },
+          dataLabels: {
+            enabled: true,
+            formatter: function(val) {
+              return '₹' + val;
+            },
+            offsetY: isHorizontal ? 0 : -20,
+            style: { fontSize: '11px', colors: ['#4b5563'] }
+          },
+          grid: { borderColor: '#eef0f6' },
+          tooltip: {
+            y: {
+              formatter: function(val) {
+                return '₹' + val + ' ' + (data.unit || '');
+              }
+            }
+          }
+        };
+      } else {
+        // area or line
+        var isArea = (chartType === 'area');
+        options = {
+          chart: {
+            type: isArea ? 'area' : 'line',
+            height: 310,
+            toolbar: { show: false },
+            animations: { enabled: true, easing: 'easeinout', speed: 500 },
+            events: {
+              dataPointMouseEnter: function(event, chartContext, config) {
+                var idx = config.dataPointIndex;
+                if (data.items[idx]) {
+                  var item = data.items[idx];
+                  updateFocusCard(item.name, item.amount, item.pct, item.unit, item.color);
+                  highlightListItem(idx);
+                }
+              }
+            }
+          },
+          stroke: { curve: 'smooth', width: 3 },
+          series: [{ name: 'Mandi Rate', data: amounts }],
+          xaxis: { categories: labels },
+          colors: ['#0e7fb8'],
+          markers: { size: 5, colors: ['#0e7fb8'], strokeColors: '#ffffff', strokeWidth: 2 },
+          fill: {
+            type: isArea ? 'gradient' : 'solid',
+            gradient: {
+              shadeIntensity: 1,
+              opacityFrom: 0.4,
+              opacityTo: 0.05,
+              stops: [0, 90, 100]
+            }
+          },
+          yaxis: {
+            title: { text: 'Rate (' + data.unit + ')', style: { fontSize: '11px', color: '#6b7280' } },
+            labels: { formatter: function(val) { return '₹' + val; } }
+          },
+          grid: { borderColor: '#eef0f6' },
+          tooltip: {
+            y: {
+              formatter: function(val) {
+                return '₹' + val + ' ' + (data.unit || '');
+              }
+            }
+          }
+        };
+      }
+
+      mandiChartInstance = new ApexCharts(chartContainer, options);
+      mandiChartInstance.render();
+    }
+
+    function highlightListItem(index) {
+      var items = document.querySelectorAll('#mandiCategoryListContainer .sales-category-item');
+      items.forEach(function(el, i) {
+        if (i === index) el.classList.add('active');
+        else el.classList.remove('active');
+      });
+    }
+
+    function applyMandiFilters() {
+      var periodEl = document.querySelector('#mandiPeriodFilter');
+      var farmEl = document.querySelector('#mandiFarmFilter');
+      var cropEl = document.querySelector('#mandiCropFilter');
+      var marketEl = document.querySelector('#mandiMarketFilter');
+      var chartTypeEl = document.querySelector('#mandiChartTypeFilter');
+
+      var period = periodEl ? periodEl.value : 'this_month';
+      var farmId = farmEl ? farmEl.value : 'all';
+      var crop = cropEl ? cropEl.value : 'all';
+      var market = marketEl ? marketEl.value : 'all';
+      var chartType = chartTypeEl ? chartTypeEl.value : 'area';
+
+      var result = getActiveDataset(period, farmId, crop, market);
+
+      var totalDisplay = document.querySelector('#mandiActiveDisplay');
+      if (totalDisplay) totalDisplay.textContent = result.total + ' Markets';
+
+      renderChart(chartType, result);
+      renderCategoryList(result.items);
+    }
+
+    var periodSelect = document.querySelector('#mandiPeriodFilter');
+    var farmSelect = document.querySelector('#mandiFarmFilter');
+    var cropSelect = document.querySelector('#mandiCropFilter');
+    var customRangeContainer = document.querySelector('#customMandiDateRangeContainer');
+    var startDateInput = document.querySelector('#mandiStartDate');
+    var endDateInput = document.querySelector('#mandiEndDate');
+
+    var todayObj = new Date();
+    var thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(todayObj.getDate() - 30);
+
+    if (endDateInput && !endDateInput.value) {
+      endDateInput.value = todayObj.toISOString().split('T')[0];
+    }
+    if (startDateInput && !startDateInput.value) {
+      startDateInput.value = thirtyDaysAgo.toISOString().split('T')[0];
+    }
+
+    if (farmSelect) {
+      farmSelect.addEventListener('change', function() {
+        if (cropSelect) syncCropOptions(farmSelect, cropSelect);
+        applyMandiFilters();
+      });
+    }
+
+    if (periodSelect) {
+      periodSelect.addEventListener('change', function() {
+        if (periodSelect.value === 'custom') {
+          if (customRangeContainer) customRangeContainer.style.display = 'block';
+        } else {
+          if (customRangeContainer) customRangeContainer.style.display = 'none';
+        }
+        applyMandiFilters();
+      });
+    }
+
+    var applyCustomBtn = document.querySelector('#applyCustomMandiDateBtn');
+    if (applyCustomBtn) {
+      applyCustomBtn.addEventListener('click', function() {
+        applyMandiFilters();
+        if (typeof Toastify !== 'undefined') {
+          Toastify({
+            text: "Custom Mandi Date Range Applied!",
+            duration: 2500,
+            gravity: "top",
+            position: "right",
+            style: { background: "linear-gradient(to right, #0e7fb8, #0a5c86)", borderRadius: "8px" }
+          }).showToast();
+        }
+      });
+    }
+
+    var filterForm = document.querySelector('#mandiFilterForm');
+    if (filterForm) {
+      filterForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        applyMandiFilters();
+        if (typeof Toastify !== 'undefined') {
+          Toastify({
+            text: "Market Price & Trading Mandis Updated!",
+            duration: 2500,
+            gravity: "top",
+            position: "right",
+            style: { background: "linear-gradient(to right, #0e7fb8, #0a5c86)", borderRadius: "8px" }
+          }).showToast();
+        }
+      });
+    }
+
+    var resetBtn = document.querySelector('#mandiFilterResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function() {
+        if (document.querySelector('#mandiPeriodFilter')) document.querySelector('#mandiPeriodFilter').value = 'this_month';
+        if (document.querySelector('#mandiFarmFilter')) document.querySelector('#mandiFarmFilter').value = 'all';
+        if (cropSelect) {
+          if (farmSelect) syncCropOptions(farmSelect, cropSelect);
+          cropSelect.value = 'all';
+        }
+        if (document.querySelector('#mandiMarketFilter')) document.querySelector('#mandiMarketFilter').value = 'all';
+        if (document.querySelector('#mandiChartTypeFilter')) document.querySelector('#mandiChartTypeFilter').value = 'area';
+        if (customRangeContainer) customRangeContainer.style.display = 'none';
+        applyMandiFilters();
+      });
+    }
+
+    var chartTypeSelect = document.querySelector('#mandiChartTypeFilter');
+    if (chartTypeSelect) {
+      chartTypeSelect.addEventListener('change', function() {
+        applyMandiFilters();
+      });
+    }
+
+    if (cropSelect) {
+      cropSelect.addEventListener('change', function() {
+        applyMandiFilters();
+      });
+    }
+
+    var marketSelect = document.querySelector('#mandiMarketFilter');
+    if (marketSelect) {
+      marketSelect.addEventListener('change', function() {
+        applyMandiFilters();
+      });
+    }
+
+    // Initial render
+    if (farmSelect && cropSelect) syncCropOptions(farmSelect, cropSelect);
+    applyMandiFilters();
+  })();
+
+  // ==========================================
+  // Dynamic Sales Analytics & Interactive Chart
+  // ==========================================
+  (function initSalesAnalytics() {
+    var chartContainer = document.querySelector('#salesDynamicChart');
+    if (!chartContainer || typeof ApexCharts === 'undefined') return;
+
+    var salesChartInstance = null;
+    var colorPalette = ['#0f9d6c', '#4338ca', '#e18b1f', '#0e7fb8', '#d1436b', '#7c3aed', '#059669', '#f59e0b'];
+    var salesDatabase = {{ sales_analytics_json|safe }};
+
+    function formatINR(val) {
+      return '₹' + Number(val).toLocaleString('en-IN');
+    }
+
+    function getActiveDataset(period, farmId, cropName, category) {
+      var rawRecords = salesDatabase.raw_records || [];
+      var startVal = document.querySelector('#salesStartDate') ? document.querySelector('#salesStartDate').value : '';
+      var endVal = document.querySelector('#salesEndDate') ? document.querySelector('#salesEndDate').value : '';
+
+      var now = new Date();
+      var startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      var startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
+      var endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+      var startOf90Days = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
+      var finYearYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+      var startOfFinYear = new Date(finYearYear, 3, 1).toISOString().split('T')[0];
+
+      var filteredRecords = rawRecords.filter(function(r) {
+        if (period === 'custom') {
+          if (startVal && r.date < startVal) return false;
+          if (endVal && r.date > endVal) return false;
+        } else if (period === 'this_month') {
+          if (r.date && r.date < startOfThisMonth) return false;
+        } else if (period === 'last_month') {
+          if (r.date && (r.date < startOfLastMonth || r.date > endOfLastMonth)) return false;
+        } else if (period === 'last_90_days') {
+          if (r.date && r.date < startOf90Days) return false;
+        } else if (period === 'this_year') {
+          if (r.date && r.date < startOfFinYear) return false;
+        }
+
+        if (farmId && farmId !== 'all') {
+          if (r.farm_id && String(r.farm_id) !== String(farmId)) return false;
+        }
+
+        if (cropName && cropName !== 'all') {
+          var recordCrop = (r.crop_name || r.name || '').toLowerCase();
+          var targetCrop = cropName.toLowerCase();
+          if (!recordCrop.includes(targetCrop) && !targetCrop.includes(recordCrop)) return false;
+        }
+
+        if (category && category !== 'all') {
+          var recordCat = (r.name || r.category || '').toLowerCase();
+          if (recordCat !== category.toLowerCase()) return false;
+        }
+
+        return true;
+      });
+
+      var catMap = {};
+      filteredRecords.forEach(function(r) {
+        var key = r.name || 'General Sales';
+        catMap[key] = (catMap[key] || 0) + (parseFloat(r.amount) || 0);
+      });
+
+      var sortedCats = Object.keys(catMap).map(function(k) {
+        return { name: k, amount: catMap[k] };
+      }).sort(function(a, b) { return b.amount - a.amount; });
+
+      var total = sortedCats.reduce(function(acc, curr) { return acc + curr.amount; }, 0);
+      var items = sortedCats.map(function(item, idx) {
+        var pct = total > 0 ? ((item.amount / total) * 100).toFixed(1) : '0.0';
+        return {
+          name: item.name,
+          amount: item.amount,
+          pct: pct,
+          color: colorPalette[idx % colorPalette.length]
+        };
+      });
+
+      return { items: items, total: total };
+    }
+
+    function updateFocusCard(label, amount, pct, color) {
+      var dot = document.querySelector('#hoverItemDot');
+      var labelEl = document.querySelector('#hoverItemLabel');
+      var pctBadge = document.querySelector('#hoverItemPctBadge');
+      var amtEl = document.querySelector('#hoverItemAmount');
+      var barEl = document.querySelector('#hoverItemProgressBar');
+      var card = document.querySelector('#salesHoverFocusCard');
+
+      if (dot) dot.style.background = color;
+      if (labelEl) labelEl.textContent = label;
+      if (pctBadge) {
+        pctBadge.textContent = pct + '%';
+        pctBadge.style.background = color;
+      }
+      if (amtEl) amtEl.textContent = formatINR(amount);
+      if (barEl) {
+        barEl.style.width = pct + '%';
+        barEl.style.background = color;
+      }
+      if (card) {
+        card.style.borderColor = color;
+      }
+    }
+
+    function renderCategoryList(items, total) {
+      var listContainer = document.querySelector('#salesCategoryListContainer');
+      if (!listContainer) return;
+
+      listContainer.innerHTML = '';
+      items.forEach(function(item, index) {
+        var row = document.createElement('div');
+        row.className = 'sales-category-item';
+        row.dataset.index = index;
+        row.innerHTML = '<div class="d-flex align-items-center gap-2" style="min-width:0;">' +
+          '<span class="cat-dot" style="background:' + item.color + ';"></span>' +
+          '<div class="text-truncate">' +
+            '<div class="cat-name text-truncate">' + item.name + '</div>' +
+            '<div class="cat-amount">' + formatINR(item.amount) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="text-end ps-2">' +
+          '<span class="cat-pct">' + item.pct + '%</span>' +
+          '<div class="progress-elite mt-1" style="height:4px; width:60px;">' +
+            '<div class="progress-bar" style="width:' + item.pct + '%; background:' + item.color + ';"></div>' +
+          '</div>' +
+        '</div>';
+
+        row.addEventListener('mouseenter', function() {
+          updateFocusCard(item.name, item.amount, item.pct, item.color);
+          document.querySelectorAll('.sales-category-item').forEach(function(el) { el.classList.remove('active'); });
+          row.classList.add('active');
+        });
+
+        listContainer.appendChild(row);
+      });
+
+      if (items.length > 0) {
+        updateFocusCard(items[0].name, items[0].amount, items[0].pct, items[0].color);
+        var firstItem = listContainer.querySelector('.sales-category-item');
+        if (firstItem) firstItem.classList.add('active');
+      }
+    }
+
+    function renderChart(chartType, data) {
+      if (salesChartInstance) {
+        salesChartInstance.destroy();
+      }
+
+      var labels = data.items.map(function(d) { return d.name; });
+      var amounts = data.items.map(function(d) { return d.amount; });
+      var colors = data.items.map(function(d) { return d.color; });
+
+      var typeBadge = document.querySelector('#activeChartTypeBadge');
+      var badgeTitles = {
+        'pie': 'Pie Chart View',
+        'donut': 'Donut Chart View',
+        'bar': 'Vertical Bar View',
+        'horizontalBar': 'Horizontal Bar View',
+        'area': 'Area Trend View'
+      };
+      if (typeBadge) typeBadge.textContent = badgeTitles[chartType] || 'Chart View';
+
+      var options = {};
+
+      if (chartType === 'pie' || chartType === 'donut') {
+        options = {
+          chart: {
+            type: chartType,
+            height: 310,
+            animations: { enabled: true, easing: 'easeinout', speed: 500 },
+            events: {
+              dataPointMouseEnter: function(event, chartContext, config) {
+                var idx = config.dataPointIndex;
+                if (data.items[idx]) {
+                  var item = data.items[idx];
+                  updateFocusCard(item.name, item.amount, item.pct, item.color);
+                  highlightListItem(idx);
+                }
+              }
+            }
+          },
+          series: amounts,
+          labels: labels,
+          colors: colors,
+          legend: { position: 'bottom', fontSize: '12px' },
+          dataLabels: {
+            enabled: true,
+            formatter: function(val) { return val.toFixed(1) + '%'; },
+            dropShadow: { enabled: false }
+          },
+          tooltip: {
+            y: {
+              formatter: function(val) {
+                var pct = data.total > 0 ? ((val / data.total) * 100).toFixed(1) : 0;
+                return formatINR(val) + ' (' + pct + '%)';
+              }
+            }
+          },
+          plotOptions: {
+            pie: {
+              donut: {
+                size: '65%',
+                labels: {
+                  show: chartType === 'donut',
+                  total: {
+                    show: true,
+                    label: 'Total Sales',
+                    formatter: function() { return formatINR(data.total); }
+                  }
+                }
+              }
+            }
+          }
+        };
+      } else if (chartType === 'bar' || chartType === 'horizontalBar') {
+        var isHorizontal = (chartType === 'horizontalBar');
+        options = {
+          chart: {
+            type: 'bar',
+            height: 310,
+            toolbar: { show: false },
+            animations: { enabled: true, easing: 'easeinout', speed: 500 },
+            events: {
+              dataPointMouseEnter: function(event, chartContext, config) {
+                var idx = config.dataPointIndex;
+                if (data.items[idx]) {
+                  var item = data.items[idx];
+                  updateFocusCard(item.name, item.amount, item.pct, item.color);
+                  highlightListItem(idx);
+                }
+              }
+            }
+          },
+          plotOptions: {
+            bar: {
+              horizontal: isHorizontal,
+              borderRadius: 6,
+              columnWidth: '45%',
+              barHeight: '55%',
+              distributed: true,
+              dataLabels: { position: 'top' }
+            }
+          },
+          series: [{ name: 'Sales Revenue', data: amounts }],
+          xaxis: {
+            categories: labels,
+            labels: {
+              formatter: function(val) {
+                if (isHorizontal && typeof val === 'number') return formatINR(val);
+                return val;
+              }
+            }
+          },
+          yaxis: {
+            labels: {
+              formatter: function(val) {
+                if (!isHorizontal && typeof val === 'number') return formatINR(val);
+                return val;
+              }
+            }
+          },
+          colors: colors,
+          legend: { show: false },
+          dataLabels: {
+            enabled: true,
+            formatter: function(val) {
+              var pct = data.total > 0 ? ((val / data.total) * 100).toFixed(1) : 0;
+              return pct + '%';
+            },
+            offsetY: isHorizontal ? 0 : -20,
+            style: { fontSize: '11px', colors: ['#4b5563'] }
+          },
+          grid: { borderColor: '#eef0f6' },
+          tooltip: {
+            y: {
+              formatter: function(val) {
+                var pct = data.total > 0 ? ((val / data.total) * 100).toFixed(1) : 0;
+                return formatINR(val) + ' (' + pct + '%)';
+              }
+            }
+          }
+        };
+      } else if (chartType === 'area') {
+        options = {
+          chart: {
+            type: 'area',
+            height: 310,
+            toolbar: { show: false },
+            animations: { enabled: true, easing: 'easeinout', speed: 500 },
+            events: {
+              dataPointMouseEnter: function(event, chartContext, config) {
+                var idx = config.dataPointIndex;
+                if (data.items[idx]) {
+                  var item = data.items[idx];
+                  updateFocusCard(item.name, item.amount, item.pct, item.color);
+                  highlightListItem(idx);
+                }
+              }
+            }
+          },
+          stroke: { curve: 'smooth', width: 3 },
+          series: [{ name: 'Sales Revenue', data: amounts }],
+          xaxis: { categories: labels },
+          colors: ['#0f9d6c'],
+          fill: {
+            type: 'gradient',
+            gradient: {
+              shadeIntensity: 1,
+              opacityFrom: 0.45,
+              opacityTo: 0.05,
+              stops: [0, 90, 100]
+            }
+          },
+          dataLabels: { enabled: false },
+          grid: { borderColor: '#eef0f6' },
+          tooltip: {
+            y: {
+              formatter: function(val) {
+                var pct = data.total > 0 ? ((val / data.total) * 100).toFixed(1) : 0;
+                return formatINR(val) + ' (' + pct + '%)';
+              }
+            }
+          }
+        };
+      }
+
+      salesChartInstance = new ApexCharts(chartContainer, options);
+      salesChartInstance.render();
+    }
+
+    function highlightListItem(index) {
+      var items = document.querySelectorAll('#salesCategoryListContainer .sales-category-item');
+      items.forEach(function(el, i) {
+        if (i === index) el.classList.add('active');
+        else el.classList.remove('active');
+      });
+    }
+
+    function applySalesFilters() {
+      var periodEl = document.querySelector('#salesPeriodFilter');
+      var farmEl = document.querySelector('#salesFarmFilter');
+      var cropEl = document.querySelector('#salesCropFilter');
+      var categoryEl = document.querySelector('#salesCategoryFilter');
+      var chartTypeEl = document.querySelector('#salesChartTypeFilter');
+
+      var period = periodEl ? periodEl.value : 'this_month';
+      var farmId = farmEl ? farmEl.value : 'all';
+      var cropName = cropEl ? cropEl.value : 'all';
+      var category = categoryEl ? categoryEl.value : 'all';
+      var chartType = chartTypeEl ? chartTypeEl.value : 'pie';
+
+      var result = getActiveDataset(period, farmId, cropName, category);
+
+      var totalDisplay = document.querySelector('#salesTotalDisplay');
+      if (totalDisplay) totalDisplay.textContent = formatINR(result.total);
+
+      renderChart(chartType, result);
+      renderCategoryList(result.items, result.total);
+    }
+
+    var periodSelect = document.querySelector('#salesPeriodFilter');
+    var farmSelect = document.querySelector('#salesFarmFilter');
+    var cropSelect = document.querySelector('#salesCropFilter');
+    var customRangeContainer = document.querySelector('#customDateRangeContainer');
+    var startDateInput = document.querySelector('#salesStartDate');
+    var endDateInput = document.querySelector('#salesEndDate');
+
+    var todayObj = new Date();
+    var thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(todayObj.getDate() - 30);
+
+    if (endDateInput && !endDateInput.value) {
+      endDateInput.value = todayObj.toISOString().split('T')[0];
+    }
+    if (startDateInput && !startDateInput.value) {
+      startDateInput.value = thirtyDaysAgo.toISOString().split('T')[0];
+    }
+
+    if (farmSelect) {
+      farmSelect.addEventListener('change', function() {
+        if (cropSelect) syncCropOptions(farmSelect, cropSelect);
+        applySalesFilters();
+      });
+    }
+
+    if (periodSelect) {
+      periodSelect.addEventListener('change', function() {
+        if (periodSelect.value === 'custom') {
+          if (customRangeContainer) customRangeContainer.style.display = 'block';
+        } else {
+          if (customRangeContainer) customRangeContainer.style.display = 'none';
+        }
+        applySalesFilters();
+      });
+    }
+
+    var applyCustomBtn = document.querySelector('#applyCustomDateBtn');
+    if (applyCustomBtn) {
+      applyCustomBtn.addEventListener('click', function() {
+        applySalesFilters();
+        if (typeof Toastify !== 'undefined') {
+          Toastify({
+            text: "Custom Date Range Applied!",
+            duration: 2500,
+            gravity: "top",
+            position: "right",
+            style: { background: "linear-gradient(to right, #0f9d6c, #0a6e4c)", borderRadius: "8px" }
+          }).showToast();
+        }
+      });
+    }
+
+    var filterForm = document.querySelector('#salesFilterForm');
+    if (filterForm) {
+      filterForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        applySalesFilters();
+        if (typeof Toastify !== 'undefined') {
+          Toastify({
+            text: "Sales Analytics & Chart Updated!",
+            duration: 2500,
+            gravity: "top",
+            position: "right",
+            style: { background: "linear-gradient(to right, #0f9d6c, #0a6e4c)", borderRadius: "8px" }
+          }).showToast();
+        }
+      });
+    }
+
+    var resetBtn = document.querySelector('#salesFilterResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function() {
+        if (document.querySelector('#salesPeriodFilter')) document.querySelector('#salesPeriodFilter').value = 'this_month';
+        if (document.querySelector('#salesFarmFilter')) document.querySelector('#salesFarmFilter').value = 'all';
+        if (cropSelect) {
+          if (farmSelect) syncCropOptions(farmSelect, cropSelect);
+          cropSelect.value = 'all';
+        }
+        if (document.querySelector('#salesCategoryFilter')) document.querySelector('#salesCategoryFilter').value = 'all';
+        if (document.querySelector('#salesChartTypeFilter')) document.querySelector('#salesChartTypeFilter').value = 'pie';
+        if (customRangeContainer) customRangeContainer.style.display = 'none';
+        applySalesFilters();
+      });
+    }
+
+    var chartTypeSelect = document.querySelector('#salesChartTypeFilter');
+    if (chartTypeSelect) {
+      chartTypeSelect.addEventListener('change', function() {
+        applySalesFilters();
+      });
+    }
+
+    if (cropSelect) {
+      cropSelect.addEventListener('change', function() {
+        applySalesFilters();
+      });
+    }
+
+    var categorySelect = document.querySelector('#salesCategoryFilter');
+    if (categorySelect) {
+      categorySelect.addEventListener('change', function() {
+        applySalesFilters();
+      });
+    }
+
+    // Initial render
+    if (farmSelect && cropSelect) syncCropOptions(farmSelect, cropSelect);
+    applySalesFilters();
+  })();
+
+  // ==========================================
+  // Dynamic Expense Analytics & Interactive Chart
+  // ==========================================
+  (function initExpenseAnalytics() {
+    var chartContainer = document.querySelector('#expenseDynamicChart');
+    if (!chartContainer || typeof ApexCharts === 'undefined') return;
+
+    var expenseChartInstance = null;
+    var colorPalette = ['#d1436b', '#e18b1f', '#4338ca', '#0e7fb8', '#7c3aed', '#0f9d6c', '#f59e0b', '#ec4899', '#6366f1', '#64748b'];
+    var expenseDatabase = {{ expense_analytics_json|safe }};
+
+    function formatINR(val) {
+      return '₹' + Number(val).toLocaleString('en-IN');
+    }
+
+    function getActiveDataset(period, farmId, cropName, category) {
+      var rawRecords = expenseDatabase.raw_records || [];
+      var startVal = document.querySelector('#expenseStartDate') ? document.querySelector('#expenseStartDate').value : '';
+      var endVal = document.querySelector('#expenseEndDate') ? document.querySelector('#expenseEndDate').value : '';
+
+      var now = new Date();
+      var startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      var startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
+      var endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+      var startOf90Days = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
+      var finYearYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+      var startOfFinYear = new Date(finYearYear, 3, 1).toISOString().split('T')[0];
+
+      var filteredRecords = rawRecords.filter(function(r) {
+        if (period === 'custom') {
+          if (startVal && r.date < startVal) return false;
+          if (endVal && r.date > endVal) return false;
+        } else if (period === 'this_month') {
+          if (r.date && r.date < startOfThisMonth) return false;
+        } else if (period === 'last_month') {
+          if (r.date && (r.date < startOfLastMonth || r.date > endOfLastMonth)) return false;
+        } else if (period === 'last_90_days') {
+          if (r.date && r.date < startOf90Days) return false;
+        } else if (period === 'this_year') {
+          if (r.date && r.date < startOfFinYear) return false;
+        }
+
+        if (farmId && farmId !== 'all') {
+          if (r.farm_id && String(r.farm_id) !== String(farmId)) return false;
+        }
+
+        if (cropName && cropName !== 'all') {
+          var recordCrop = (r.crop_name || '').toLowerCase();
+          var targetCrop = cropName.toLowerCase();
+          if (!recordCrop.includes(targetCrop) && !targetCrop.includes(recordCrop)) return false;
+        }
+
+        if (category && category !== 'all') {
+          var recordCat = (r.name || r.category || '').toLowerCase();
+          if (recordCat !== category.toLowerCase()) return false;
+        }
+
+        return true;
+      });
+
+      var catMap = {};
+      filteredRecords.forEach(function(r) {
+        var key = r.name || 'General Expense';
+        catMap[key] = (catMap[key] || 0) + (parseFloat(r.amount) || 0);
+      });
+
+      var sortedCats = Object.keys(catMap).map(function(k) {
+        return { name: k, amount: catMap[k] };
+      }).sort(function(a, b) { return b.amount - a.amount; });
+
+      var total = sortedCats.reduce(function(acc, curr) { return acc + curr.amount; }, 0);
+      var items = sortedCats.map(function(item, idx) {
+        var pct = total > 0 ? ((item.amount / total) * 100).toFixed(1) : '0.0';
+        return {
+          name: item.name,
+          amount: item.amount,
+          pct: pct,
+          color: colorPalette[idx % colorPalette.length]
+        };
+      });
+
+      return { items: items, total: total };
+    }
+
+    function updateFocusCard(label, amount, pct, color) {
+      var dot = document.querySelector('#hoverExpenseDot');
+      var labelEl = document.querySelector('#hoverExpenseLabel');
+      var pctBadge = document.querySelector('#hoverExpensePctBadge');
+      var amtEl = document.querySelector('#hoverExpenseAmount');
+      var barEl = document.querySelector('#hoverExpenseProgressBar');
+      var card = document.querySelector('#expenseHoverFocusCard');
+
+      if (dot) dot.style.background = color;
+      if (labelEl) labelEl.textContent = label;
+      if (pctBadge) {
+        pctBadge.textContent = pct + '%';
+        pctBadge.style.background = color;
+      }
+      if (amtEl) amtEl.textContent = formatINR(amount);
+      if (barEl) {
+        barEl.style.width = pct + '%';
+        barEl.style.background = color;
+      }
+      if (card) {
+        card.style.borderColor = color;
+      }
+    }
+
+    function renderCategoryList(items, total) {
+      var listContainer = document.querySelector('#expenseCategoryListContainer');
+      if (!listContainer) return;
+
+      listContainer.innerHTML = '';
+      items.forEach(function(item, index) {
+        var row = document.createElement('div');
+        row.className = 'sales-category-item';
+        row.dataset.index = index;
+        row.innerHTML = '<div class="d-flex align-items-center gap-2" style="min-width:0;">' +
+          '<span class="cat-dot" style="background:' + item.color + ';"></span>' +
+          '<div class="text-truncate">' +
+            '<div class="cat-name text-truncate">' + item.name + '</div>' +
+            '<div class="cat-amount">' + formatINR(item.amount) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="text-end ps-2">' +
+          '<span class="cat-pct">' + item.pct + '%</span>' +
+          '<div class="progress-elite mt-1" style="height:4px; width:60px;">' +
+            '<div class="progress-bar" style="width:' + item.pct + '%; background:' + item.color + ';"></div>' +
+          '</div>' +
+        '</div>';
+
+        row.addEventListener('mouseenter', function() {
+          updateFocusCard(item.name, item.amount, item.pct, item.color);
+          document.querySelectorAll('#expenseCategoryListContainer .sales-category-item').forEach(function(el) { el.classList.remove('active'); });
+          row.classList.add('active');
+        });
+
+        listContainer.appendChild(row);
+      });
+
+      if (items.length > 0) {
+        updateFocusCard(items[0].name, items[0].amount, items[0].pct, items[0].color);
+        var firstItem = listContainer.querySelector('.sales-category-item');
+        if (firstItem) firstItem.classList.add('active');
+      }
+    }
+
+    function renderChart(chartType, data) {
+      if (expenseChartInstance) {
+        expenseChartInstance.destroy();
+      }
+
+      var labels = data.items.map(function(d) { return d.name; });
+      var amounts = data.items.map(function(d) { return d.amount; });
+      var colors = data.items.map(function(d) { return d.color; });
+
+      var typeBadge = document.querySelector('#activeExpenseChartTypeBadge');
+      var badgeTitles = {
+        'pie': 'Pie Chart View',
+        'donut': 'Donut Chart View',
+        'bar': 'Vertical Bar View',
+        'horizontalBar': 'Horizontal Bar View',
+        'area': 'Area Trend View'
+      };
+      if (typeBadge) typeBadge.textContent = badgeTitles[chartType] || 'Chart View';
+
+      var options = {};
+
+      if (chartType === 'pie' || chartType === 'donut') {
+        options = {
+          chart: {
+            type: chartType,
+            height: 310,
+            animations: { enabled: true, easing: 'easeinout', speed: 500 },
+            events: {
+              dataPointMouseEnter: function(event, chartContext, config) {
+                var idx = config.dataPointIndex;
+                if (data.items[idx]) {
+                  var item = data.items[idx];
+                  updateFocusCard(item.name, item.amount, item.pct, item.color);
+                  highlightListItem(idx);
+                }
+              }
+            }
+          },
+          series: amounts,
+          labels: labels,
+          colors: colors,
+          legend: { position: 'bottom', fontSize: '12px' },
+          dataLabels: {
+            enabled: true,
+            formatter: function(val) { return val.toFixed(1) + '%'; },
+            dropShadow: { enabled: false }
+          },
+          tooltip: {
+            y: {
+              formatter: function(val) {
+                var pct = data.total > 0 ? ((val / data.total) * 100).toFixed(1) : 0;
+                return formatINR(val) + ' (' + pct + '%)';
+              }
+            }
+          },
+          plotOptions: {
+            pie: {
+              donut: {
+                size: '65%',
+                labels: {
+                  show: chartType === 'donut',
+                  total: {
+                    show: true,
+                    label: 'Total Expenses',
+                    formatter: function() { return formatINR(data.total); }
+                  }
+                }
+              }
+            }
+          }
+        };
+      } else if (chartType === 'bar' || chartType === 'horizontalBar') {
+        var isHorizontal = (chartType === 'horizontalBar');
+        options = {
+          chart: {
+            type: 'bar',
+            height: 310,
+            toolbar: { show: false },
+            animations: { enabled: true, easing: 'easeinout', speed: 500 },
+            events: {
+              dataPointMouseEnter: function(event, chartContext, config) {
+                var idx = config.dataPointIndex;
+                if (data.items[idx]) {
+                  var item = data.items[idx];
+                  updateFocusCard(item.name, item.amount, item.pct, item.color);
+                  highlightListItem(idx);
+                }
+              }
+            }
+          },
+          plotOptions: {
+            bar: {
+              horizontal: isHorizontal,
+              borderRadius: 6,
+              columnWidth: '45%',
+              barHeight: '55%',
+              distributed: true,
+              dataLabels: { position: 'top' }
+            }
+          },
+          series: [{ name: 'Expense Outflow', data: amounts }],
+          xaxis: {
+            categories: labels,
+            labels: {
+              formatter: function(val) {
+                if (isHorizontal && typeof val === 'number') return formatINR(val);
+                return val;
+              }
+            }
+          },
+          yaxis: {
+            labels: {
+              formatter: function(val) {
+                if (!isHorizontal && typeof val === 'number') return formatINR(val);
+                return val;
+              }
+            }
+          },
+          colors: colors,
+          legend: { show: false },
+          dataLabels: {
+            enabled: true,
+            formatter: function(val) {
+              var pct = data.total > 0 ? ((val / data.total) * 100).toFixed(1) : 0;
+              return pct + '%';
+            },
+            offsetY: isHorizontal ? 0 : -20,
+            style: { fontSize: '11px', colors: ['#4b5563'] }
+          },
+          grid: { borderColor: '#eef0f6' },
+          tooltip: {
+            y: {
+              formatter: function(val) {
+                var pct = data.total > 0 ? ((val / data.total) * 100).toFixed(1) : 0;
+                return formatINR(val) + ' (' + pct + '%)';
+              }
+            }
+          }
+        };
+      } else if (chartType === 'area') {
+        options = {
+          chart: {
+            type: 'area',
+            height: 310,
+            toolbar: { show: false },
+            animations: { enabled: true, easing: 'easeinout', speed: 500 },
+            events: {
+              dataPointMouseEnter: function(event, chartContext, config) {
+                var idx = config.dataPointIndex;
+                if (data.items[idx]) {
+                  var item = data.items[idx];
+                  updateFocusCard(item.name, item.amount, item.pct, item.color);
+                  highlightListItem(idx);
+                }
+              }
+            }
+          },
+          stroke: { curve: 'smooth', width: 3 },
+          series: [{ name: 'Expense Outflow', data: amounts }],
+          xaxis: { categories: labels },
+          colors: ['#d1436b'],
+          fill: {
+            type: 'gradient',
+            gradient: {
+              shadeIntensity: 1,
+              opacityFrom: 0.45,
+              opacityTo: 0.05,
+              stops: [0, 90, 100]
+            }
+          },
+          dataLabels: { enabled: false },
+          grid: { borderColor: '#eef0f6' },
+          tooltip: {
+            y: {
+              formatter: function(val) {
+                var pct = data.total > 0 ? ((val / data.total) * 100).toFixed(1) : 0;
+                return formatINR(val) + ' (' + pct + '%)';
+              }
+            }
+          }
+        };
+      }
+
+      expenseChartInstance = new ApexCharts(chartContainer, options);
+      expenseChartInstance.render();
+    }
+
+    function highlightListItem(index) {
+      var items = document.querySelectorAll('#expenseCategoryListContainer .sales-category-item');
+      items.forEach(function(el, i) {
+        if (i === index) el.classList.add('active');
+        else el.classList.remove('active');
+      });
+    }
+
+    function applyExpenseFilters() {
+      var periodEl = document.querySelector('#expensePeriodFilter');
+      var farmEl = document.querySelector('#expenseFarmFilter');
+      var cropEl = document.querySelector('#expenseCropFilter');
+      var categoryEl = document.querySelector('#expenseCategoryFilter');
+      var chartTypeEl = document.querySelector('#expenseChartTypeFilter');
+
+      var period = periodEl ? periodEl.value : 'this_month';
+      var farmId = farmEl ? farmEl.value : 'all';
+      var cropName = cropEl ? cropEl.value : 'all';
+      var category = categoryEl ? categoryEl.value : 'all';
+      var chartType = chartTypeEl ? chartTypeEl.value : 'donut';
+
+      var result = getActiveDataset(period, farmId, cropName, category);
+
+      var totalDisplay = document.querySelector('#expenseTotalDisplay');
+      if (totalDisplay) totalDisplay.textContent = formatINR(result.total);
+
+      renderChart(chartType, result);
+      renderCategoryList(result.items, result.total);
+    }
+
+    var periodSelect = document.querySelector('#expensePeriodFilter');
+    var farmSelect = document.querySelector('#expenseFarmFilter');
+    var cropSelect = document.querySelector('#expenseCropFilter');
+    var customRangeContainer = document.querySelector('#customExpenseDateRangeContainer');
+    var startDateInput = document.querySelector('#expenseStartDate');
+    var endDateInput = document.querySelector('#expenseEndDate');
+
+    var todayObj = new Date();
+    var thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(todayObj.getDate() - 30);
+
+    if (endDateInput && !endDateInput.value) {
+      endDateInput.value = todayObj.toISOString().split('T')[0];
+    }
+    if (startDateInput && !startDateInput.value) {
+      startDateInput.value = thirtyDaysAgo.toISOString().split('T')[0];
+    }
+
+    if (farmSelect) {
+      farmSelect.addEventListener('change', function() {
+        if (cropSelect) syncCropOptions(farmSelect, cropSelect);
+        applyExpenseFilters();
+      });
+    }
+
+    if (periodSelect) {
+      periodSelect.addEventListener('change', function() {
+        if (periodSelect.value === 'custom') {
+          if (customRangeContainer) customRangeContainer.style.display = 'block';
+        } else {
+          if (customRangeContainer) customRangeContainer.style.display = 'none';
+        }
+        applyExpenseFilters();
+      });
+    }
+
+    var applyCustomBtn = document.querySelector('#applyCustomExpenseDateBtn');
+    if (applyCustomBtn) {
+      applyCustomBtn.addEventListener('click', function() {
+        applyExpenseFilters();
+        if (typeof Toastify !== 'undefined') {
+          Toastify({
+            text: "Custom Expense Date Range Applied!",
+            duration: 2500,
+            gravity: "top",
+            position: "right",
+            style: { background: "linear-gradient(to right, #d1436b, #9c2e4f)", borderRadius: "8px" }
+          }).showToast();
+        }
+      });
+    }
+
+    var filterForm = document.querySelector('#expenseFilterForm');
+    if (filterForm) {
+      filterForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        applyExpenseFilters();
+        if (typeof Toastify !== 'undefined') {
+          Toastify({
+            text: "Expense Analytics & Chart Updated!",
+            duration: 2500,
+            gravity: "top",
+            position: "right",
+            style: { background: "linear-gradient(to right, #d1436b, #9c2e4f)", borderRadius: "8px" }
+          }).showToast();
+        }
+      });
+    }
+
+    var resetBtn = document.querySelector('#expenseFilterResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function() {
+        if (document.querySelector('#expensePeriodFilter')) document.querySelector('#expensePeriodFilter').value = 'this_month';
+        if (document.querySelector('#expenseFarmFilter')) document.querySelector('#expenseFarmFilter').value = 'all';
+        if (cropSelect) {
+          if (farmSelect) syncCropOptions(farmSelect, cropSelect);
+          cropSelect.value = 'all';
+        }
+        if (document.querySelector('#expenseCategoryFilter')) document.querySelector('#expenseCategoryFilter').value = 'all';
+        if (document.querySelector('#expenseChartTypeFilter')) document.querySelector('#expenseChartTypeFilter').value = 'donut';
+        if (customRangeContainer) customRangeContainer.style.display = 'none';
+        applyExpenseFilters();
+      });
+    }
+
+    var chartTypeSelect = document.querySelector('#expenseChartTypeFilter');
+    if (chartTypeSelect) {
+      chartTypeSelect.addEventListener('change', function() {
+        applyExpenseFilters();
+      });
+    }
+
+    if (cropSelect) {
+      cropSelect.addEventListener('change', function() {
+        applyExpenseFilters();
+      });
+    }
+
+    var categorySelect = document.querySelector('#expenseCategoryFilter');
+    if (categorySelect) {
+      categorySelect.addEventListener('change', function() {
+        applyExpenseFilters();
+      });
+    }
+
+    // Initial render
+    if (farmSelect && cropSelect) syncCropOptions(farmSelect, cropSelect);
+    applyExpenseFilters();
+  })();
+
+  // ==========================================
+  // Dynamic Task Analytics & Interactive Chart
+  // ==========================================
+  (function initTaskAnalytics() {
+    var chartContainer = document.querySelector('#taskDynamicChart');
+    if (!chartContainer || typeof ApexCharts === 'undefined') return;
+
+    var taskChartInstance = null;
+    var colorPalette = ['#e18b1f', '#4338ca', '#0f9d6c', '#0e7fb8', '#7c3aed', '#d1436b', '#f59e0b'];
+    var taskDatabase = {{ task_analytics_json|safe }};
+
+    function getActiveDataset(period, farmId, cropName, category) {
+      var rawRecords = taskDatabase.raw_records || [];
+      var startVal = document.querySelector('#taskStartDate') ? document.querySelector('#taskStartDate').value : '';
+      var endVal = document.querySelector('#taskEndDate') ? document.querySelector('#taskEndDate').value : '';
+
+      var now = new Date();
+      var startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      var startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
+      var endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+      var startOf90Days = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
+      var finYearYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+      var startOfFinYear = new Date(finYearYear, 3, 1).toISOString().split('T')[0];
+
+      var filteredRecords = rawRecords.filter(function(r) {
+        if (period === 'custom') {
+          if (startVal && r.date < startVal) return false;
+          if (endVal && r.date > endVal) return false;
+        } else if (period === 'this_month') {
+          if (r.date && r.date < startOfThisMonth) return false;
+        } else if (period === 'last_month') {
+          if (r.date && (r.date < startOfLastMonth || r.date > endOfLastMonth)) return false;
+        } else if (period === 'last_90_days') {
+          if (r.date && r.date < startOf90Days) return false;
+        } else if (period === 'this_year') {
+          if (r.date && r.date < startOfFinYear) return false;
+        }
+
+        if (farmId && farmId !== 'all') {
+          if (r.farm_id && String(r.farm_id) !== String(farmId)) return false;
+        }
+
+        if (cropName && cropName !== 'all') {
+          var recordCrop = (r.crop_name || '').toLowerCase();
+          var targetCrop = cropName.toLowerCase();
+          if (!recordCrop.includes(targetCrop) && !targetCrop.includes(recordCrop)) return false;
+        }
+
+        if (category && category !== 'all') {
+          var recordCat = (r.category || '').toLowerCase();
+          var recordStatus = (r.status || '').toLowerCase();
+          var targetCat = category.toLowerCase();
+          if (!recordCat.includes(targetCat) && !recordStatus.includes(targetCat) && !r.name.toLowerCase().includes(targetCat)) return false;
+        }
+
+        return true;
+      });
+
+      var statusMap = {};
+      filteredRecords.forEach(function(r) {
+        var key = r.name || (r.status ? (r.status + ' Tasks') : 'Pending Tasks');
+        statusMap[key] = (statusMap[key] || 0) + (parseInt(r.amount) || 1);
+      });
+
+      var statusOrder = ['Pending Tasks', 'In Progress Tasks', 'Completed Tasks', 'Cancelled Tasks'];
+      var sortedTasks = [];
+      statusOrder.forEach(function(stKey) {
+        if (statusMap[stKey]) {
+          sortedTasks.push({ name: stKey, amount: statusMap[stKey] });
+          delete statusMap[stKey];
+        }
+      });
+      Object.keys(statusMap).forEach(function(k) {
+        sortedTasks.push({ name: k, amount: statusMap[k] });
+      });
+
+      var total = sortedTasks.reduce(function(acc, curr) { return acc + curr.amount; }, 0);
+      var items = sortedTasks.map(function(item) {
+        var pct = total > 0 ? ((item.amount / total) * 100).toFixed(1) : '0.0';
+        var c = item.name.includes('Pending') ? '#e18b1f' : (item.name.includes('In Progress') ? '#4338ca' : '#0f9d6c');
+        return {
+          name: item.name,
+          amount: item.amount,
+          pct: pct,
+          color: c
+        };
+      });
+
+      return { items: items, total: total };
+    }
+
+    function updateFocusCard(label, count, pct, color) {
+      var dot = document.querySelector('#hoverTaskDot');
+      var labelEl = document.querySelector('#hoverTaskLabel');
+      var pctBadge = document.querySelector('#hoverTaskPctBadge');
+      var amtEl = document.querySelector('#hoverTaskAmount');
+      var barEl = document.querySelector('#hoverTaskProgressBar');
+      var card = document.querySelector('#taskHoverFocusCard');
+
+      if (dot) dot.style.background = color;
+      if (labelEl) labelEl.textContent = label;
+      if (pctBadge) {
+        pctBadge.textContent = pct + '%';
+        pctBadge.style.background = color;
+      }
+      if (amtEl) amtEl.textContent = count + ' Tasks';
+      if (barEl) {
+        barEl.style.width = pct + '%';
+        barEl.style.background = color;
+      }
+      if (card) {
+        card.style.borderColor = color;
+      }
+    }
+
+    function renderCategoryList(items, total) {
+      var listContainer = document.querySelector('#taskCategoryListContainer');
+      if (!listContainer) return;
+
+      listContainer.innerHTML = '';
+      items.forEach(function(item, index) {
+        var row = document.createElement('div');
+        row.className = 'sales-category-item';
+        row.dataset.index = index;
+        row.innerHTML = '<div class="d-flex align-items-center gap-2" style="min-width:0;">' +
+          '<span class="cat-dot" style="background:' + item.color + ';"></span>' +
+          '<div class="text-truncate">' +
+            '<div class="cat-name text-truncate">' + item.name + '</div>' +
+            '<div class="cat-amount">' + item.amount + ' Tasks</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="text-end ps-2">' +
+          '<span class="cat-pct">' + item.pct + '%</span>' +
+          '<div class="progress-elite mt-1" style="height:4px; width:60px;">' +
+            '<div class="progress-bar" style="width:' + item.pct + '%; background:' + item.color + ';"></div>' +
+          '</div>' +
+        '</div>';
+
+        row.addEventListener('mouseenter', function() {
+          updateFocusCard(item.name, item.amount, item.pct, item.color);
+          document.querySelectorAll('#taskCategoryListContainer .sales-category-item').forEach(function(el) { el.classList.remove('active'); });
+          row.classList.add('active');
+        });
+
+        listContainer.appendChild(row);
+      });
+
+      if (items.length > 0) {
+        updateFocusCard(items[0].name, items[0].amount, items[0].pct, items[0].color);
+        var firstItem = listContainer.querySelector('.sales-category-item');
+        if (firstItem) firstItem.classList.add('active');
+      }
+    }
+
+    function renderChart(chartType, data) {
+      if (taskChartInstance) {
+        taskChartInstance.destroy();
+      }
+
+      var labels = data.items.map(function(d) { return d.name; });
+      var amounts = data.items.map(function(d) { return d.amount; });
+      var colors = data.items.map(function(d) { return d.color; });
+
+      var typeBadge = document.querySelector('#activeTaskChartTypeBadge');
+      var badgeTitles = {
+        'pie': 'Pie Chart View',
+        'donut': 'Donut Chart View',
+        'bar': 'Vertical Bar View',
+        'horizontalBar': 'Horizontal Bar View',
+        'area': 'Area Trend View'
+      };
+      if (typeBadge) typeBadge.textContent = badgeTitles[chartType] || 'Chart View';
+
+      var options = {};
+
+      if (chartType === 'pie' || chartType === 'donut') {
+        options = {
+          chart: {
+            type: chartType,
+            height: 310,
+            animations: { enabled: true, easing: 'easeinout', speed: 500 },
+            events: {
+              dataPointMouseEnter: function(event, chartContext, config) {
+                var idx = config.dataPointIndex;
+                if (data.items[idx]) {
+                  var item = data.items[idx];
+                  updateFocusCard(item.name, item.amount, item.pct, item.color);
+                  highlightListItem(idx);
+                }
+              }
+            }
+          },
+          series: amounts,
+          labels: labels,
+          colors: colors,
+          legend: { position: 'bottom', fontSize: '12px' },
+          dataLabels: {
+            enabled: true,
+            formatter: function(val) { return val.toFixed(1) + '%'; },
+            dropShadow: { enabled: false }
+          },
+          tooltip: {
+            y: {
+              formatter: function(val) {
+                var pct = data.total > 0 ? ((val / data.total) * 100).toFixed(1) : 0;
+                return val + ' Tasks (' + pct + '%)';
+              }
+            }
+          },
+          plotOptions: {
+            pie: {
+              donut: {
+                size: '65%',
+                labels: {
+                  show: chartType === 'donut',
+                  total: {
+                    show: true,
+                    label: 'Total Tasks',
+                    formatter: function() { return data.total + ' Tasks'; }
+                  }
+                }
+              }
+            }
+          }
+        };
+      } else if (chartType === 'bar' || chartType === 'horizontalBar') {
+        var isHorizontal = (chartType === 'horizontalBar');
+        options = {
+          chart: {
+            type: 'bar',
+            height: 310,
+            toolbar: { show: false },
+            animations: { enabled: true, easing: 'easeinout', speed: 500 },
+            events: {
+              dataPointMouseEnter: function(event, chartContext, config) {
+                var idx = config.dataPointIndex;
+                if (data.items[idx]) {
+                  var item = data.items[idx];
+                  updateFocusCard(item.name, item.amount, item.pct, item.color);
+                  highlightListItem(idx);
+                }
+              }
+            }
+          },
+          plotOptions: {
+            bar: {
+              horizontal: isHorizontal,
+              borderRadius: 6,
+              columnWidth: '45%',
+              barHeight: '55%',
+              distributed: true,
+              dataLabels: { position: 'top' }
+            }
+          },
+          series: [{ name: 'Tasks Count', data: amounts }],
+          xaxis: {
+            categories: labels,
+            labels: {
+              formatter: function(val) {
+                if (isHorizontal && typeof val === 'number') return val + ' Tasks';
+                return val;
+              }
+            }
+          },
+          yaxis: {
+            labels: {
+              formatter: function(val) {
+                if (!isHorizontal && typeof val === 'number') return val;
+                return val;
+              }
+            }
+          },
+          colors: colors,
+          legend: { show: false },
+          dataLabels: {
+            enabled: true,
+            formatter: function(val) {
+              var pct = data.total > 0 ? ((val / data.total) * 100).toFixed(1) : 0;
+              return pct + '%';
+            },
+            offsetY: isHorizontal ? 0 : -20,
+            style: { fontSize: '11px', colors: ['#4b5563'] }
+          },
+          grid: { borderColor: '#eef0f6' },
+          tooltip: {
+            y: {
+              formatter: function(val) {
+                var pct = data.total > 0 ? ((val / data.total) * 100).toFixed(1) : 0;
+                return val + ' Tasks (' + pct + '%)';
+              }
+            }
+          }
+        };
+      } else if (chartType === 'area') {
+        options = {
+          chart: {
+            type: 'area',
+            height: 310,
+            toolbar: { show: false },
+            animations: { enabled: true, easing: 'easeinout', speed: 500 },
+            events: {
+              dataPointMouseEnter: function(event, chartContext, config) {
+                var idx = config.dataPointIndex;
+                if (data.items[idx]) {
+                  var item = data.items[idx];
+                  updateFocusCard(item.name, item.amount, item.pct, item.color);
+                  highlightListItem(idx);
+                }
+              }
+            }
+          },
+          stroke: { curve: 'smooth', width: 3 },
+          series: [{ name: 'Tasks Count', data: amounts }],
+          xaxis: { categories: labels },
+          colors: ['#4338ca'],
+          fill: {
+            type: 'gradient',
+            gradient: {
+              shadeIntensity: 1,
+              opacityFrom: 0.45,
+              opacityTo: 0.05,
+              stops: [0, 90, 100]
+            }
+          },
+          dataLabels: { enabled: false },
+          grid: { borderColor: '#eef0f6' },
+          tooltip: {
+            y: {
+              formatter: function(val) {
+                var pct = data.total > 0 ? ((val / data.total) * 100).toFixed(1) : 0;
+                return val + ' Tasks (' + pct + '%)';
+              }
+            }
+          }
+        };
+      }
+
+      taskChartInstance = new ApexCharts(chartContainer, options);
+      taskChartInstance.render();
+    }
+
+    function highlightListItem(index) {
+      var items = document.querySelectorAll('#taskCategoryListContainer .sales-category-item');
+      items.forEach(function(el, i) {
+        if (i === index) el.classList.add('active');
+        else el.classList.remove('active');
+      });
+    }
+
+    function applyTaskFilters() {
+      var periodEl = document.querySelector('#taskPeriodFilter');
+      var farmEl = document.querySelector('#taskFarmFilter');
+      var cropEl = document.querySelector('#taskCropFilter');
+      var categoryEl = document.querySelector('#taskCategoryFilter');
+      var chartTypeEl = document.querySelector('#taskChartTypeFilter');
+
+      var period = periodEl ? periodEl.value : 'this_month';
+      var farmId = farmEl ? farmEl.value : 'all';
+      var cropName = cropEl ? cropEl.value : 'all';
+      var category = categoryEl ? categoryEl.value : 'all';
+      var chartType = chartTypeEl ? chartTypeEl.value : 'donut';
+
+      var result = getActiveDataset(period, farmId, cropName, category);
+
+      var totalDisplay = document.querySelector('#taskTotalDisplay');
+      if (totalDisplay) totalDisplay.textContent = result.total + ' Tasks';
+
+      renderChart(chartType, result);
+      renderCategoryList(result.items, result.total);
+    }
+
+    var periodSelect = document.querySelector('#taskPeriodFilter');
+    var farmSelect = document.querySelector('#taskFarmFilter');
+    var cropSelect = document.querySelector('#taskCropFilter');
+    var customRangeContainer = document.querySelector('#customTaskDateRangeContainer');
+    var startDateInput = document.querySelector('#taskStartDate');
+    var endDateInput = document.querySelector('#taskEndDate');
+
+    var todayObj = new Date();
+    var thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(todayObj.getDate() - 30);
+
+    if (endDateInput && !endDateInput.value) {
+      endDateInput.value = todayObj.toISOString().split('T')[0];
+    }
+    if (startDateInput && !startDateInput.value) {
+      startDateInput.value = thirtyDaysAgo.toISOString().split('T')[0];
+    }
+
+    if (farmSelect) {
+      farmSelect.addEventListener('change', function() {
+        if (cropSelect) syncCropOptions(farmSelect, cropSelect);
+        applyTaskFilters();
+      });
+    }
+
+    if (periodSelect) {
+      periodSelect.addEventListener('change', function() {
+        if (periodSelect.value === 'custom') {
+          if (customRangeContainer) customRangeContainer.style.display = 'block';
+        } else {
+          if (customRangeContainer) customRangeContainer.style.display = 'none';
+        }
+        applyTaskFilters();
+      });
+    }
+
+    var applyCustomBtn = document.querySelector('#applyCustomTaskDateBtn');
+    if (applyCustomBtn) {
+      applyCustomBtn.addEventListener('click', function() {
+        applyTaskFilters();
+        if (typeof Toastify !== 'undefined') {
+          Toastify({
+            text: "Custom Task Date Range Applied!",
+            duration: 2500,
+            gravity: "top",
+            position: "right",
+            style: { background: "linear-gradient(to right, #4338ca, #2d2a8c)", borderRadius: "8px" }
+          }).showToast();
+        }
+      });
+    }
+
+    var filterForm = document.querySelector('#taskFilterForm');
+    if (filterForm) {
+      filterForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        applyTaskFilters();
+        if (typeof Toastify !== 'undefined') {
+          Toastify({
+            text: "Task Analytics & Chart Updated!",
+            duration: 2500,
+            gravity: "top",
+            position: "right",
+            style: { background: "linear-gradient(to right, #4338ca, #2d2a8c)", borderRadius: "8px" }
+          }).showToast();
+        }
+      });
+    }
+
+    var resetBtn = document.querySelector('#taskFilterResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function() {
+        if (document.querySelector('#taskPeriodFilter')) document.querySelector('#taskPeriodFilter').value = 'this_month';
+        if (document.querySelector('#taskFarmFilter')) document.querySelector('#taskFarmFilter').value = 'all';
+        if (cropSelect) {
+          if (farmSelect) syncCropOptions(farmSelect, cropSelect);
+          cropSelect.value = 'all';
+        }
+        if (document.querySelector('#taskCategoryFilter')) document.querySelector('#taskCategoryFilter').value = 'all';
+        if (document.querySelector('#taskChartTypeFilter')) document.querySelector('#taskChartTypeFilter').value = 'donut';
+        if (customRangeContainer) customRangeContainer.style.display = 'none';
+        applyTaskFilters();
+      });
+    }
+
+    var chartTypeSelect = document.querySelector('#taskChartTypeFilter');
+    if (chartTypeSelect) {
+      chartTypeSelect.addEventListener('change', function() {
+        applyTaskFilters();
+      });
+    }
+
+    if (cropSelect) {
+      cropSelect.addEventListener('change', function() {
+        applyTaskFilters();
+      });
+    }
+
+    var categorySelect = document.querySelector('#taskCategoryFilter');
+    if (categorySelect) {
+      categorySelect.addEventListener('change', function() {
+        applyTaskFilters();
+      });
+    }
+
+    // Initial render
+    if (farmSelect && cropSelect) syncCropOptions(farmSelect, cropSelect);
+    applyTaskFilters();
+  })();
+
+  // ==========================================
+  // ==========================================
+  // Interactive Weather & Agronomy Chart Engine
+  // ==========================================
+  (function initWeatherAnalytics() {
+    var chartContainer = document.querySelector('#weatherDynamicChart');
+    if (!chartContainer || typeof ApexCharts === 'undefined') return;
+
+    var weatherChartInstance = null;
+    var currentMetric = 'temp';
+    var currentHorizon = '7day';
+    var currentSelectedDay = 0;
+
+    var baseDate = new Date();
+    var forecastData = [
+      { label: 'Today', date: '25 Aug', temp_high: 33, temp_low: 26, feels_like: 34, condition: 'Partly Cloudy', icon: 'ri-sun-cloudy-line', rain: 40, humidity: 78, wind: 14, uv: 6, rain_mm: 4 },
+      { label: 'Wed', date: '26 Aug', temp_high: 31, temp_low: 25, feels_like: 32, condition: 'Cloudy & Overcast', icon: 'ri-cloudy-line', rain: 55, humidity: 82, wind: 16, uv: 5, rain_mm: 8 },
+      { label: 'Thu', date: '27 Aug', temp_high: 29, temp_low: 24, feels_like: 30, condition: 'Thunderstorms Anticipated', icon: 'ri-thunderstorms-line', rain: 72, humidity: 88, wind: 22, uv: 4, rain_mm: 22 },
+      { label: 'Fri', date: '28 Aug', temp_high: 28, temp_low: 23, feels_like: 29, condition: 'Heavy Rainfall', icon: 'ri-rainy-line', rain: 80, humidity: 92, wind: 28, uv: 3, rain_mm: 35 },
+      { label: 'Sat', date: '29 Aug', temp_high: 32, temp_low: 25, feels_like: 35, condition: 'Clear Sunny Sky', icon: 'ri-sun-line', rain: 20, humidity: 65, wind: 12, uv: 8, rain_mm: 0 },
+      { label: 'Sun', date: '30 Aug', temp_high: 33, temp_low: 26, feels_like: 36, condition: 'Scattered Clouds', icon: 'ri-sun-cloudy-line', rain: 35, humidity: 70, wind: 10, uv: 9, rain_mm: 2 },
+      { label: 'Mon', date: '31 Aug', temp_high: 30, temp_low: 24, feels_like: 31, condition: 'Passing Showers', icon: 'ri-cloudy-line', rain: 50, humidity: 75, wind: 15, uv: 7, rain_mm: 10 }
+    ];
+
+    var hourlyLabels = ['06:00 AM', '09:00 AM', '12:00 PM', '03:00 PM', '06:00 PM', '09:00 PM', '12:00 AM', '03:00 AM'];
+
+    function getDayLabels() {
+      return forecastData.map(function(d) {
+        return d.label + ' (' + d.date + ')';
+      });
+    }
+
+    function getDatasets() {
+      var daysLabels = getDayLabels();
+      return {
+        '7day': {
+          temp: {
+            categories: daysLabels,
+            series: [
+              { name: 'Max Temp (°C)', data: forecastData.map(function(d){ return d.temp_high; }) },
+              { name: 'Min Temp (°C)', data: forecastData.map(function(d){ return d.temp_low; }) }
+            ],
+            colors: ['#f59e0b', '#0284c7'],
+            type: 'area',
+            unit: '°C'
+          },
+          rain: {
+            categories: daysLabels,
+            series: [
+              { name: 'Rain Probability (%)', data: forecastData.map(function(d){ return d.rain; }) },
+              { name: 'Estimated Rainfall (mm)', data: forecastData.map(function(d){ return d.rain_mm; }) }
+            ],
+            colors: ['#0284c7', '#0f9d6c'],
+            type: 'bar',
+            unit: '%'
+          },
+          humidity: {
+            categories: daysLabels,
+            series: [
+              { name: 'Humidity (%)', data: forecastData.map(function(d){ return d.humidity; }) },
+              { name: 'Wind Speed (km/h)', data: forecastData.map(function(d){ return d.wind; }) }
+            ],
+            colors: ['#0e7fb8', '#10b981'],
+            type: 'area',
+            unit: ''
+          },
+          uv: {
+            categories: daysLabels,
+            series: [
+              { name: 'Solar UV Index', data: forecastData.map(function(d){ return d.uv; }) }
+            ],
+            colors: ['#f97316'],
+            type: 'bar',
+            unit: ' UV'
+          }
+        },
+        '24h': {
+          temp: {
+            categories: hourlyLabels,
+            series: [
+              { name: 'Temperature (°C)', data: [25, 28, 32, 33, 30, 27, 26, 24] },
+              { name: 'Feels Like (°C)', data: [27, 30, 35, 36, 33, 29, 27, 25] }
+            ],
+            colors: ['#f59e0b', '#ea580c'],
+            type: 'area',
+            unit: '°C'
+          },
+          rain: {
+            categories: hourlyLabels,
+            series: [
+              { name: 'Rain Probability (%)', data: [15, 20, 35, 45, 50, 30, 10, 5] },
+              { name: 'Precipitation (mm)', data: [0, 0, 1.2, 3.5, 4.0, 0.8, 0, 0] }
+            ],
+            colors: ['#0284c7', '#0f9d6c'],
+            type: 'bar',
+            unit: '%'
+          },
+          humidity: {
+            categories: hourlyLabels,
+            series: [
+              { name: 'Humidity (%)', data: [88, 76, 68, 65, 72, 82, 86, 90] },
+              { name: 'Wind Speed (km/h)', data: [8, 12, 16, 18, 15, 11, 9, 7] }
+            ],
+            colors: ['#0e7fb8', '#10b981'],
+            type: 'area',
+            unit: ''
+          },
+          uv: {
+            categories: hourlyLabels,
+            series: [
+              { name: 'Solar UV Index', data: [1, 4, 8, 7, 3, 0, 0, 0] }
+            ],
+            colors: ['#f97316'],
+            type: 'bar',
+            unit: ' UV'
+          }
+        }
+      };
+    }
+
+    function renderWeatherChart() {
+      if (weatherChartInstance) {
+        weatherChartInstance.destroy();
+      }
+
+      var allDs = getDatasets();
+      var ds = allDs[currentHorizon === 'advisory' ? '7day' : currentHorizon][currentMetric];
+      var chartType = ds.type === 'bar' ? 'bar' : 'area';
+
+      var options = {
+        chart: {
+          type: chartType,
+          height: 255,
+          fontFamily: 'inherit',
+          toolbar: { show: false },
+          animations: { enabled: true, easing: 'easeinout', speed: 450 }
+        },
+        series: ds.series,
+        colors: ds.colors,
+        xaxis: {
+          categories: ds.categories,
+          labels: { style: { fontSize: '11px', colors: '#64748b' } },
+          axisBorder: { show: false },
+          axisTicks: { show: false }
+        },
+        yaxis: {
+          labels: {
+            style: { fontSize: '11px', colors: '#64748b' },
+            formatter: function(val) { return val + (ds.unit ? ds.unit : ''); }
+          }
+        },
+        stroke: { curve: 'smooth', width: chartType === 'bar' ? 0 : 2.5 },
+        fill: {
+          type: chartType === 'bar' ? 'solid' : 'gradient',
+          gradient: {
+            shadeIntensity: 1,
+            opacityFrom: 0.45,
+            opacityTo: 0.05,
+            stops: [0, 90, 100]
+          }
+        },
+        plotOptions: {
+          bar: {
+            borderRadius: 6,
+            columnWidth: '40%',
+            dataLabels: { position: 'top' }
+          }
+        },
+        dataLabels: { enabled: false },
+        grid: {
+          borderColor: '#f1f5f9',
+          strokeDashArray: 4
+        },
+        tooltip: {
+          theme: 'light',
+          y: {
+            formatter: function(val, opts) {
+              return val + (ds.unit ? ' ' + ds.unit : '');
+            }
+          }
+        },
+        legend: {
+          position: 'top',
+          horizontalAlign: 'right',
+          fontSize: '12px',
+          markers: { radius: 12 }
+        }
+      };
+
+      weatherChartInstance = new ApexCharts(chartContainer, options);
+      weatherChartInstance.render();
+    }
+
+    window.switchWeatherMetric = function(metric) {
+      currentMetric = metric;
+      document.querySelectorAll('.weather-metric-btn').forEach(function(btn) {
+        btn.classList.remove('active');
+      });
+      var activeBtn = document.getElementById('btnMetric' + metric.charAt(0).toUpperCase() + metric.slice(1));
+      if (activeBtn) activeBtn.classList.add('active');
+      renderWeatherChart();
+    };
+
+    window.changeWeatherHorizon = function(horizon) {
+      currentHorizon = horizon;
+      var grid = document.getElementById('weatherAdvisoryGrid');
+      if (grid) {
+        grid.style.display = (horizon === 'advisory' || horizon === '7day') ? 'flex' : 'none';
+      }
+      renderWeatherChart();
+    };
+
+    window.changeWeatherBaseDate = function(dateStr) {
+      if (!dateStr) return;
+      var picked = new Date(dateStr);
+      if (isNaN(picked.getTime())) return;
+
+      var monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      var dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+      for (var i = 0; i < 7; i++) {
+        var d = new Date(picked);
+        d.setDate(picked.getDate() + i);
+        forecastData[i].label = (i === 0) ? 'Today' : dayNames[d.getDay()];
+        forecastData[i].date = d.getDate() + ' ' + monthNames[d.getMonth()];
+      }
+
+      // Re-render strip day cards
+      forecastData.forEach(function(item, idx) {
+        var card = document.getElementById('weatherDayCard_' + idx);
+        if (card) {
+          var dayEl = card.querySelector('.wd-day');
+          var dateEl = card.querySelector('.wd-date');
+          if (dayEl) dayEl.textContent = item.label;
+          if (dateEl) dateEl.textContent = item.date;
+        }
+      });
+
+      // Update current selected day
+      selectWeatherDay(0);
+      renderWeatherChart();
+
+      if (typeof Toastify !== 'undefined') {
+        Toastify({
+          text: "📅 Weather forecast updated for " + dateStr,
+          duration: 2500,
+          gravity: "top",
+          position: "right",
+          style: { background: "linear-gradient(to right, #0284c7, #0369a1)", borderRadius: "8px" }
+        }).showToast();
+      }
+    };
+
+    window.selectWeatherDay = function(dayIdx) {
+      currentSelectedDay = dayIdx;
+      var item = forecastData[dayIdx] || forecastData[0];
+
+      // Highlight active card
+      document.querySelectorAll('.weather-day-card').forEach(function(card, idx) {
+        if (idx === dayIdx) {
+          card.classList.add('active-day');
+        } else {
+          card.classList.remove('active-day');
+        }
+      });
+
+      // Update Top Weather Hero Display with selected day details
+      var mainIcon = document.getElementById('weatherMainIcon');
+      var mainTemp = document.getElementById('weatherMainTemp');
+      var mainCond = document.getElementById('weatherMainCondition');
+      var metaHum = document.getElementById('weatherMetaHumidity');
+      var metaWind = document.getElementById('weatherMetaWind');
+      var metaRain = document.getElementById('weatherMetaRain');
+      var metaUV = document.getElementById('weatherMetaUV');
+
+      if (mainIcon) mainIcon.innerHTML = '<i class="' + item.icon + '"></i>';
+      if (mainTemp) mainTemp.innerHTML = item.temp_high + '&deg;C <span style="font-size:1rem; font-weight:normal; color:#8790b3;">/ ' + item.temp_low + '&deg;C</span>';
+      if (mainCond) mainCond.innerHTML = item.condition + ' &middot; Feels like ' + item.feels_like + '&deg;C (' + item.label + ')';
+      if (metaHum) metaHum.textContent = item.humidity + '%';
+      if (metaWind) metaWind.textContent = item.wind + ' km/h';
+      if (metaRain) metaRain.textContent = item.rain + '%';
+      if (metaUV) metaUV.textContent = item.uv;
+
+      // Update smart agronomy advisory based on selected day
+      var advSprayBadge = document.getElementById('advSprayBadge');
+      var advSprayText = document.getElementById('advSprayText');
+      var advIrrigBadge = document.getElementById('advIrrigBadge');
+      var advIrrigText = document.getElementById('advIrrigText');
+      var advHarvestBadge = document.getElementById('advHarvestBadge');
+      var advHarvestText = document.getElementById('advHarvestText');
+
+      if (item.rain >= 60) {
+        if (advSprayBadge) {
+          advSprayBadge.className = 'badge bg-danger-subtle text-danger mb-1';
+          advSprayBadge.textContent = 'Avoid Spraying';
+        }
+        if (advSprayText) advSprayText.textContent = 'High rainfall expected on ' + item.label + ' (' + item.rain + '%). Risk of chemical wash-off.';
+        if (advIrrigBadge) {
+          advIrrigBadge.className = 'badge bg-info-subtle text-info mb-1';
+          advIrrigBadge.textContent = 'Delay Irrigation';
+        }
+        if (advIrrigText) advIrrigText.textContent = 'Heavy precipitation expected (~' + item.rain_mm + ' mm). Conserve water & power.';
+        if (advHarvestBadge) {
+          advHarvestBadge.className = 'badge bg-danger-subtle text-danger mb-1';
+          advHarvestBadge.textContent = 'Hold Harvesting';
+        }
+        if (advHarvestText) advHarvestText.textContent = 'Wet conditions. Avoid harvest to prevent post-harvest crop rot.';
+      } else {
+        if (advSprayBadge) {
+          advSprayBadge.className = 'badge bg-success-subtle text-success mb-1';
+          advSprayBadge.textContent = 'Optimal Window';
+        }
+        if (advSprayText) advSprayText.textContent = 'Favorable condition on ' + item.label + ' (Wind < ' + item.wind + ' km/h, Rain ' + item.rain + '%). Best hours: 06:30 AM – 10:00 AM.';
+        if (advIrrigBadge) {
+          advIrrigBadge.className = 'badge bg-warning-subtle text-warning mb-1';
+          advIrrigBadge.textContent = 'Normal Irrigation';
+        }
+        if (advIrrigText) advIrrigText.textContent = 'Standard irrigation cycles recommended for root zone moisture.';
+        if (advHarvestBadge) {
+          advHarvestBadge.className = 'badge bg-success-subtle text-success mb-1';
+          advHarvestBadge.textContent = 'Favorable Window';
+        }
+        if (advHarvestText) advHarvestText.textContent = 'Clear weather & dry soil expected. Suitable for harvesting & weeding.';
+      }
+    };
+
+    // Initial Weather Chart Render & Selection
+    selectWeatherDay(0);
+    renderWeatherChart();
+  })();
+
+});
+</script>
+{% endblock %}
+
+{% block page_css %}
+{{ block.super }}
+<style>
+    :root{
+        --elite-emerald:#0f9d6c;
+        --elite-emerald-dk:#0a6e4c;
+        --elite-indigo:#4338ca;
+        --elite-indigo-dk:#2d2a8c;
+        --elite-amber:#e18b1f;
+        --elite-amber-dk:#b8690f;
+        --elite-rose:#d1436b;
+        --elite-rose-dk:#9c2e4f;
+        --elite-sky:#0e7fb8;
+        --elite-sky-dk:#0a5c86;
+        --elite-violet:#7c3aed;
+        --elite-violet-dk:#5b21b6;
+        --elite-ink:#12172b;
+        --elite-card-radius:16px;
+    }
+
+  .elite-hero{
+    border-radius:var(--elite-card-radius);
+    background:linear-gradient(120deg,var(--elite-ink) 0%,#1c2444 55%,#232b52 100%);
+    color:#fff;
+    position:relative;
+    overflow:hidden;
+    margin-bottom:1.5rem;
+  }
+  .elite-hero::after{
+    content:"";
+    position:absolute; right:-60px; top:-60px;
+    width:220px; height:220px; border-radius:50%;
+    background:radial-gradient(circle, rgba(15,157,108,.35), transparent 70%);
+  }
+  .elite-hero::before{
+    content:"";
+    position:absolute; left:30%; bottom:-90px;
+    width:260px; height:260px; border-radius:50%;
+    background:radial-gradient(circle, rgba(67,56,202,.30), transparent 70%);
+  }
+  .elite-hero .hero-value{ font-size:2.4rem; font-weight:700; letter-spacing:-.02em; }
+  .elite-hero .hero-label{ text-transform:uppercase; letter-spacing:.08em; font-size:.72rem; color: #e5eaff; }
+  .elite-hero .hero-sub{ color:#c7cbe8; font-size:.85rem; }
+
+  .elite-kpi{
+    border:none; border-radius:var(--elite-card-radius);
+    color:#fff; position:relative; overflow:hidden;
+    box-shadow:0 8px 22px -8px rgba(20,20,50,.35);
+    transition:transform .18s ease, box-shadow .18s ease;
+  }
+  .elite-kpi:hover{ transform:translateY(-4px); box-shadow:0 16px 30px -10px rgba(20,20,50,.45); }
+  .elite-kpi .card-body{ position:relative; z-index:2; padding:1.25rem 1.35rem; }
+  .elite-kpi .kpi-icon{
+    width:42px; height:42px; border-radius:12px;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,.18);
+    font-size:1.2rem;
+  }
+  .elite-kpi .kpi-label{ font-size:.76rem; text-transform:uppercase; letter-spacing:.06em; opacity:.9; }
+  .elite-kpi .kpi-value{ font-size:1.65rem; font-weight:700; letter-spacing:-.01em; }
+  .elite-kpi .kpi-sub{ font-size:.74rem; opacity:.85; }
+
+  .elite-kpi.g-emerald{ background:linear-gradient(135deg,var(--elite-emerald),var(--elite-emerald-dk)); }
+  .elite-kpi.g-indigo{ background:linear-gradient(135deg,var(--elite-indigo),var(--elite-indigo-dk)); }
+  .elite-kpi.g-amber{ background:linear-gradient(135deg,var(--elite-amber),var(--elite-amber-dk)); }
+  .elite-kpi.g-rose{ background:linear-gradient(135deg,var(--elite-rose),var(--elite-rose-dk)); }
+  .elite-kpi.g-sky{ background:linear-gradient(135deg,var(--elite-sky),var(--elite-sky-dk)); }
+  .elite-kpi.g-ink{ background:linear-gradient(135deg,#2b3357,#12172b); }
+  .elite-kpi.g-violet{ background:linear-gradient(135deg,var(--elite-violet),var(--elite-violet-dk)); }
+
+  .elite-panel{
+    border:none; border-radius:var(--elite-card-radius);
+    box-shadow:0 6px 18px -10px rgba(20,20,50,.18);
+  }
+  .elite-panel .card-header{
+    background:transparent; border-bottom:1px solid rgba(0,0,0,.06);
+    font-weight:700; padding:1.1rem 1.35rem;
+  }
+  .elite-panel .card-body{ padding:1.35rem; }
+
+  .progress-elite{ height:8px; border-radius:6px; background:#eef0f6; }
+  .progress-elite .progress-bar{ border-radius:6px; }
+
+  .market-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:.6rem .75rem; border-radius:10px; margin-bottom:.4rem;
+    background:#f7f8fc;
+  }
+  .market-row .crop-chip{ font-weight:600; font-size:.82rem; color:var(--elite-ink); }
+  .market-row .market-name{ font-size:.74rem; color:#8790b3; }
+  .market-row .price-tag{ font-weight:700; color:var(--elite-emerald-dk); font-size:.9rem; }
+
+  .sub-badge{
+    display:inline-flex; align-items:center; gap:.4rem;
+    padding:.3rem .7rem; border-radius:20px; font-size:.72rem; font-weight:700;
+    background:rgba(15,157,108,.12); color:var(--elite-emerald-dk);
+  }
+
+  .staff-donut-wrap{ display:flex; align-items:center; gap:1.25rem; }
+
+  .timeline-elite .timeline-event{ background:#fbfbfe; border-radius:12px; padding:1rem 1.1rem; }
+
+  .timeline{ list-style:none; padding-left:0; }
+  .timeline-item{ position:relative; padding-left:2.25rem; margin-bottom:1rem; }
+  .border-left-dashed{ border-left:2px dashed #e0e2ee; margin-left:.9rem; }
+  .timeline-indicator-advanced{
+    position:absolute; left:-1.05rem; top:0;
+    width:2.1rem; height:2.1rem; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:#fff; border:2px solid var(--elite-emerald);
+    color:var(--elite-emerald);
+  }
+
+  /* ---------- Task Status ---------- */
+  .task-status-wrap{ display:flex; align-items:center; gap:1rem; }
+  .task-legend{ flex:1; display:flex; flex-direction:column; gap:.55rem; }
+  .task-legend-item{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:.5rem .65rem; border-radius:10px; background:#f7f8fc;
+  }
+  .task-legend-item .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:.5rem; }
+  .task-legend-item .label{ font-size:.82rem; font-weight:600; color:var(--elite-ink); display:flex; align-items:center; }
+  .task-legend-item .count{ font-size:.82rem; font-weight:700; color:var(--elite-ink); }
+  .task-legend-item .pct{ font-size:.7rem; color:#8790b3; margin-left:.35rem; }
+
+  /* ---------- Subscription ---------- */
+  .plan-card-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
+  .plan-price{ font-size:1.9rem; font-weight:700; color:var(--elite-ink); letter-spacing:-.01em; }
+  .plan-price small{ font-size:.75rem; font-weight:600; color:#8790b3; }
+  .plan-divider{ border-top:1px solid rgba(0,0,0,.06); margin:.9rem 0; }
+  .plan-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:.6rem; }
+  .plan-row .plan-row-label{ font-size:.76rem; color:#8790b3; display:flex; align-items:center; gap:.4rem; }
+  .plan-row .plan-row-value{ font-size:.85rem; font-weight:700; color:var(--elite-ink); }
+  .renew-pill{
+    display:inline-flex; align-items:center; gap:.35rem;
+    padding:.25rem .6rem; border-radius:20px; font-size:.72rem; font-weight:700;
+  }
+  .renew-pill.ok{ background:rgba(15,157,108,.12); color:var(--elite-emerald-dk); }
+  .renew-pill.warn{ background:rgba(209,67,107,.12); color:var(--elite-rose-dk); }
+  .auto-switch{ display:flex; align-items:center; justify-content:space-between; background:#f7f8fc; border-radius:10px; padding:.55rem .75rem; }
+  .auto-switch .switch-label{ font-size:.78rem; font-weight:600; color:var(--elite-ink); }
+  .switch-track{ width:36px; height:20px; border-radius:20px; position:relative; transition:background .18s ease; }
+  .switch-track.on{ background:var(--elite-emerald); }
+  .switch-track.off{ background:#d8dae8; }
+  .switch-thumb{
+    position:absolute; top:2px; width:16px; height:16px; border-radius:50%; background:#fff;
+    transition:left .18s ease; box-shadow:0 1px 3px rgba(0,0,0,.25);
+  }
+  .switch-track.on .switch-thumb{ left:18px; }
+  .switch-track.off .switch-thumb{ left:2px; }
+
+  /* ---------- Workforce Snapshot ---------- */
+  .workforce-headline{ display:flex; align-items:center; gap:1rem; margin-bottom:1.1rem; }
+  .workforce-headline .attendance-value{ font-size:1.9rem; font-weight:700; color:var(--elite-ink); line-height:1; }
+  .workforce-headline .attendance-label{ font-size:.74rem; color:#8790b3; text-transform:uppercase; letter-spacing:.05em; }
+  .workforce-grid{ display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
+  .workforce-stat{ border-radius:12px; padding:.7rem .8rem; background:#f7f8fc; display:flex; align-items:center; gap:.6rem; }
+  .workforce-stat .wf-icon{
+    width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+    font-size:.95rem; color:#fff; flex-shrink:0;
+  }
+  .workforce-stat .wf-value{ font-size:1rem; font-weight:700; color:var(--elite-ink); line-height:1.1; }
+  .workforce-stat .wf-label{ font-size:.68rem; color:#8790b3; }
+  .wf-icon.bg-active{ background:var(--elite-emerald); }
+  .wf-icon.bg-suspended{ background:var(--elite-rose); }
+  .wf-icon.bg-present{ background:var(--elite-sky); }
+  .wf-icon.bg-absent{ background:var(--elite-amber); }
+
+  @media (max-width: 767px){ .elite-hero .hero-value{ font-size:1.9rem; } }
+
+  /* ---------- Weather Forecast ---------- */
+  .weather-card{ overflow:hidden; border-radius: 16px; border: 1px solid rgba(0,0,0,0.06); }
+  .weather-today{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:1rem; padding-bottom:1.1rem; margin-bottom:1.1rem;
+    border-bottom:1px solid rgba(0,0,0,.06);
+    flex-wrap:wrap;
+  }
+  .weather-today-left{ display:flex; align-items:center; gap:1rem; }
+  .weather-icon-lg{
+    width:64px; height:64px; border-radius:16px;
+    display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(135deg, var(--elite-sky), var(--elite-sky-dk));
+    color:#fff; font-size:2rem; flex-shrink:0;
+  }
+  .weather-temp-now{ font-size:2.2rem; font-weight:700; color:var(--elite-ink); line-height:1; }
+  .weather-condition{ font-size:.85rem; color:#8790b3; margin-top:.25rem; }
+  .weather-location{ font-size:.76rem; color:#8790b3; display:flex; align-items:center; gap:.3rem; margin-bottom:.15rem; }
+  .weather-meta{ display:flex; gap:1.4rem; flex-wrap:wrap; }
+  .weather-meta-item{ text-align:center; }
+  .weather-meta-item .wm-icon{ font-size:1.1rem; color:var(--elite-sky); margin-bottom:.15rem; }
+  .weather-meta-item .wm-value{ font-size:.85rem; font-weight:700; color:var(--elite-ink); }
+  .weather-meta-item .wm-label{ font-size:.66rem; color:#8790b3; text-transform:uppercase; letter-spacing:.04em; }
+  .weather-strip{ display:flex; gap:.6rem; overflow-x:auto; padding-bottom:.25rem; }
+  .weather-day-card{
+    flex:1 1 0; min-width:88px;
+    background:#f7f8fc; border-radius:12px;
+    padding:.85rem .5rem; text-align:center;
+    transition:all .2s ease;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .weather-day-card:hover {
+    transform: translateY(-2px);
+    background: #edf2f9;
+    border-color: #cbd5e1;
+  }
+  .weather-day-card.is-today,
+  .weather-day-card.active-day {
+    background:linear-gradient(135deg, rgba(14,127,184,.12), rgba(14,127,184,.05));
+    border:1px solid rgba(14,127,184,.35);
+    box-shadow: 0 4px 10px rgba(14,127,184,.10);
+  }
+  .weather-day-card .wd-day{ font-size:.72rem; font-weight:700; color:var(--elite-ink); text-transform:uppercase; letter-spacing:.03em; }
+  .weather-day-card .wd-date{ font-size:.64rem; color:#8790b3; margin-bottom:.5rem; }
+  .weather-day-card .wd-icon{ font-size:1.4rem; color:var(--elite-sky); margin-bottom:.4rem; }
+  .weather-day-card .wd-high{ font-size:.85rem; font-weight:700; color:var(--elite-ink); }
+  .weather-day-card .wd-low{ font-size:.74rem; color:#8790b3; }
+  .weather-day-card .wd-rain{ display:inline-flex; align-items:center; gap:.2rem; font-size:.66rem; color:var(--elite-sky-dk); margin-top:.4rem; }
+  
+  .weather-chart-toolbar {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 0.5rem 0.75rem;
+  }
+  .weather-metric-btn {
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.35rem 0.75rem;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+  }
+  .weather-metric-btn:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+  }
+  .weather-metric-btn.active {
+    background: #0284c7 !important;
+    border-color: #0284c7 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+  }
+  .weather-advisory-card {
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s ease;
+  }
+  .weather-advisory-card:hover {
+    background: #ffffff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  }
+  @media (max-width: 767px){ .weather-strip{ flex-wrap:nowrap; } .weather-day-card{ min-width:76px; } }
+
+  /* ---------- Section dividers (Agronomy / Operations / Financials) ---------- */
+  .elite-section-divider{
+    display:flex; align-items:center; justify-content:center;
+    border-radius:12px; padding:.65rem 1rem; margin: .5rem 0 1.25rem;
+    background:linear-gradient(120deg, rgba(124,58,237,.14), rgba(67,56,202,.10));
+    color:var(--elite-indigo-dk); font-weight:700; font-size:.82rem;
+    text-transform:uppercase; letter-spacing:.1em;
+  }
+
+  /* ---------- Inventory : stock rows ---------- */
+  .stock-row{ padding:.75rem 0; border-bottom:1px solid rgba(0,0,0,.06); }
+  .stock-row:last-child{ border-bottom:none; }
+  .stock-row-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:.4rem; gap:.5rem; flex-wrap:wrap; }
+  .stock-row-name{ font-weight:700; font-size:.85rem; color:var(--elite-ink); }
+  .stock-row-meta{ font-size:.7rem; color:#8790b3; }
+  .stock-row-value{ font-weight:700; font-size:.85rem; color:var(--elite-emerald-dk); }
+  .stock-row-value.na{ color:#b3b8cf; font-weight:600; }
+  .stock-badge{
+    display:inline-flex; align-items:center; gap:.3rem;
+    padding:.2rem .55rem; border-radius:20px; font-size:.66rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:.03em;
+  }
+  .stock-badge.ok{ background:rgba(15,157,108,.12); color:var(--elite-emerald-dk); }
+  .stock-badge.low{ background:rgba(209,67,107,.12); color:var(--elite-rose-dk); }
+  .stock-cat-icon{
+    width:26px; height:26px; border-radius:8px; display:inline-flex;
+    align-items:center; justify-content:center; font-size:.8rem; color:#fff;
+    margin-right:.5rem; flex-shrink:0;
+  }
+
+  /* ---------- Machinery : maintenance rows ---------- */
+  .machine-row{ display:flex; align-items:center; gap:.75rem; padding:.75rem 0; border-bottom:1px solid rgba(0,0,0,.06); }
+  .machine-row:last-child{ border-bottom:none; }
+  .machine-icon{
+    width:38px; height:38px; border-radius:10px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:1.05rem; color:#fff;
+  }
+  .machine-icon.bg-op{ background:linear-gradient(135deg,var(--elite-emerald),var(--elite-emerald-dk)); }
+  .machine-icon.bg-low{ background:linear-gradient(135deg,var(--elite-rose),var(--elite-rose-dk)); }
+  .machine-icon.bg-maint{ background:linear-gradient(135deg,var(--elite-amber),var(--elite-amber-dk)); }
+  .machine-info{ flex:1; min-width:0; }
+  .machine-name{ font-weight:700; font-size:.84rem; color:var(--elite-ink); }
+  .machine-meta{ font-size:.7rem; color:#8790b3; }
+  .machine-status-col{ text-align:right; flex-shrink:0; }
+  .machine-inspected{ font-size:.68rem; color:#8790b3; margin-top:.25rem; }
+
+  /* ---------- Overall Farm Status ---------- */
+  .farm-status-row{ display:flex; align-items:center; justify-content:space-between; padding:.5rem .65rem; border-radius:10px; background:#f7f8fc; margin-bottom:.5rem; }
+  .farm-status-row:last-child{ margin-bottom:0; }
+  .farm-status-row .fs-label{ font-size:.8rem; font-weight:600; color:var(--elite-ink); display:flex; align-items:center; gap:.5rem; }
+  .farm-status-row .fs-dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .farm-status-row .fs-count{ font-size:.85rem; font-weight:700; color:var(--elite-ink); }
+  .farm-health-ring{ display:flex; align-items:center; gap:1rem; margin-bottom:1rem; }
+  .farm-health-ring .ring-value{ font-size:1.9rem; font-weight:700; color:var(--elite-emerald-dk); line-height:1; }
+  .farm-health-ring .ring-label{ font-size:.72rem; color:#8790b3; text-transform:uppercase; letter-spacing:.05em; }
+
+  /* ---------- Soil & Crop Health ---------- */
+  .soil-metric{ margin-bottom:.85rem; }
+  .soil-metric:last-child{ margin-bottom:0; }
+  .soil-metric-top{ display:flex; justify-content:space-between; font-size:.78rem; margin-bottom:.3rem; }
+  .soil-metric-top .sm-label{ color:#8790b3; font-weight:600; }
+  .soil-metric-top .sm-value{ color:var(--elite-ink); font-weight:700; }
+  .crop-health-chips{ display:flex; flex-wrap:wrap; gap:.4rem; margin-top:1rem; }
+  .health-chip{
+    display:inline-flex; align-items:center; gap:.35rem;
+    padding:.3rem .6rem; border-radius:10px; font-size:.7rem; font-weight:700; background:#f7f8fc; color:var(--elite-ink);
+  }
+  .health-chip .hc-dot{ width:8px; height:8px; border-radius:50%; }
+
+  /* ---------- Labour Payroll & Attendance ---------- */
+  .payroll-summary{ display:grid; grid-template-columns:repeat(4,1fr); gap:.6rem; margin-bottom:1.1rem; }
+  .payroll-stat{ background:#f7f8fc; border-radius:12px; padding:.75rem .8rem; }
+  .payroll-stat .ps-label{ font-size:.66rem; color:#8790b3; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.25rem; }
+  .payroll-stat .ps-value{ font-size:1.05rem; font-weight:700; color:var(--elite-ink); }
+  .payroll-stat .ps-value.warn{ color:var(--elite-rose-dk); }
+  .payroll-role-row{ display:flex; align-items:center; justify-content:space-between; padding:.65rem 0; border-bottom:1px solid rgba(0,0,0,.06); }
+  .payroll-role-row:last-child{ border-bottom:none; }
+  .payroll-role-name{ font-size:.82rem; font-weight:700; color:var(--elite-ink); }
+  .payroll-role-meta{ font-size:.7rem; color:#8790b3; }
+  .payroll-role-amount{ font-size:.85rem; font-weight:700; color:var(--elite-emerald-dk); text-align:right; }
+  .payroll-role-amount .rate{ display:block; font-size:.66rem; color:#8790b3; font-weight:600; }
+  @media (max-width: 991px){ .payroll-summary{ grid-template-columns:repeat(2,1fr); } }
+
+  /* ---------- Live Sales & Order ---------- */
+  .order-row{ display:flex; align-items:center; gap:.75rem; padding:.65rem 0; border-bottom:1px solid rgba(0,0,0,.06); }
+  .order-row:last-child{ border-bottom:none; }
+  .order-icon{
+    width:34px; height:34px; border-radius:9px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:.9rem; color:#fff;
+    background:linear-gradient(135deg,var(--elite-emerald),var(--elite-emerald-dk));
+  }
+  .order-info{ flex:1; min-width:0; }
+  .order-crop{ font-size:.82rem; font-weight:700; color:var(--elite-ink); }
+  .order-buyer{ font-size:.7rem; color:#8790b3; }
+  .order-right{ text-align:right; flex-shrink:0; }
+  .order-amount{ font-size:.83rem; font-weight:700; color:var(--elite-ink); }
+
+  /* ---------- Expenses & Revenue Breakdown ---------- */
+  .breakdown-row{ margin-bottom:.75rem; }
+  .breakdown-row:last-child{ margin-bottom:0; }
+  .breakdown-top{ display:flex; justify-content:space-between; font-size:.78rem; margin-bottom:.3rem; }
+  .breakdown-top .bd-label{ font-weight:600; color:var(--elite-ink); }
+  .breakdown-top .bd-value{ font-weight:700; color:#8790b3; }
+
+  /* ---------- Sales Breakdown & Filter Analytics ---------- */
+  .sales-filter-card {
+    border: none;
+    border-radius: var(--elite-card-radius);
+    box-shadow: 0 6px 18px -10px rgba(20,20,50,.18);
+  }
+  .sales-filter-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--elite-emerald), var(--elite-emerald-dk));
+    color: #fff;
+    font-size: 1.3rem;
+    box-shadow: 0 4px 12px rgba(15, 157, 108, 0.25);
+  }
+  .sales-category-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.8rem;
+    border-radius: 10px;
+    background: #f8f9fd;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .sales-category-item:hover, .sales-category-item.active {
+    background: #ffffff;
+    border-color: #d1d5db;
+    transform: translateX(3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+  .sales-category-item .cat-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .sales-category-item .cat-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--elite-ink);
+  }
+  .sales-category-item .cat-amount {
+    font-size: 0.72rem;
+    color: #8790b3;
+  }
+  .sales-category-item .cat-pct {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--elite-ink);
+  }
+  .hover-focus-card {
+    box-shadow: 0 2px 10px rgba(15, 157, 108, 0.08);
+  }
+</style>
+{% endblock %}
+
+{% block page_content %}
+
+<!-- ============ HERO : TOTAL BUSINESS VALUE ============ -->
+<div class="elite-hero">
+  <div class="row align-items-center p-6">
+    <div class="col-lg-4">
+      <span class="hero-label">Total Business Value</span>
+      <div class="hero-value">{{ total_business_value_fmt }}</div>
+    </div>
+    <div class="col-lg-8">
+      <div class="row mt-3 mt-lg-0">
+        <div class="col-6 col-md-3 mb-3 mb-md-0">
+          <div class="hero-label">Net Profit</div>
+          <div class="fs-4 fw-bold {% if net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ net_profit_fmt }}</div>
+        </div>
+        <div class="col-6 col-md-3 mb-3 mb-md-0">
+          <div class="hero-label">Inventory Value</div>
+          <div class="fs-4 fw-bold">{{ inventory_value_fmt }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="hero-label">Receivables</div>
+          <div class="fs-4 fw-bold">{{ receivables_fmt }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="hero-label">Payables</div>
+          <div class="fs-4 fw-bold">{{ payables_fmt }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TOP STRIP : TOTAL FARMS / ACTIVE CROPS / PENDING TASKS ============ -->
+<div class="row g-4 mb-4">
+  <div class="col-sm-6 col-xl-3">
+    <div class="card elite-kpi g-emerald">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="kpi-label">Total Farms</div>
+            <div class="kpi-value">{{ total_farms }}</div>
+            <div class="kpi-sub">{{ total_acres }} acres total</div>
+          </div>
+          <span class="kpi-icon"><i class="ri-map-pin-line"></i></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card elite-kpi g-indigo">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="kpi-label">Active Crops</div>
+            <div class="kpi-value">{{ active_crops }}</div>
+            <div class="kpi-sub">{{ harvested_crops }} harvested</div>
+          </div>
+          <span class="kpi-icon"><i class="ri-plant-line"></i></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card elite-kpi g-amber">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="kpi-label">Pending Tasks</div>
+            <div class="kpi-value">{{ pending_tasks }}</div>
+            <div class="kpi-sub">{{ completed_tasks }}/{{ total_tasks }} completed</div>
+          </div>
+          <span class="kpi-icon"><i class="ri-task-line"></i></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card elite-kpi g-sky">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="kpi-label">Employees</div>
+            <div class="kpi-value">{{ total_staff }}</div>
+            <div class="kpi-sub">{{ present_today }} present today</div>
+          </div>
+          <span class="kpi-icon"><i class="ri-team-line"></i></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- =====================================================================
+     AGRONOMY
+====================================================================== -->
+<div class="elite-section-divider">Agronomy</div>
+
+<!-- ---------- Weather Forecast (Localised Weather Advisory) ---------- -->
+<div class="row g-4 mb-4">
+  <div class="col-lg-12">
+    <div class="card elite-panel weather-card border-0 shadow-sm rounded-4">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom-0 pb-2">
+        <div class="d-flex align-items-center gap-2">
+          <div class="report-hub-icon-wrapper" style="width:38px; height:38px; border-radius:10px; background:#e0f2fe; color:#0284c7; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="ri-cloudy-2-line"></i>
+          </div>
+          <div>
+            <h5 class="mb-0 fw-bold text-dark" style="font-size: 1.1rem;">Weather Forecast & Analytics</h5>
+            <small class="text-muted" id="weatherLocationSubtitle"><i class="ri-map-pin-2-line text-primary"></i> {{ weather.current.location|default:"Coimbatore, Tamil Nadu" }}</small>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <!-- Changeable Date Filter -->
+          <div class="d-flex align-items-center gap-1 bg-light border rounded-3 px-2 py-1 shadow-xs">
+            <small class="text-muted fw-semibold me-1"><i class="ri-calendar-line text-primary"></i> Date:</small>
+            <input type="date" id="weatherDatePicker" value="{% now 'Y-m-d' %}" class="form-control form-control-sm border-0 bg-transparent py-0 fw-semibold text-dark" style="width: 130px; cursor: pointer;" onchange="changeWeatherBaseDate(this.value)">
+          </div>
+        </div>
+      </div>
+
+      <div class="card-body pt-2">
+
+        {% with today=weather.current %}
+        <div class="weather-today">
+          <div class="weather-today-left">
+            <span class="weather-icon-lg" id="weatherMainIcon">
+              <i class="{{ today.icon_class|default:'ri-sun-cloudy-line' }}"></i>
+            </span>
+            <div>
+              <div class="weather-location" id="weatherMainLocation">
+                <i class="ri-map-pin-2-line"></i>{{ weather.current.location|default:"Coimbatore, Tamil Nadu" }}
+              </div>
+              <div class="weather-temp-now" id="weatherMainTemp">{{ today.temp|default:"31" }}&deg;C</div>
+              <div class="weather-condition" id="weatherMainCondition">{{ today.condition|default:"Partly Cloudy" }} &middot; Feels like {{ today.feels_like|default:"34" }}&deg;C</div>
+            </div>
+          </div>
+
+          <div class="weather-meta">
+            <div class="weather-meta-item">
+              <div class="wm-icon"><i class="ri-drop-line"></i></div>
+              <div class="wm-value" id="weatherMetaHumidity">{{ today.humidity|default:"78" }}%</div>
+              <div class="wm-label">Humidity</div>
+            </div>
+            <div class="weather-meta-item">
+              <div class="wm-icon"><i class="ri-windy-line"></i></div>
+              <div class="wm-value" id="weatherMetaWind">{{ today.wind_speed|default:"14" }} km/h</div>
+              <div class="wm-label">Wind</div>
+            </div>
+            <div class="weather-meta-item">
+              <div class="wm-icon"><i class="ri-cloudy-2-line"></i></div>
+              <div class="wm-value" id="weatherMetaRain">{{ today.rain_chance|default:"40" }}%</div>
+              <div class="wm-label">Rain Chance</div>
+            </div>
+            <div class="weather-meta-item">
+              <div class="wm-icon"><i class="ri-sun-line"></i></div>
+              <div class="wm-value" id="weatherMetaUV">{{ today.uv_index|default:"6" }}</div>
+              <div class="wm-label">UV Index</div>
+            </div>
+          </div>
+        </div>
+        {% endwith %}
+
+        <!-- 7-Day Interactive Forecast Strip -->
+        <div class="weather-strip mb-4" id="weatherForecastStrip">
+          {% for day in weather.forecast %}
+          <div class="weather-day-card {% if forloop.first %}is-today{% endif %}" onclick="selectWeatherDay({{ forloop.counter0 }})" id="weatherDayCard_{{ forloop.counter0 }}">
+            <div class="wd-day">{{ day.label }}</div>
+            <div class="wd-date">{{ day.date }}</div>
+            <div class="wd-icon"><i class="{{ day.icon_class }}"></i></div>
+            <div class="wd-high">{{ day.temp_high }}&deg;</div>
+            <div class="wd-low">{{ day.temp_low }}&deg;</div>
+            <div class="wd-rain"><i class="ri-drop-line"></i>{{ day.rain_chance }}%</div>
+          </div>
+          {% empty %}
+          <div class="weather-day-card is-today" onclick="selectWeatherDay(0)" id="weatherDayCard_0">
+            <div class="wd-day">Today</div><div class="wd-date">{% now "d M" %}</div>
+            <div class="wd-icon"><i class="ri-sun-cloudy-line"></i></div>
+            <div class="wd-high">33&deg;</div><div class="wd-low">26&deg;</div>
+            <div class="wd-rain"><i class="ri-drop-line"></i>40%</div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Weather Chart Filter & Visualizer Toolbar -->
+        <div class="weather-chart-toolbar d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span class="small fw-bold text-muted text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.05em;">
+              <i class="ri-line-chart-line me-1 text-primary"></i> Metric:
+            </span>
+            <button type="button" class="weather-metric-btn active" id="btnMetricTemp" onclick="switchWeatherMetric('temp')">
+              <i class="ri-temp-hot-line text-warning"></i> Temperature (°C)
+            </button>
+            <button type="button" class="weather-metric-btn" id="btnMetricRain" onclick="switchWeatherMetric('rain')">
+              <i class="ri-drop-line text-info"></i> Rain & Precip (%)
+            </button>
+            <button type="button" class="weather-metric-btn" id="btnMetricHumidity" onclick="switchWeatherMetric('humidity')">
+              <i class="ri-windy-line text-primary"></i> Humidity & Wind
+            </button>
+            <button type="button" class="weather-metric-btn" id="btnMetricUV" onclick="switchWeatherMetric('uv')">
+              <i class="ri-sun-line text-warning"></i> Solar UV Index
+            </button>
+          </div>
+
+          <div class="d-flex align-items-center gap-2">
+            <span class="small fw-bold text-muted text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.05em;">Horizon:</span>
+            <select class="form-select form-select-sm border-secondary-subtle" id="weatherHorizonFilter" style="width: auto; font-size: 0.78rem;" onchange="changeWeatherHorizon(this.value)">
+              <option value="7day" selected>7-Day Daily Forecast</option>
+              <option value="24h">24-Hour Hourly Curve</option>
+              <option value="advisory">Agronomy Action Matrix</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- ApexChart Visualization Area -->
+        <div id="weatherChartContainer" style="background: #ffffff; border-radius: 12px; padding: 10px; border: 1px solid #f1f5f9;">
+          <div id="weatherDynamicChart" style="min-height: 250px;"></div>
+        </div>
+
+        <!-- Field Agronomy Insights & Action Advisory Grid -->
+        <div class="row g-3 mt-2" id="weatherAdvisoryGrid">
+          <div class="col-12 col-md-4">
+            <div class="weather-advisory-card h-100 d-flex align-items-start gap-3">
+              <div class="avatar flex-shrink-0" style="background:rgba(15,157,108,0.12); color:#0f9d6c; width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                <i class="ri-flask-line fs-5"></i>
+              </div>
+              <div>
+                <span class="fw-bold text-dark d-block small mb-1">Spraying Conditions</span>
+                <span class="badge bg-success-subtle text-success mb-1" id="advSprayBadge">Optimal Window</span>
+                <p class="text-muted small mb-0" id="advSprayText" style="font-size: 0.76rem;">
+                  Low wind (< 14 km/h) & minimal rain today. Best hours: 06:30 AM – 10:00 AM.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <div class="weather-advisory-card h-100 d-flex align-items-start gap-3">
+              <div class="avatar flex-shrink-0" style="background:rgba(14,127,184,0.12); color:#0e7fb8; width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                <i class="ri-water-flash-line fs-5"></i>
+              </div>
+              <div>
+                <span class="fw-bold text-dark d-block small mb-1">Irrigation Planning</span>
+                <span class="badge bg-info-subtle text-info mb-1" id="advIrrigBadge">Rain Anticipated</span>
+                <p class="text-muted small mb-0" id="advIrrigText" style="font-size: 0.76rem;">
+                  High rain chance (72%-80%) on Thu/Fri. Reduce pump cycles to prevent soil waterlogging.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <div class="weather-advisory-card h-100 d-flex align-items-start gap-3">
+              <div class="avatar flex-shrink-0" style="background:rgba(246,156,85,0.12); color:#f69c55; width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                <i class="ri-hand-heart-line fs-5"></i>
+              </div>
+              <div>
+                <span class="fw-bold text-dark d-block small mb-1">Field & Harvest Window</span>
+                <span class="badge bg-warning-subtle text-warning mb-1" id="advHarvestBadge">Favorable Weekend</span>
+                <p class="text-muted small mb-0" id="advHarvestText" style="font-size: 0.76rem;">
+                  Clear skies & low humidity on Saturday/Sunday. Ideal for harvest, weeding & drying.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Sales Breakdown & Filter Analytics ---------- -->
+<div class="row g-4 mb-4" id="salesAnalyticsSection">
+  <div class="col-lg-12">
+    <div class="card elite-panel sales-filter-card">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom-0 pb-1">
+        <div class="d-flex align-items-center gap-3">
+          <span class="sales-filter-icon"><i class="ri-pie-chart-2-line"></i></span>
+          <div>
+            <h5 class="mb-0 fw-bold" style="color:var(--elite-ink); font-size:1.15rem;">Sales Analytics</h5>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge bg-label-success px-3 py-2 rounded-pill fw-bold" id="salesTotalBadge" style="font-size:0.85rem; background:rgba(15,157,108,0.12); color:var(--elite-emerald-dk);">
+            <i class="ri-money-rupee-circle-line me-1"></i>Total Sales: <span id="salesTotalDisplay">₹18,45,000</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="card-body pt-3">
+        <!-- Filter Form Controls -->
+        <form id="salesFilterForm" class="sales-filter-form p-3 mb-4 rounded-3" style="background:#f8f9fd; border:1px solid #e7eaf3;">
+          <div class="row g-2 align-items-end">
+            <!-- Filter Category: Time Period -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-calendar-line me-1 text-primary"></i> Time Period
+              </label>
+              <select class="form-select form-select-sm" id="salesPeriodFilter">
+                <option value="this_month" selected>This Month ({% now "M Y" %})</option>
+                <option value="last_month">Last Month</option>
+                <option value="last_90_days">Last 90 Days</option>
+                <option value="this_year">This Financial Year</option>
+                <option value="all_time">All Time</option>
+                <option value="custom">Custom Date Range 📅</option>
+              </select>
+            </div>
+
+            <!-- Filter: Farm -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-map-pin-2-line me-1 text-success"></i> Farm
+              </label>
+              <select class="form-select form-select-sm" id="salesFarmFilter">
+                <option value="all" selected>All Farms</option>
+                {% for f in dashboard_farms %}
+                <option value="{{ f.id }}">{{ f.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Filter: Crop -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-plant-line me-1 text-success"></i> Crop
+              </label>
+              <select class="form-select form-select-sm" id="salesCropFilter">
+                <option value="all" selected>All Crops</option>
+                {% for crop in dashboard_crops %}
+                <option value="{{ crop }}">{{ crop }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Filter Category: Crop / Product Category -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-pie-chart-line me-1 text-warning"></i> Category
+              </label>
+              <select class="form-select form-select-sm" id="salesCategoryFilter">
+                <option value="all" selected>All Categories</option>
+                {% for cat in filter_categories_list %}
+                <option value="{{ cat }}">{{ cat }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Chart Type Selector -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-bar-chart-grouped-line me-1 text-info"></i> Chart Type
+              </label>
+              <select class="form-select form-select-sm" id="salesChartTypeFilter">
+                <option value="pie" selected>Pie Chart</option>
+                <option value="donut">Donut Chart</option>
+                <option value="bar">Bar Chart (Vertical)</option>
+                <option value="horizontalBar">Horizontal Bar</option>
+                <option value="area">Area / Trend Chart</option>
+              </select>
+            </div>
+
+            <!-- Submit Button & Reset Button -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2 d-flex gap-2">
+              <button type="submit" class="btn btn-sm btn-primary w-100 d-flex align-items-center justify-content-center gap-1 shadow-sm fw-semibold" style="background:var(--elite-emerald); border-color:var(--elite-emerald); height:32px;">
+                <i class="ri-filter-3-line"></i> <span>Submit</span>
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="salesFilterResetBtn" title="Reset Filters" style="height:32px;">
+                <i class="ri-refresh-line"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Custom Date Range Row (Revealed when Custom Date Range is selected) -->
+          <div id="customDateRangeContainer" class="mt-3 pt-3 border-top" style="display:none;">
+            <div class="row g-3 align-items-end">
+              <div class="col-12 col-sm-5">
+                <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                  <i class="ri-calendar-event-line me-1 text-primary"></i> Start Date
+                </label>
+                <input type="date" class="form-control form-control-sm" id="salesStartDate">
+              </div>
+              <div class="col-12 col-sm-5">
+                <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                  <i class="ri-calendar-event-line me-1 text-primary"></i> End Date
+                </label>
+                <input type="date" class="form-control form-control-sm" id="salesEndDate">
+              </div>
+              <div class="col-12 col-sm-2">
+                <button type="button" class="btn btn-sm btn-outline-primary w-100 fw-semibold" id="applyCustomDateBtn" style="height:32px;">
+                  <i class="ri-check-line me-1"></i> Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- Chart View & Percentage Breakdown Panel -->
+        <div class="row g-4 align-items-stretch">
+          <!-- Left: Main Chart Container -->
+          <div class="col-lg-7 col-xl-7">
+            <div class="sales-chart-wrapper p-3 rounded-3 h-100 d-flex flex-column justify-content-between" style="background:#ffffff; border:1px solid #edf0f7; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+              <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                <div>
+                  <span class="small fw-bold text-muted text-uppercase" id="salesChartSubHeader" style="font-size:0.72rem; letter-spacing:0.04em;">Category Revenue Share</span>
+                  <div class="small text-muted" style="font-size:0.74rem;">Hover on any chart slice/bar to view exact percentage</div>
+                </div>
+                <span class="badge rounded-pill px-3 py-1" id="activeChartTypeBadge" style="background:rgba(67,56,202,0.1); color:var(--elite-indigo); font-size:0.75rem; font-weight:600;">Pie Chart</span>
+              </div>
+              <div class="d-flex align-items-center justify-content-center flex-grow-1" style="min-height:310px;">
+                <div id="salesDynamicChart" style="width:100%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Interactive Hover & Percentage Breakdown Panel -->
+          <div class="col-lg-5 col-xl-5">
+            <div class="sales-breakdown-panel p-3 rounded-3 h-100 d-flex flex-column" style="background:#ffffff; border:1px solid #edf0f7; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+              
+              <!-- Active Hover Focus Card -->
+              <div class="hover-focus-card p-3 mb-3 rounded-3" id="salesHoverFocusCard" style="background:linear-gradient(135deg, #f0fdf4 0%, #e6f9ed 100%); border:1px solid #bbf7d0; transition:all .2s ease;">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="hover-dot" id="hoverItemDot" style="width:12px; height:12px; border-radius:50%; background:var(--elite-emerald); display:inline-block;"></span>
+                    <span class="fw-bold text-dark" id="hoverItemLabel" style="font-size:0.95rem;">Category Focus</span>
+                  </div>
+                  <span class="badge rounded-pill" id="hoverItemPctBadge" style="background:var(--elite-emerald); color:#fff; font-size:0.82rem; font-weight:700;">--%</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-baseline mt-2">
+                  <span class="text-muted small">Sales Contribution:</span>
+                  <span class="fw-bold fs-5 text-dark" id="hoverItemAmount">₹0</span>
+                </div>
+                <div class="progress-elite mt-2" style="height:7px;">
+                  <div class="progress-bar" id="hoverItemProgressBar" style="width:0%; background:var(--elite-emerald); transition:width .3s ease;"></div>
+                </div>
+              </div>
+
+              <!-- List of Categories with Percentages -->
+              <div class="text-muted small fw-bold mb-2 text-uppercase d-flex justify-content-between align-items-center" style="font-size:.7rem; letter-spacing:.04em;">
+                <span>Category Breakdown</span>
+                <span>Share (%)</span>
+              </div>
+              
+              <div class="sales-category-list d-flex flex-column gap-2 flex-grow-1" id="salesCategoryListContainer" style="max-height:250px; overflow-y:auto;">
+                <!-- Dynamically populated category rows -->
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Expense Analytics & Filter Section ---------- -->
+<div class="row g-4 mb-4" id="expenseAnalyticsSection">
+  <div class="col-lg-12">
+    <div class="card elite-panel sales-filter-card">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom-0 pb-1">
+        <div class="d-flex align-items-center gap-3">
+          <span class="sales-filter-icon" style="background:linear-gradient(135deg, var(--elite-rose), var(--elite-rose-dk)); box-shadow:0 4px 12px rgba(209,67,107,0.25);"><i class="ri-shopping-bag-3-line"></i></span>
+          <div>
+            <h5 class="mb-0 fw-bold" style="color:var(--elite-ink); font-size:1.15rem;">Expense Analytics</h5>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge px-3 py-2 rounded-pill fw-bold" id="expenseTotalBadge" style="font-size:0.85rem; background:rgba(209,67,107,0.12); color:var(--elite-rose-dk);">
+            <i class="ri-money-rupee-circle-line me-1"></i>Total Expenses: <span id="expenseTotalDisplay">₹{{ total_expenses_fmt }}</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="card-body pt-3">
+        <!-- Filter Form Controls -->
+        <form id="expenseFilterForm" class="sales-filter-form p-3 mb-4 rounded-3" style="background:#fdf8f9; border:1px solid #f9e2e7;">
+          <div class="row g-2 align-items-end">
+            <!-- Filter Category: Time Period -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-calendar-line me-1 text-danger"></i> Time Period
+              </label>
+              <select class="form-select form-select-sm" id="expensePeriodFilter">
+                <option value="this_month" selected>This Month ({% now "M Y" %})</option>
+                <option value="last_month">Last Month</option>
+                <option value="last_90_days">Last 90 Days</option>
+                <option value="this_year">This Financial Year</option>
+                <option value="all_time">All Time</option>
+                <option value="custom">Custom Date Range 📅</option>
+              </select>
+            </div>
+
+            <!-- Filter: Farm -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-map-pin-2-line me-1 text-danger"></i> Farm
+              </label>
+              <select class="form-select form-select-sm" id="expenseFarmFilter">
+                <option value="all" selected>All Farms</option>
+                {% for f in dashboard_farms %}
+                <option value="{{ f.id }}">{{ f.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Filter: Crop -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-plant-line me-1 text-success"></i> Crop
+              </label>
+              <select class="form-select form-select-sm" id="expenseCropFilter">
+                <option value="all" selected>All Crops</option>
+                {% for crop in dashboard_crops %}
+                <option value="{{ crop }}">{{ crop }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Filter Category: Expense Category -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-pie-chart-line me-1 text-warning"></i> Category
+              </label>
+              <select class="form-select form-select-sm" id="expenseCategoryFilter">
+                <option value="all" selected>All Categories</option>
+                {% for cat in filter_expense_categories_list %}
+                <option value="{{ cat }}">{{ cat }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Chart Type Selector -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-bar-chart-grouped-line me-1 text-info"></i> Chart Type
+              </label>
+              <select class="form-select form-select-sm" id="expenseChartTypeFilter">
+                <option value="donut" selected>Donut Chart</option>
+                <option value="pie">Pie Chart</option>
+                <option value="bar">Bar Chart (Vertical)</option>
+                <option value="horizontalBar">Horizontal Bar</option>
+                <option value="area">Area / Trend Chart</option>
+              </select>
+            </div>
+
+            <!-- Submit Button & Reset Button -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2 d-flex gap-2">
+              <button type="submit" class="btn btn-sm btn-primary w-100 d-flex align-items-center justify-content-center gap-1 shadow-sm fw-semibold" style="background:var(--elite-rose); border-color:var(--elite-rose); height:32px;">
+                <i class="ri-filter-3-line"></i> <span>Submit</span>
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="expenseFilterResetBtn" title="Reset Filters" style="height:32px;">
+                <i class="ri-refresh-line"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Custom Date Range Row -->
+          <div id="customExpenseDateRangeContainer" class="mt-3 pt-3 border-top" style="display:none;">
+            <div class="row g-3 align-items-end">
+              <div class="col-12 col-sm-5">
+                <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                  <i class="ri-calendar-event-line me-1 text-danger"></i> Start Date
+                </label>
+                <input type="date" class="form-control form-control-sm" id="expenseStartDate">
+              </div>
+              <div class="col-12 col-sm-5">
+                <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                  <i class="ri-calendar-event-line me-1 text-danger"></i> End Date
+                </label>
+                <input type="date" class="form-control form-control-sm" id="expenseEndDate">
+              </div>
+              <div class="col-12 col-sm-2">
+                <button type="button" class="btn btn-sm btn-outline-danger w-100 fw-semibold" id="applyCustomExpenseDateBtn" style="height:32px;">
+                  <i class="ri-check-line me-1"></i> Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- Chart View & Percentage Breakdown Panel -->
+        <div class="row g-4 align-items-stretch">
+          <!-- Left: Main Chart Container -->
+          <div class="col-lg-7 col-xl-7">
+            <div class="sales-chart-wrapper p-3 rounded-3 h-100 d-flex flex-column justify-content-between" style="background:#ffffff; border:1px solid #edf0f7; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+              <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                <div>
+                  <span class="small fw-bold text-muted text-uppercase" id="expenseChartSubHeader" style="font-size:0.72rem; letter-spacing:0.04em;">Expense Outflow Share</span>
+                  <div class="small text-muted" style="font-size:0.74rem;">Hover on any chart slice/bar to view exact percentage</div>
+                </div>
+                <span class="badge rounded-pill px-3 py-1" id="activeExpenseChartTypeBadge" style="background:rgba(209,67,107,0.1); color:var(--elite-rose-dk); font-size:0.75rem; font-weight:600;">Donut Chart</span>
+              </div>
+              <div class="d-flex align-items-center justify-content-center flex-grow-1" style="min-height:310px;">
+                <div id="expenseDynamicChart" style="width:100%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Interactive Hover & Percentage Breakdown Panel -->
+          <div class="col-lg-5 col-xl-5">
+            <div class="sales-breakdown-panel p-3 rounded-3 h-100 d-flex flex-column" style="background:#ffffff; border:1px solid #edf0f7; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+              
+              <!-- Active Hover Focus Card -->
+              <div class="hover-focus-card p-3 mb-3 rounded-3" id="expenseHoverFocusCard" style="background:linear-gradient(135deg, #fff5f7 0%, #ffe9ee 100%); border:1px solid #fecdd6; transition:all .2s ease;">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="hover-dot" id="hoverExpenseDot" style="width:12px; height:12px; border-radius:50%; background:var(--elite-rose); display:inline-block;"></span>
+                    <span class="fw-bold text-dark" id="hoverExpenseLabel" style="font-size:0.95rem;">Expense Focus</span>
+                  </div>
+                  <span class="badge rounded-pill" id="hoverExpensePctBadge" style="background:var(--elite-rose); color:#fff; font-size:0.82rem; font-weight:700;">--%</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-baseline mt-2">
+                  <span class="text-muted small">Outflow Amount:</span>
+                  <span class="fw-bold fs-5 text-dark" id="hoverExpenseAmount">₹0</span>
+                </div>
+                <div class="progress-elite mt-2" style="height:7px;">
+                  <div class="progress-bar" id="hoverExpenseProgressBar" style="width:0%; background:var(--elite-rose); transition:width .3s ease;"></div>
+                </div>
+              </div>
+
+              <!-- List of Categories with Percentages -->
+              <div class="text-muted small fw-bold mb-2 text-uppercase d-flex justify-content-between align-items-center" style="font-size:.7rem; letter-spacing:.04em;">
+                <span>Category Breakdown</span>
+                <span>Share (%)</span>
+              </div>
+              
+              <div class="sales-category-list d-flex flex-column gap-2 flex-grow-1" id="expenseCategoryListContainer" style="max-height:250px; overflow-y:auto;">
+                <!-- Dynamically populated expense rows -->
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Task Analytics & Filter Section ---------- -->
+<div class="row g-4 mb-4" id="taskAnalyticsSection">
+  <div class="col-lg-12">
+    <div class="card elite-panel sales-filter-card">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom-0 pb-1">
+        <div class="d-flex align-items-center gap-3">
+          <span class="sales-filter-icon" style="background:linear-gradient(135deg, var(--elite-indigo), var(--elite-indigo-dk)); box-shadow:0 4px 12px rgba(67,56,202,0.25);"><i class="ri-task-line"></i></span>
+          <div>
+            <h5 class="mb-0 fw-bold" style="color:var(--elite-ink); font-size:1.15rem;">Task Analytics</h5>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge px-3 py-2 rounded-pill fw-bold" id="taskTotalBadge" style="font-size:0.85rem; background:rgba(67,56,202,0.12); color:var(--elite-indigo-dk);">
+            <i class="ri-checkbox-circle-line me-1"></i>Total Tasks: <span id="taskTotalDisplay">{{ total_tasks }} Tasks</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="card-body pt-3">
+        <!-- Filter Form Controls -->
+        <form id="taskFilterForm" class="sales-filter-form p-3 mb-4 rounded-3" style="background:#f8f9ff; border:1px solid #e3e6fc;">
+          <div class="row g-2 align-items-end">
+            <!-- Filter Category: Time Period -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-calendar-line me-1 text-primary"></i> Time Period
+              </label>
+              <select class="form-select form-select-sm" id="taskPeriodFilter">
+                <option value="this_month" selected>This Month ({% now "M Y" %})</option>
+                <option value="last_month">Last Month</option>
+                <option value="last_90_days">Last 90 Days</option>
+                <option value="this_year">This Financial Year</option>
+                <option value="all_time">All Time</option>
+                <option value="custom">Custom Date Range 📅</option>
+              </select>
+            </div>
+
+            <!-- Filter: Farm -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-map-pin-2-line me-1 text-indigo"></i> Farm
+              </label>
+              <select class="form-select form-select-sm" id="taskFarmFilter">
+                <option value="all" selected>All Farms</option>
+                {% for f in dashboard_farms %}
+                <option value="{{ f.id }}">{{ f.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Filter: Crop -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-plant-line me-1 text-success"></i> Crop
+              </label>
+              <select class="form-select form-select-sm" id="taskCropFilter">
+                <option value="all" selected>All Crops</option>
+                {% for crop in dashboard_crops %}
+                <option value="{{ crop }}">{{ crop }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Filter Category: Task Category / Status -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-list-check me-1 text-indigo"></i> Category / Status
+              </label>
+              <select class="form-select form-select-sm" id="taskCategoryFilter">
+                <option value="all" selected>All Tasks (Status Overview)</option>
+                {% for cat in filter_task_categories_list %}
+                <option value="{{ cat }}">{{ cat }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Chart Type Selector -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-bar-chart-grouped-line me-1 text-info"></i> Chart Type
+              </label>
+              <select class="form-select form-select-sm" id="taskChartTypeFilter">
+                <option value="donut" selected>Donut Chart</option>
+                <option value="pie">Pie Chart</option>
+                <option value="bar">Bar Chart (Vertical)</option>
+                <option value="horizontalBar">Horizontal Bar</option>
+                <option value="area">Area / Trend Chart</option>
+              </select>
+            </div>
+
+            <!-- Submit Button & Reset Button -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2 d-flex gap-2">
+              <button type="submit" class="btn btn-sm btn-primary w-100 d-flex align-items-center justify-content-center gap-1 shadow-sm fw-semibold" style="background:var(--elite-indigo); border-color:var(--elite-indigo); height:32px;">
+                <i class="ri-filter-3-line"></i> <span>Submit</span>
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="taskFilterResetBtn" title="Reset Filters" style="height:32px;">
+                <i class="ri-refresh-line"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Custom Date Range Row -->
+          <div id="customTaskDateRangeContainer" class="mt-3 pt-3 border-top" style="display:none;">
+            <div class="row g-3 align-items-end">
+              <div class="col-12 col-sm-5">
+                <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                  <i class="ri-calendar-event-line me-1 text-indigo"></i> Start Date
+                </label>
+                <input type="date" class="form-control form-control-sm" id="taskStartDate">
+              </div>
+              <div class="col-12 col-sm-5">
+                <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                  <i class="ri-calendar-event-line me-1 text-indigo"></i> End Date
+                </label>
+                <input type="date" class="form-control form-control-sm" id="taskEndDate">
+              </div>
+              <div class="col-12 col-sm-2">
+                <button type="button" class="btn btn-sm btn-outline-primary w-100 fw-semibold" id="applyCustomTaskDateBtn" style="height:32px;">
+                  <i class="ri-check-line me-1"></i> Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- Chart View & Percentage Breakdown Panel -->
+        <div class="row g-4 align-items-stretch">
+          <!-- Left: Main Chart Container -->
+          <div class="col-lg-7 col-xl-7">
+            <div class="sales-chart-wrapper p-3 rounded-3 h-100 d-flex flex-column justify-content-between" style="background:#ffffff; border:1px solid #edf0f7; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+              <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                <div>
+                  <span class="small fw-bold text-muted text-uppercase" id="taskChartSubHeader" style="font-size:0.72rem; letter-spacing:0.04em;">Task Distribution Share</span>
+                  <div class="small text-muted" style="font-size:0.74rem;">Hover on any chart slice/bar to view exact percentage</div>
+                </div>
+                <span class="badge rounded-pill px-3 py-1" id="activeTaskChartTypeBadge" style="background:rgba(67,56,202,0.1); color:var(--elite-indigo); font-size:0.75rem; font-weight:600;">Donut Chart</span>
+              </div>
+              <div class="d-flex align-items-center justify-content-center flex-grow-1" style="min-height:310px;">
+                <div id="taskDynamicChart" style="width:100%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Interactive Hover & Percentage Breakdown Panel -->
+          <div class="col-lg-5 col-xl-5">
+            <div class="sales-breakdown-panel p-3 rounded-3 h-100 d-flex flex-column" style="background:#ffffff; border:1px solid #edf0f7; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+              
+              <!-- Active Hover Focus Card -->
+              <div class="hover-focus-card p-3 mb-3 rounded-3" id="taskHoverFocusCard" style="background:linear-gradient(135deg, #f3f4fd 0%, #e8eaff 100%); border:1px solid #c7d2fe; transition:all .2s ease;">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="hover-dot" id="hoverTaskDot" style="width:12px; height:12px; border-radius:50%; background:var(--elite-indigo); display:inline-block;"></span>
+                    <span class="fw-bold text-dark" id="hoverTaskLabel" style="font-size:0.95rem;">Task Focus</span>
+                  </div>
+                  <span class="badge rounded-pill" id="hoverTaskPctBadge" style="background:var(--elite-indigo); color:#fff; font-size:0.82rem; font-weight:700;">--%</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-baseline mt-2">
+                  <span class="text-muted small">Tasks Count:</span>
+                  <span class="fw-bold fs-5 text-dark" id="hoverTaskAmount">0 Tasks</span>
+                </div>
+                <div class="progress-elite mt-2" style="height:7px;">
+                  <div class="progress-bar" id="hoverTaskProgressBar" style="width:0%; background:var(--elite-indigo); transition:width .3s ease;"></div>
+                </div>
+              </div>
+
+              <!-- List of Categories with Percentages -->
+              <div class="text-muted small fw-bold mb-2 text-uppercase d-flex justify-content-between align-items-center" style="font-size:.7rem; letter-spacing:.04em;">
+                <span>Task Breakdown</span>
+                <span>Share (%)</span>
+              </div>
+              
+              <div class="sales-category-list d-flex flex-column gap-2 flex-grow-1" id="taskCategoryListContainer" style="max-height:250px; overflow-y:auto;">
+                <!-- Dynamically populated task rows -->
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Overall Farm Status + Soil & Crop Health ---------- -->
+<div class="row g-4 mb-4">
+  <div class="col-lg-6">
+    <div class="card elite-panel h-100">
+      <div class="card-header border-bottom-0">Overall Farm Status</div>
+      <div class="card-body">
+        <div class="farm-health-ring">
+          <div>
+            <div class="ring-value">{{ farm_health_score }}%</div>
+            <div class="ring-label">Farms in good standing</div>
+          </div>
+        </div>
+        <div class="progress-elite mb-3"><div class="progress-bar bg-success" style="width: {{ farm_health_score }}%"></div></div>
+
+        <div class="farm-status-row">
+          <span class="fs-label"><span class="fs-dot" style="background:var(--elite-emerald);"></span>Healthy</span>
+          <span class="fs-count">{{ healthy_farms_count }} farms</span>
+        </div>
+        <div class="farm-status-row">
+          <span class="fs-label"><span class="fs-dot" style="background:var(--elite-amber);"></span>Needs Attention</span>
+          <span class="fs-count">{{ needs_attention_farms_count }} farms</span>
+        </div>
+        <div class="farm-status-row">
+          <span class="fs-label"><span class="fs-dot" style="background:var(--elite-rose);"></span>Critical</span>
+          <span class="fs-count">{{ critical_farms_count }} farm{% if critical_farms_count != 1 %}s{% endif %}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card elite-panel h-100">
+      <div class="card-header border-bottom-0">Soil &amp; Crop Health</div>
+      <div class="card-body">
+
+        <div class="soil-metric">
+          <div class="soil-metric-top"><span class="sm-label">Soil Moisture</span><span class="sm-value">58%</span></div>
+          <div class="progress-elite"><div class="progress-bar" style="width: 58%; background: var(--elite-sky);"></div></div>
+        </div>
+        <div class="soil-metric">
+          <div class="soil-metric-top"><span class="sm-label">Soil pH (avg {{ avg_soil_ph }} &mdash; optimal)</span><span class="sm-value">{{ avg_soil_ph }}</span></div>
+          <div class="progress-elite"><div class="progress-bar" style="width: 80%; background: var(--elite-emerald);"></div></div>
+        </div>
+        <div class="soil-metric">
+          <div class="soil-metric-top"><span class="sm-label">Nitrogen (N)</span><span class="sm-value">Adequate</span></div>
+          <div class="progress-elite"><div class="progress-bar" style="width: 68%; background: var(--elite-violet);"></div></div>
+        </div>
+        <div class="soil-metric">
+          <div class="soil-metric-top"><span class="sm-label">Phosphorus / Potassium (P/K)</span><span class="sm-value">Moderate</span></div>
+          <div class="progress-elite"><div class="progress-bar" style="width: 52%; background: var(--elite-amber);"></div></div>
+        </div>
+
+        <div class="crop-health-chips">
+          {% for chip in crop_health_chips %}
+          <span class="health-chip"><span class="hc-dot" style="background:{{ chip.color }};"></span>{{ chip.name }} &mdash; {{ chip.status }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ---------- Market Price & Trading Mandis Section ---------- -->
+<div class="row g-4 mb-4" id="mandiPriceAnalyticsSection">
+  <div class="col-lg-12">
+    <div class="card elite-panel sales-filter-card">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom-0 pb-1">
+        <div class="d-flex align-items-center gap-3">
+          <span class="sales-filter-icon" style="background:linear-gradient(135deg, var(--elite-sky), var(--elite-sky-dk)); box-shadow:0 4px 12px rgba(14,127,184,0.25);"><i class="ri-store-2-line"></i></span>
+          <div>
+            <h5 class="mb-0 fw-bold" style="color:var(--elite-ink); font-size:1.15rem;">Market Price &amp; Trading Mandis</h5>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge px-3 py-2 rounded-pill fw-bold" id="mandiTotalBadge" style="font-size:0.85rem; background:rgba(14,127,184,0.12); color:var(--elite-sky-dk);">
+            <i class="ri-map-pin-2-line me-1"></i>Active Mandis: <span id="mandiActiveDisplay">{{ mandi_markets_list|length }} Markets</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="card-body pt-3">
+        <!-- Filter Form Controls -->
+        <form id="mandiFilterForm" class="sales-filter-form p-3 mb-4 rounded-3" style="background:#f0f9ff; border:1px solid #bae6fd;">
+          <div class="row g-2 align-items-end">
+            <!-- Filter Category: Time Period -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-calendar-line me-1 text-primary"></i> Time Period
+              </label>
+              <select class="form-select form-select-sm" id="mandiPeriodFilter">
+                <option value="this_month" selected>This Month ({% now "M Y" %})</option>
+                <option value="last_month">Last Month</option>
+                <option value="last_90_days">Last 90 Days</option>
+                <option value="this_year">This Financial Year</option>
+                <option value="all_time">All Time</option>
+                <option value="custom">Custom Date Range 📅</option>
+              </select>
+            </div>
+
+            <!-- Filter: Farm -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-map-pin-2-line me-1 text-info"></i> Farm
+              </label>
+              <select class="form-select form-select-sm" id="mandiFarmFilter">
+                <option value="all" selected>All Farms</option>
+                {% for f in dashboard_farms %}
+                <option value="{{ f.id }}">{{ f.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Filter Category: Crop -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-plant-line me-1 text-success"></i> Crop
+              </label>
+              <select class="form-select form-select-sm" id="mandiCropFilter">
+                <option value="all" selected>All Crops</option>
+                {% for crop in mandi_crops_list %}
+                <option value="{{ crop }}">{{ crop }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Filter Category: Market / Mandi -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-building-line me-1 text-info"></i> Market / Mandi
+              </label>
+              <select class="form-select form-select-sm" id="mandiMarketFilter">
+                <option value="all" selected>All Regional Mandis</option>
+                {% for mkt in mandi_markets_list %}
+                <option value="{{ mkt }}">{{ mkt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Chart Type Selector -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                <i class="ri-bar-chart-grouped-line me-1 text-primary"></i> Chart Type
+              </label>
+              <select class="form-select form-select-sm" id="mandiChartTypeFilter">
+                <option value="area" selected>Spline Area Trend</option>
+                <option value="line">Line Chart</option>
+                <option value="bar">Bar Chart (Vertical)</option>
+                <option value="horizontalBar">Horizontal Bar</option>
+                <option value="donut">Donut Chart</option>
+              </select>
+            </div>
+
+            <!-- Submit Button & Reset Button -->
+            <div class="col-12 col-sm-6 col-md-3 col-xl-2 d-flex gap-2">
+              <button type="submit" class="btn btn-sm btn-primary w-100 d-flex align-items-center justify-content-center gap-1 shadow-sm fw-semibold" style="background:var(--elite-sky); border-color:var(--elite-sky); height:32px;">
+                <i class="ri-filter-3-line"></i> <span>Submit</span>
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="mandiFilterResetBtn" title="Reset Filters" style="height:32px;">
+                <i class="ri-refresh-line"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Custom Date Range Row -->
+          <div id="customMandiDateRangeContainer" class="mt-3 pt-3 border-top" style="display:none;">
+            <div class="row g-3 align-items-end">
+              <div class="col-12 col-sm-5">
+                <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                  <i class="ri-calendar-event-line me-1 text-primary"></i> Start Date
+                </label>
+                <input type="date" class="form-control form-control-sm" id="mandiStartDate">
+              </div>
+              <div class="col-12 col-sm-5">
+                <label class="form-label small fw-bold text-uppercase text-muted" style="font-size:0.7rem; letter-spacing:0.04em;">
+                  <i class="ri-calendar-event-line me-1 text-primary"></i> End Date
+                </label>
+                <input type="date" class="form-control form-control-sm" id="mandiEndDate">
+              </div>
+              <div class="col-12 col-sm-2">
+                <button type="button" class="btn btn-sm btn-outline-primary w-100 fw-semibold" id="applyCustomMandiDateBtn" style="height:32px;">
+                  <i class="ri-check-line me-1"></i> Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- Chart View & Percentage / Rate Breakdown Panel -->
+        <div class="row g-4 align-items-stretch">
+          <!-- Left: Main Chart Container -->
+          <div class="col-lg-7 col-xl-7">
+            <div class="sales-chart-wrapper p-3 rounded-3 h-100 d-flex flex-column justify-content-between" style="background:#ffffff; border:1px solid #edf0f7; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+              <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                <div>
+                  <span class="small fw-bold text-muted text-uppercase" id="mandiChartSubHeader" style="font-size:0.72rem; letter-spacing:0.04em;">Mandi Price Trend &amp; Spread</span>
+                  <div class="small text-muted" style="font-size:0.74rem;">Hover on any chart node/bar to view current wholesale trading rate</div>
+                </div>
+                <span class="badge rounded-pill px-3 py-1" id="activeMandiChartTypeBadge" style="background:rgba(14,127,184,0.1); color:var(--elite-sky-dk); font-size:0.75rem; font-weight:600;">Spline Trend View</span>
+              </div>
+              <div class="d-flex align-items-center justify-content-center flex-grow-1" style="min-height:310px;">
+                <div id="mandiDynamicChart" style="width:100%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Interactive Hover & Percentage / Rate Breakdown Panel -->
+          <div class="col-lg-5 col-xl-5">
+            <div class="sales-breakdown-panel p-3 rounded-3 h-100 d-flex flex-column" style="background:#ffffff; border:1px solid #edf0f7; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+              
+              <!-- Active Hover Focus Card -->
+              <div class="hover-focus-card p-3 mb-3 rounded-3" id="mandiHoverFocusCard" style="background:linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border:1px solid #bae6fd; transition:all .2s ease;">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="hover-dot" id="hoverMandiDot" style="width:12px; height:12px; border-radius:50%; background:var(--elite-sky); display:inline-block;"></span>
+                    <span class="fw-bold text-dark text-truncate" id="hoverMandiLabel" style="font-size:0.95rem; max-width:180px;">Mandi Focus</span>
+                  </div>
+                  <span class="badge rounded-pill" id="hoverMandiPctBadge" style="background:var(--elite-sky); color:#fff; font-size:0.82rem; font-weight:700;">₹0</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-baseline mt-2">
+                  <span class="text-muted small">Trading Price:</span>
+                  <span class="fw-bold fs-5 text-dark" id="hoverMandiAmount">₹0</span>
+                </div>
+                <div class="progress-elite mt-2" style="height:7px;">
+                  <div class="progress-bar" id="hoverMandiProgressBar" style="width:0%; background:var(--elite-sky); transition:width .3s ease;"></div>
+                </div>
+              </div>
+
+              <!-- List of Markets / Depots with Rates -->
+              <div class="text-muted small fw-bold mb-2 text-uppercase d-flex justify-content-between align-items-center" style="font-size:.7rem; letter-spacing:.04em;">
+                <span>Trading Depot / Mandi</span>
+                <span>Current Rate</span>
+              </div>
+              
+              <div class="sales-category-list d-flex flex-column gap-2 flex-grow-1" id="mandiCategoryListContainer" style="max-height:250px; overflow-y:auto;">
+                <!-- Dynamically populated mandi rows -->
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- =====================================================================
+     OPERATIONS
+====================================================================== -->
+<div class="elite-section-divider">Operations</div>
+
+<!-- ---------- KPI Row : Sales / Expenses / Tasks / Attendance ---------- -->
+<div class="row g-4 mb-4">
+  <div class="col-sm-6 col-xl-3">
+    <div class="card elite-kpi g-violet">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="kpi-label">Total Sales</div>
+            <div class="kpi-value">{{ total_sales_fmt }}</div>
+          </div>
+          <span class="kpi-icon"><i class="ri-line-chart-line"></i></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card elite-kpi g-rose">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="kpi-label">Total Expenses</div>
+            <div class="kpi-value">{{ total_expenses_fmt }}</div>
+          </div>
+          <span class="kpi-icon"><i class="ri-shopping-bag-3-line"></i></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card elite-kpi g-ink">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="kpi-label">Active Tasks</div>
+            <div class="kpi-value">{{ in_progress_tasks|default:pending_tasks }}</div>
+          </div>
+          <span class="kpi-icon"><i class="ri-loop-right-line"></i></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card elite-kpi g-indigo">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="kpi-label">Attendance Today</div>
+            <div class="kpi-value">{{ attendance_pct }}%</div>
+          </div>
+          <span class="kpi-icon"><i class="ri-calendar-check-line"></i></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- KPI Row : Inventory + Fleet ---------- -->
+<div class="row g-4 mb-4">
+  <div class="col-sm-6 col-xl-3">
+    <div class="card elite-kpi g-emerald">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="kpi-label">Total Stock Value</div>
+            <div class="kpi-value">₹15,88,100</div>
+            <div class="kpi-sub">6 items tracked</div>
+          </div>
+          <span class="kpi-icon"><i class="ri-archive-2-line"></i></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card elite-kpi g-rose">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="kpi-label">Low Stock Alerts</div>
+            <div class="kpi-value">{{ low_stock_count }}</div>
+            <div class="kpi-sub">{{ low_stock_subtitle }}</div>
+          </div>
+          <span class="kpi-icon"><i class="ri-alert-line"></i></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card elite-kpi g-sky">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="kpi-label">Fleet Operational</div>
+            <div class="kpi-value">{{ fleet_operational_count }}/{{ fleet_total_count }}</div>
+            <div class="kpi-sub">{{ fleet_maintenance_count }} in maintenance</div>
+          </div>
+          <span class="kpi-icon"><i class="ri-truck-line"></i></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card elite-kpi g-violet">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="kpi-label">Tools Registered</div>
+            <div class="kpi-value">{{ tools_count }}</div>
+            <div class="kpi-sub">Equipment &amp; implements</div>
+          </div>
+          <span class="kpi-icon"><i class="ri-tools-line"></i></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Inventory & Stock Value  +  Machinery & Maintenance Status ---------- -->
+<div class="row g-4 mb-4">
+
+  <div class="col-lg-7">
+    <div class="card elite-panel h-100">
+      <div class="card-header d-flex justify-content-between align-items-center border-bottom-0">
+        <span>Inventory &amp; Stock Value</span>
+        <a href="{% url 'farmer-inventory' %}" class="btn btn-sm btn-outline-primary">View Full Inventory</a>
+      </div>
+      <div class="card-body">
+
+        {% for item in inventory_items %}
+        <div class="stock-row">
+          <div class="stock-row-top">
+            <div><span class="stock-cat-icon" style="background:{{ item.icon_bg }};"><i class="{{ item.icon_class }}"></i></span><span class="stock-row-name">{{ item.item_name }}</span></div>
+            {% if item.is_low %}
+            <span class="stock-badge low"><i class="ri-alert-line"></i> Low Stock</span>
+            {% else %}
+            <span class="stock-badge ok"><i class="ri-checkbox-circle-line"></i> In Stock</span>
+            {% endif %}
+          </div>
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="stock-row-meta">{{ item.quantity }} {{ item.unit }} on hand &middot; reorder at {{ item.safety_stock }} &middot; {{ item.location }}</div>
+            <div class="stock-row-value {% if not item.total_val_fmt %}na{% endif %}">{{ item.total_val_fmt|default:"— No unit price set" }}</div>
+          </div>
+          <div class="progress-elite mt-2"><div class="progress-bar {% if item.is_low %}bg-danger{% else %}bg-success{% endif %}" style="width: {{ item.stock_pct }}%"></div></div>
+        </div>
+        {% empty %}
+        <div class="text-center py-4 text-muted">No inventory items recorded yet.</div>
+        {% endfor %}
+
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card elite-panel h-100">
+      <div class="card-header d-flex justify-content-between align-items-center border-bottom-0">
+        <span>Machinery &amp; Maintenance Status</span>
+        <a href="{% url 'farmer-consumption-vehicle' %}" class="btn btn-sm btn-outline-primary">View Fleet</a>
+      </div>
+      <div class="card-body">
+
+        {% for f_item in fleet_items %}
+        <div class="machine-row">
+          <span class="machine-icon {{ f_item.icon_bg }}"><i class="ri-truck-line"></i></span>
+          <div class="machine-info">
+            <div class="machine-name">{{ f_item.name }}</div>
+            <div class="machine-meta">{{ f_item.category }} &middot; {{ f_item.plate }} &middot; {{ f_item.location }}</div>
+          </div>
+          <div class="machine-status-col">
+            <span class="stock-badge {{ f_item.badge_class }}"><i class="{% if f_item.badge_class == 'ok' %}ri-checkbox-circle-line{% else %}ri-alert-line{% endif %}"></i> {{ f_item.status_label }}</span>
+            <div class="machine-inspected">Inspected {{ f_item.inspected }}</div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-center py-4 text-muted">No machinery or vehicles registered.</div>
+        {% endfor %}
+
+        <hr>
+
+        <div class="d-flex align-items-center justify-content-between">
+          <span class="text-muted small">Fleet uptime (operational / total)</span>
+          <span class="fw-bold text-success">{{ fleet_uptime_pct }}%</span>
+        </div>
+        <div class="progress-elite mt-2 mb-1"><div class="progress-bar bg-success" style="width: {{ fleet_uptime_pct }}%"></div></div>
+        <div class="d-flex align-items-center justify-content-between mt-3">
+          <span class="text-muted small">Next service due</span>
+          <span class="fw-bold" style="color:var(--elite-ink);">{{ next_service_name }}</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ---------- Workforce Snapshot ---------- -->
+<div class="row g-4 mb-4">
+  <div class="col-lg-12">
+    <div class="card elite-panel h-100">
+      <div class="card-header border-bottom-0">Workforce Snapshot</div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-lg-4">
+            <div class="workforce-headline">
+              <div id="eliteStaffChart"></div>
+              <div>
+                <div class="attendance-value">{{ attendance_pct }}%</div>
+                <div class="attendance-label">Attendance Today</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-8">
+            <div class="workforce-grid">
+              <div class="workforce-stat">
+                <span class="wf-icon bg-active"><i class="ri-user-follow-line"></i></span>
+                <div>
+                  <div class="wf-value">{{ active_staff }}</div>
+                  <div class="wf-label">Active</div>
+                </div>
+              </div>
+              <div class="workforce-stat">
+                <span class="wf-icon bg-suspended"><i class="ri-user-forbid-line"></i></span>
+                <div>
+                  <div class="wf-value">{{ suspended_staff }}</div>
+                  <div class="wf-label">Suspended</div>
+                </div>
+              </div>
+              <div class="workforce-stat">
+                <span class="wf-icon bg-present"><i class="ri-checkbox-circle-line"></i></span>
+                <div>
+                  <div class="wf-value">{{ present_today }}</div>
+                  <div class="wf-label">Present Today</div>
+                </div>
+              </div>
+              <div class="workforce-stat">
+                <span class="wf-icon bg-absent"><i class="ri-close-circle-line"></i></span>
+                <div>
+                  <div class="wf-value">{{ absent_today }}</div>
+                  <div class="wf-label">Absent Today</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr>
+        <div class="text-muted small">Overdue payment invoices</div>
+        <div class="d-flex align-items-center gap-2 mt-1">
+          <div class="progress-elite flex-grow-1">
+            <div class="progress-bar bg-danger" style="width: {{ overdue_percentage }}%"></div>
+          </div>
+          <span class="fw-bold text-danger">{{ overdue_invoices_count }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =====================================================================
+     FINANCIALS
+====================================================================== -->
+<div class="elite-section-divider">Financials</div>
+
+<!-- ---------- Labour Payroll & Attendance ---------- -->
+<div class="row g-4 mb-4">
+  <div class="col-lg-12">
+    <div class="card elite-panel">
+      <div class="card-header d-flex justify-content-between align-items-center border-bottom-0">
+        <span>Labour Payroll &amp; Attendance</span>
+        <a href="{% url 'farmer-salary-report' %}" class="btn btn-sm btn-outline-primary">View Full Payroll</a>
+      </div>
+      <div class="card-body">
+
+        <div class="payroll-summary">
+          <div class="payroll-stat">
+            <div class="ps-label">Total Monthly Payroll</div>
+            <div class="ps-value">{{ monthly_payroll_total_fmt }}</div>
+          </div>
+          <div class="payroll-stat">
+            <div class="ps-label">Paid This Month</div>
+            <div class="ps-value">{{ payroll_paid_fmt }}</div>
+          </div>
+          <div class="payroll-stat">
+            <div class="ps-label">Pending Payout</div>
+            <div class="ps-value warn">{{ payroll_pending_fmt }}</div>
+          </div>
+          <div class="payroll-stat">
+            <div class="ps-label">Attendance Today</div>
+            <div class="ps-value">{{ present_today }} / {{ total_staff }} ({{ attendance_pct }}%)</div>
+          </div>
+        </div>
+
+        <div class="row g-4">
+          <div class="col-lg-7">
+            <div class="text-muted small fw-bold mb-2 text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Payroll by Role</div>
+
+            {% for role in payroll_by_role %}
+            <div class="payroll-role-row">
+              <div>
+                <div class="payroll-role-name">{{ role.role_name }}</div>
+                <div class="payroll-role-meta">{{ role.worker_count }} worker{% if role.worker_count != 1 %}s{% endif %} &middot; {{ role.present_count }} present today</div>
+              </div>
+              <div class="payroll-role-amount">{{ role.total_fmt }}<span class="rate">{{ role.daily_rate }}</span></div>
+            </div>
+            {% empty %}
+            <div class="text-muted py-2">No staff records found.</div>
+            {% endfor %}
+          </div>
+
+          <div class="col-lg-5">
+            <div class="text-muted small fw-bold mb-2 text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Attendance Breakdown</div>
+            <div class="task-legend">
+              <div class="task-legend-item">
+                <span class="label"><span class="dot" style="background:#0f9d6c;"></span>Present</span>
+                <span class="count">{{ present_today }} <span class="pct">{{ attendance_pct }}%</span></span>
+              </div>
+              <div class="task-legend-item">
+                <span class="label"><span class="dot" style="background:#e18b1f;"></span>On Leave</span>
+                <span class="count">{{ leave_today }} <span class="pct">{{ leave_pct }}%</span></span>
+              </div>
+              <div class="task-legend-item">
+                <span class="label"><span class="dot" style="background:#d1436b;"></span>Absent</span>
+                <span class="count">{{ absent_today }} <span class="pct">{{ absent_pct }}%</span></span>
+              </div>
+            </div>
+
+            <hr>
+            <div class="d-flex align-items-center justify-content-between">
+              <span class="text-muted small">Next payroll run</span>
+              <span class="fw-bold" style="color:var(--elite-ink);">{{ next_payroll_date }}</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Live Sales & Recent Orders ---------- -->
+<div class="row g-4 mb-4">
+  <div class="col-lg-12">
+    <div class="card elite-panel h-100">
+      <div class="card-header d-flex justify-content-between align-items-center border-bottom-0">
+        <div class="d-flex align-items-center gap-2">
+          <i class="ri-shopping-cart-2-line text-success fs-5"></i>
+          <span class="fw-bold" style="color:var(--elite-ink); font-size:1.05rem;">Live Sales &amp; Recent Orders</span>
+        </div>
+        <a href="{% url 'farmer-financials' %}" class="btn btn-sm btn-outline-primary fw-semibold">
+          <i class="ri-external-link-line me-1"></i>View All Orders
+        </a>
+      </div>
+      <div class="card-body pt-2">
+        <div class="row g-3">
+          {% for order in recent_sales_orders %}
+          <div class="col-12 col-md-6 col-xl-4">
+            <div class="order-row p-3 rounded-3 h-100" style="background:#f8f9fd; border:1px solid #e7eaf3;">
+              <span class="order-icon" style="background:{{ order.icon_bg }};"><i class="ri-shopping-cart-2-line"></i></span>
+              <div class="order-info">
+                <div class="order-crop fw-bold">{{ order.title }}</div>
+                <div class="order-buyer small text-muted">{{ order.buyer }}</div>
+              </div>
+              <div class="order-right text-end">
+                <div class="order-amount fw-bold text-success">{{ order.amount_fmt }}</div>
+                <span class="stock-badge {{ order.badge_class }} mt-1"><i class="{% if order.badge_class == 'ok' %}ri-checkbox-circle-line{% else %}ri-time-line{% endif %}"></i> {{ order.status }}</span>
+              </div>
+            </div>
+          </div>
+          {% empty %}
+          <div class="col-12 text-center py-4 text-muted">No recent sales orders found.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

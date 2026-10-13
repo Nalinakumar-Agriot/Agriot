@@ -1,0 +1,669 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Users Management{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
+<style>
+.search-collapse-wrapper {
+  position: relative;
+}
+.search-input-group {
+  width: 0;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.25s ease, opacity 0.2s ease;
+  white-space: nowrap;
+}
+.search-input-group.expanded {
+  max-width: 420px;
+  width: 420px;
+  opacity: 1;
+  margin-left: 8px;
+}
+@media (max-width: 576px) {
+  .search-input-group.expanded {
+    max-width: 220px;
+    width: 220px;
+  }
+}
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+
+<script>
+var staffTable;
+
+function toggleStaffSearchBox() {
+  var group = document.getElementById('staff_search_input_group');
+  var isExpanded = group && group.classList.contains('expanded');
+
+  if (isExpanded) {
+    closeStaffSearchBox();
+  } else if (group) {
+    group.classList.remove('d-none');
+    setTimeout(function () {
+      group.classList.add('expanded');
+      var input = document.getElementById('staffSearchBox');
+      if (input) input.focus();
+    }, 10);
+  }
+}
+
+function closeStaffSearchBox() {
+  var group = document.getElementById('staff_search_input_group');
+  var input = document.getElementById('staffSearchBox');
+  if (group) group.classList.remove('expanded');
+  if (input) {
+    input.value = '';
+    if (staffTable) staffTable.search('').draw();
+  }
+  setTimeout(function () {
+    if (group) group.classList.add('d-none');
+  }, 250);
+}
+
+document.addEventListener('click', function (e) {
+  var wrapper = document.getElementById('staff_search_collapse_wrapper');
+  var group = document.getElementById('staff_search_input_group');
+  if (wrapper && group && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+    closeStaffSearchBox();
+  }
+});
+
+$(document).ready(function () {
+
+    $('.datatable').each(function () {
+
+        if ($.fn.dataTable.isDataTable(this)) {
+            $(this).DataTable().destroy();
+        }
+
+        staffTable = $(this).DataTable({
+            pageLength: $(this).data('page-length') || 10,
+            lengthMenu: [5, 10, 25, 50],
+            responsive: true,
+            dom: 't<"bottom d-flex align-items-center justify-content-between mt-3"ip>'
+        });
+
+        // Custom search box
+        $('#staffSearchBox').on('keyup', function () {
+            if (staffTable) staffTable.search(this.value).draw();
+        });
+
+        // Role filter using DataTables
+        $('.role-filter').on('click', function (e) {
+            e.preventDefault();
+            let selectedRole = $(this).data('role');
+            let selectedText = $(this).text();
+
+            $('#roleDropdown').text(selectedText);
+
+            if (selectedRole === 0 || selectedRole === "0") {
+                staffTable.column(2).search('').draw();
+            } else {
+                staffTable.column(2).search(selectedRole).draw();
+            }
+        });
+
+    });
+
+    // Password show/hide toggle
+    $(document).on('click', '.toggle-pwd-btn', function() {
+        let targetId = $(this).data('target');
+        let input = $(targetId);
+        let icon = $(this).find('i');
+        if (input.attr('type') === 'password') {
+            input.attr('type', 'text');
+            icon.removeClass('ri-eye-off-line').addClass('ri-eye-line');
+        } else {
+            input.attr('type', 'password');
+            icon.removeClass('ri-eye-line').addClass('ri-eye-off-line');
+        }
+    });
+
+    // Permission switches toggle
+    $('#add_perm_all').on('change', function() {
+        var isAll = $(this).is(':checked');
+        $('.add-perm-check').prop('checked', isAll).prop('disabled', isAll);
+    });
+
+    $('#edit_perm_all').on('change', function() {
+        var isAll = $(this).is(':checked');
+        $('.edit-perm-check').prop('checked', isAll).prop('disabled', isAll);
+    });
+
+    // Populate Edit Modal
+    $(document).on('click', '.edit-btn', function () {
+        let id = $(this).attr('data-id');
+        let name = $(this).attr('data-name');
+        let email = $(this).attr('data-email');
+        let mobile = $(this).attr('data-mobile');
+        let role = $(this).attr('data-role');
+        let status = $(this).attr('data-status');
+        let permsRaw = $(this).attr('data-permissions');
+
+        $('#edit_id').val(id);
+        $('#edit_name').val(name);
+        $('#edit_email').val(email);
+        
+        if (mobile && mobile !== 'None') {
+            $('#edit_mobile').val(mobile);
+        } else {
+            $('#edit_mobile').val('');
+        }
+        
+        // Add role if it doesn't exist in dropdown
+        if ($('#edit_role option[value="' + role + '"]').length === 0) {
+            $('#edit_role').append(new Option(role, role));
+        }
+        $('#edit_role').val(role).trigger('change');
+        
+        $('#edit_status').val(status).trigger('change');
+
+        // Parse permissions
+        let perms = [];
+        try {
+            perms = JSON.parse(permsRaw);
+        } catch(e) { perms = []; }
+        if (!Array.isArray(perms)) perms = [];
+
+        let hasAll = perms.includes('ALL');
+        $('#edit_perm_all').prop('checked', hasAll);
+
+        if (hasAll) {
+            $('.edit-perm-check').prop('checked', true).prop('disabled', true);
+        } else {
+            $('.edit-perm-check').prop('disabled', false);
+            $('.edit-perm-check').each(function() {
+                let val = $(this).val();
+                $(this).prop('checked', perms.includes(val));
+            });
+        }
+    });
+
+    // Populate Delete Modal
+    $(document).on('click', '.delete-btn', function () {
+        let id = $(this).attr('data-id');
+        let name = $(this).attr('data-name');
+
+        $('#delete_id').val(id);
+        $('#deleteFarmerName').text(name);
+    });
+
+    // Reset Add Staff Form on Modal Close
+    $('#add_staff_modal').on('hidden.bs.modal', function () {
+        $(this).find('form')[0].reset();
+        
+        // Reset role input state
+        $('#roleInputWrapper').addClass('d-none');
+        $('#roleSelect').removeClass('d-none');
+        $('#newRoleInput').val('');
+        
+        // Reset password visibility
+        $('#add_password_input').attr('type', 'password');
+        $(this).find('.toggle-pwd-btn i').removeClass('ri-eye-line').addClass('ri-eye-off-line');
+
+        // Reset permissions logic
+        $('#add_perm_all').prop('checked', true).trigger('change');
+    });
+
+});
+</script>
+
+{% endblock page_js %}
+
+{% block content %}
+
+<!-- Header Card -->
+<div class="card mb-3 border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex justify-content-between align-items-center p-3 border-bottom">
+      <div>
+          <h4 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+            <i class="ri-group-line text-primary"></i>
+            {% trans "Operator Staff Directory" %}
+          </h4>
+      </div>
+      <a href="#" class="btn btn-primary d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#add_staff_modal">
+          <i class="ri-add-line"></i> Add Staff Member
+      </a>
+    </div>
+</div>
+
+<!-- Filter Toolbar Card -->
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+        <!-- Collapsible Search -->
+        <div class="d-flex align-items-center search-collapse-wrapper" id="staff_search_collapse_wrapper">
+          <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="staff_search_toggle_btn" onclick="toggleStaffSearchBox()" style="width: 38px; height: 38px;">
+            <i class="ri-search-line"></i>
+          </button>
+          <div class="input-group search-input-group d-none" id="staff_search_input_group">
+            <span class="input-group-text bg-white border-end-0">
+              <i class="ri-search-line text-muted"></i>
+            </span>
+            <input type="text"
+                id="staffSearchBox"
+                class="form-control border-start-0"
+                placeholder="Search staff members by name or emails...">
+            <button class="btn btn-outline-secondary border-start-0" type="button" id="staff_search_close_btn" onclick="closeStaffSearchBox()">
+              <i class="ri-close-line"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" id="roleDropdown">
+              All Roles
+            </button>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item role-filter" data-role="0" href="#">All Roles</a></li>
+              {% for role in roles %}
+              <li><a class="dropdown-item role-filter" data-role="{{ role }}" href="#">{{ role }}</a></li>
+              {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="table-responsive text-nowrap p-3">
+        <table class="table table-hover align-middle border-top datatable" data-page-length="10">
+                <thead class="table-gray-200 ">
+                    <tr class="fs-8 fw-medium">
+                        <th>Staff Name</th>
+                        <th>Email Id</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="fs-7 fw-medium text-black">
+                    {% for u in staff_users %}
+                    <tr class="user-card" data-role="{{ u.profile.role }}">
+                        <td>
+                          <label class="fw-semibold text-black">{{ u.first_name }}</label>
+                        </td>
+                        <td>
+                            <label class="fs-8 fw-normal"><i class="ri-mail-line me-1"></i>{{ u.email }}</label>
+                          </td>
+                        <td>
+                          {% if u.profile.role == 'Administrator' or u.profile.role == 'superadmin' or u.profile.role == 'Superadmin' %}
+                          <label class="badge rounded ms-2" style="background: #ebe3f1; color: #5d0a72; border:1px solid #63085e;">{{ u.profile.role|title }}</label>
+                          {% elif u.profile.role == 'Field Manager' %}
+                          <label class="badge rounded ms-2" style="background: #e3e9f3; color: #1234cc; border: 1px solid #1234cc;">Field Manager</label>
+                          {% else %}
+                          <label class="badge bg-label-primary border border-primary rounded ms-2">{{ u.profile.role|title }}</label>
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if u.is_active %}
+                          <span class="badge bg-label-primary text-primary rounded-3">Active</span>
+                          {% else %}
+                          <span class="badge bg-label-danger text-danger rounded-3">Suspended</span>
+                          {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if u.email != 'admin@agriot.com' %}
+                            <button class="btn btn-sm btn-outline-secondary edit-btn"
+                                    data-id="{{ u.id }}"
+                                    data-name="{{ u.first_name }}"
+                                    data-email="{{ u.email }}"
+                                    data-mobile="{{ u.profile.mobile_number }}"
+                                    data-role="{{ u.profile.role }}"
+                                    data-status="{% if u.is_active %}0{% else %}1{% endif %}"
+                                    data-permissions="{{ u.profile.permissions_json }}"
+                                    data-bs-toggle="modal" data-bs-target="#edit_staff_modal"><i class="ri-pencil-line"></i></button>
+                            <button class="btn btn-sm btn-outline-danger delete-btn"
+                                    data-id="{{ u.id }}"
+                                    data-name="{{ u.first_name }}"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#delete_staff_modal">
+                                <i class="ri-delete-bin-7-line"></i>
+                            </button>
+                            {% else %}
+                            <span class="badge bg-label-secondary text-secondary">Protected</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+<!-- Add Staff Modal -->
+<div class="modal fade" id="add_staff_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+
+      <form method="POST" action="{% url 'manage_users' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add">
+        
+        <!-- Header -->
+        <div class="modal-header">
+          <h5 class="modal-title fw-semibold">Add Staff Operator</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <!-- Body -->
+        <div class="modal-body">
+
+          <div class="row g-3">
+
+            <div class="col-md-6">
+              <label class="form-label">Full Operator Name</label>
+              <input type="text" name="name" class="form-control border rounded" placeholder="Liam Sterling" required>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Government/Work Email</label>
+              <input type="email" name="email" class="form-control border rounded" placeholder="Enter email address" autocomplete="off" required>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label">Mobile Number</label>
+              <input type="text" name="mobile" class="form-control border rounded" placeholder="9876543210" minlength="10" maxlength="15" required>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Password</label>
+              <div class="input-group">
+                <input type="password" name="password" id="add_password_input" class="form-control border" placeholder="Create a password" autocomplete="new-password" required>
+                <button class="btn btn-outline-secondary toggle-pwd-btn" type="button" data-target="#add_password_input" tabindex="-1">
+                  <i class="ri-eye-off-line"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="col-6">
+              <label class="form-label d-flex justify-content-between align-items-center">
+                System Permission Role
+                <a href="#" class="btn btn-sm text-primary p-0" id="addRoleBtn">
+                  <i class="ri-add-line"></i>
+                  Add Role
+                </a>
+              </label>
+
+              <select name="role" id="roleSelect" class="form-select border rounded" required>
+                <option value="">Select Role</option>
+                {% for role in roles %}
+                <option value="{{ role }}">{{ role }}</option>
+                {% endfor %}
+              </select>
+
+              <div id="roleInputWrapper" class="d-none mt-2">
+                <div class="d-flex align-items-center gap-2">
+                  <input type="text" id="newRoleInput" class="form-control" placeholder="Enter new role">
+
+                  <a href="#" class="btn btn-primary d-flex align-items-center justify-content-center"
+                    style="width: 40px; height: 40px;"
+                    id="saveRoleBtn">
+                    <i class="ri-save-line"></i>
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6">
+              <label class="form-label">Status</label>
+              <select name="status" class="select3 form-select border rounded" required>
+                <option value="0">Active</option>
+                <option value="1">Suspended locked</option>
+              </select>
+            </div>
+
+            <!-- Permission Section -->
+            <div class="col-12 mt-3">
+              <div class="bg-light border rounded-3 p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <span class="fw-bold text-dark small"><i class="ri-key-2-line me-1 text-warning"></i> Admin Module Access Permissions</span>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" id="add_perm_all" name="perm_all" value="true" checked>
+                    <label class="form-check-label fw-bold small text-success" for="add_perm_all">All Modules</label>
+                  </div>
+                </div>
+
+                <div id="add_permissions_container" class="row g-2 mt-1">
+                  {% for perm in admin_permissions %}
+                  <div class="col-6 col-md-4">
+                    <div class="form-check">
+                      <input class="form-check-input add-perm-check" type="checkbox" name="permissions" value="{{ perm }}" id="add_perm_{{ forloop.counter }}" checked disabled>
+                      <label class="form-check-label small" for="add_perm_{{ forloop.counter }}">{{ perm }}</label>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="modal-footer d-flex justify-content-between">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <i class="ri-check-line me-1"></i> Confirm Registration
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- Edit Staff Modal -->
+<div class="modal fade" id="edit_staff_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+
+      <form method="POST" action="{% url 'manage_users' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="edit">
+        <input type="hidden" name="id" id="edit_id">
+        
+        <!-- Header -->
+        <div class="modal-header">
+          <h5 class="modal-title fw-semibold">Edit Staff Credentials</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <!-- Body -->
+        <div class="modal-body">
+
+          <div class="row g-3">
+
+            <div class="col-md-6">
+              <label class="form-label">Full Operator Name</label>
+              <input type="text" name="name" id="edit_name" class="form-control border rounded" required>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Government/Work Email</label>
+              <input type="email" name="email" id="edit_email" class="form-control border rounded" required>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label">Mobile Number</label>
+              <input type="text" name="mobile" id="edit_mobile" class="form-control border rounded" minlength="10" maxlength="15" required>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Reset Password (Optional)</label>
+              <div class="input-group">
+                <input type="password" name="password" id="edit_password_input" class="form-control border" placeholder="Leave blank to keep current">
+                <button class="btn btn-outline-secondary toggle-pwd-btn" type="button" data-target="#edit_password_input" tabindex="-1">
+                  <i class="ri-eye-off-line"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="col-6">
+              <label class="form-label">System Permission Role</label>
+              <select name="role" id="edit_role" class="form-select border rounded" required>
+                {% for role in roles %}
+                <option value="{{ role }}">{{ role }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-6">
+              <label class="form-label">Select Status</label>
+              <select name="status" id="edit_status" class="form-select border rounded" required>
+                <option value="0">Active</option>
+                <option value="1">Suspended locked</option>
+              </select>
+            </div>
+
+            <!-- Permission Section -->
+            <div class="col-12 mt-3">
+              <div class="bg-light border rounded-3 p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <span class="fw-bold text-dark small"><i class="ri-key-2-line me-1 text-warning"></i> Admin Module Access Permissions</span>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" id="edit_perm_all" name="perm_all" value="true">
+                    <label class="form-check-label fw-bold small text-success" for="edit_perm_all">All Modules</label>
+                  </div>
+                </div>
+
+                <div id="edit_permissions_container" class="row g-2 mt-1">
+                  {% for perm in admin_permissions %}
+                  <div class="col-6 col-md-4">
+                    <div class="form-check">
+                      <input class="form-check-input edit-perm-check" type="checkbox" name="permissions" value="{{ perm }}" id="edit_perm_{{ forloop.counter }}">
+                      <label class="form-check-label small" for="edit_perm_{{ forloop.counter }}">{{ perm }}</label>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="modal-footer d-flex justify-content-between">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <i class="ri-check-line me-1"></i> Update Credentials
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<!-- Delete staff Modal -->
+<div class="modal fade" id="delete_staff_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+
+      <form method="POST" action="{% url 'manage_users' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="id" id="delete_id">
+        <div class="modal-header">
+          <h5 class="modal-title text-danger">Confirm Delete</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body text-center">
+          <p class="mb-0">
+            Are you sure you want to delete
+            <strong id="deleteFarmerName">this Staff</strong>?
+          </p>
+        </div>
+
+        <div class="modal-footer justify-content-center">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-danger" id="confirmDeleteBtn">
+            Yes, Delete
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+
+<script>
+  const addBtn = document.getElementById('addRoleBtn');
+  const inputWrapper = document.getElementById('roleInputWrapper');
+  const select = document.getElementById('roleSelect');
+  const saveBtn = document.getElementById('saveRoleBtn');
+  const input = document.getElementById('newRoleInput');
+
+  // Add Role Click
+  addBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+
+    inputWrapper.classList.remove('d-none');
+    select.classList.add('d-none');
+
+    input.focus();
+  });
+
+  // Save Role Click
+  saveBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+
+    const newRole = input.value.trim();
+    if (!newRole) return;
+
+    // Create option
+    const option = document.createElement('option');
+    option.value = newRole;
+    option.text = newRole;
+    option.selected = true;
+
+    select.appendChild(option);
+
+    input.value = '';
+    inputWrapper.classList.add('d-none');
+    select.classList.remove('d-none');
+  });
+
+  input.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      saveBtn.click();
+    }
+  });
+</script>
+
+{% endblock %}

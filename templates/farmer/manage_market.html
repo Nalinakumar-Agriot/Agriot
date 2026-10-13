@@ -1,0 +1,3896 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Market Management{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
+<style>
+.clamp-3 {
+  font-size: 0.8125rem;
+  line-height: 1.625;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical; 
+  overflow: hidden;
+}
+.bg-gray-100{
+    background-color: #F8FAFC;
+}
+
+.agri-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 14px;
+  height: 95px;
+  background: #fff;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.2s ease;
+}
+
+.agri-card:hover {
+  background: #f8fafc;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+/* ACTIVE */
+.agri-card.active {
+  background: linear-gradient(135deg, #FEEFE3, #FEEFE3);
+  color: #000;
+  border-color: #F8A760;
+  transform: scale(1.03);
+}
+
+/* TOP ROW */
+.agri-card .top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ICON BOX */
+.icon {
+  padding: 6px;
+  border-radius: 8px;
+  background: #f1f5f9;
+}
+
+.icon i {
+  font-size: 14px;
+}
+
+.icon.emerald {
+  background: rgb(247, 206, 170);
+  color: #ad5c14;
+}
+
+/* TEXT */
+.agri-card .title {
+  font-weight: 800;
+  font-size: 13px;
+  display: block;
+}
+
+.agri-card .sub {
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+.agri-card.active .sub {
+  color: rgba(75, 75, 75, 0.7);
+}
+
+</style>
+<style>
+
+.section {
+  width: 100%;
+}
+
+.table-scroll-wrapper {
+    width: 100% !important;
+}
+
+.table-container {
+    width: 100%;
+    height: 350px;
+    overflow-y: auto;   /* 🔥 force vertical scroll */
+    overflow-x: auto;   /* optional horizontal */
+    border: 1px solid #ddd;
+}
+
+/* IMPORTANT: force horizontal scroll */
+.table-container table {
+    width: max-content;
+    min-width: 100%;
+    height: 378px;
+    border-collapse: separate;
+}
+
+/* prevent wrapping */
+.table-container th,
+.table-container td {
+    white-space: nowrap;
+}
+
+.sticky_table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.sticky_table th,
+.sticky_table td {
+    white-space: nowrap;
+    min-width: 150px;     /* balanced */
+    padding: 6px;
+}
+
+
+.sticky_table thead th {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    z-index: 10; /* 50 is fine, but 10 is enough */
+    text-align: center;
+    vertical-align: middle;
+}
+
+
+.sticky_table th.sticky-col-1 {
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 60;
+    width: 200px;
+}
+
+.sticky_table td.sticky-col-1 {
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 10;
+}
+
+.sticky_table th.sticky-col-2 {
+    position: sticky;
+    left: 200px;  /* must match col width */
+    background: #fff;
+    z-index: 60;
+    width: 200px;
+}
+
+.sticky_table td.sticky-col-2 {
+    position: sticky;
+    left: 200px;
+    background: #fff;
+    z-index: 10;
+}
+
+.sticky_table tbody tr:hover td {
+    background-color: #e3f2fd;
+    transition: 0.2s ease-in-out;
+}
+
+.current-row td {
+    background-color: #fff3cd !important;
+}
+
+.quick-sc-item {
+  transition: all 0.15s ease-in-out;
+  border: 1px solid #e9ecef;
+  background: #ffffff;
+}
+.quick-sc-item:hover {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.04);
+}
+.delete-sc-btn {
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+.delete-sc-btn:hover {
+  color: #ef4444 !important;
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+}
+#farmer_quick_service_class_items_list::-webkit-scrollbar {
+  width: 4px;
+}
+#farmer_quick_service_class_items_list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+/* Premium Nearby Location Card Styling */
+.location-card-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.04);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+.location-card-item:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 12px 28px -4px rgba(15, 23, 42, 0.09), 0 4px 8px -2px rgba(15, 23, 42, 0.04);
+  transform: translateY(-3px);
+}
+.loc-icon-circle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.badge-contact-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #334155;
+  text-decoration: none;
+  transition: all 0.18s ease;
+}
+.badge-contact-pill.phone-pill {
+  background: #f0fdf4;
+  border-color: #dcfce7;
+  color: #15803d;
+  font-weight: 600;
+}
+.badge-contact-pill.phone-pill:hover {
+  background: #15803d;
+  border-color: #15803d;
+  color: #ffffff !important;
+}
+.badge-contact-pill.phone-pill:hover i {
+  color: #ffffff !important;
+}
+.badge-contact-pill.email-pill {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #475569;
+  width: 100%;
+}
+.badge-contact-pill.email-pill:hover {
+  background: #0284c7;
+  border-color: #0284c7;
+  color: #ffffff !important;
+}
+.badge-contact-pill.email-pill:hover i {
+  color: #ffffff !important;
+}
+.badge-contact-pill.website-pill {
+  background: #eff6ff;
+  border-color: #dbeafe;
+  color: #1d4ed8;
+  font-weight: 600;
+  padding: 6px 14px;
+}
+.badge-contact-pill.website-pill:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #ffffff !important;
+}
+.badge-contact-pill.website-pill:hover i {
+  color: #ffffff !important;
+}
+.location-notes-box {
+  background: #fffdf5;
+  border: 1px solid #fef3c7;
+  border-left: 3px solid #f59e0b;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  color: #92400e;
+  line-height: 1.4;
+}
+.search-collapse-wrapper {
+  position: relative;
+}
+.search-input-group {
+  width: 0;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.25s ease, opacity 0.2s ease;
+  white-space: nowrap;
+}
+.search-input-group.expanded {
+  max-width: 420px;
+  width: 420px;
+  opacity: 1;
+  margin-left: 8px;
+}
+@media (max-width: 576px) {
+  .search-input-group.expanded {
+    max-width: 220px;
+    width: 220px;
+  }
+}
+.quick-add-link {
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.quick-item-row {
+  transition: all 0.15s ease-in-out;
+  border: 1px solid #e9ecef;
+  background: #ffffff;
+}
+.quick-item-row:hover {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.04);
+}
+.delete-item-btn {
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+.delete-item-btn:hover {
+  color: #ef4444 !important;
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+}
+.modal[id^="farmer_quick_add_"], .modal[id^="quick_add_"] {
+  z-index: 10700 !important;
+}
+.modal[id^="farmer_quick_add_"] .modal-dialog, .modal[id^="quick_add_"] .modal-dialog {
+  z-index: 10701 !important;
+}
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+document.querySelectorAll('.agri-card').forEach(btn => {
+  btn.addEventListener('click', function () {
+    document.querySelectorAll('.agri-card').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+</script>
+<script>
+$(document).ready(function () {
+
+    $('.datatable').each(function () {
+
+        // 🔥 prevent double init
+        if ($.fn.dataTable.isDataTable(this)) {
+            $(this).DataTable().destroy();
+        }
+
+        $(this).DataTable({
+            pageLength: $(this).data('page-length') || 5,
+            lengthMenu: [5, 10, 25, 50],
+            responsive: true
+        });
+
+    });
+
+});
+</script>
+
+<script>
+document.querySelectorAll('.role-filter').forEach(item => {
+    item.addEventListener('click', function () {
+        let selectedRole = this.getAttribute('data-role');
+        let selectedText = this.textContent;
+
+        // Change button text
+        document.getElementById('roleDropdown').textContent = selectedText;
+
+        // Filter cards
+        document.querySelectorAll('.user-card').forEach(card => {
+            let role = card.getAttribute('data-role');
+
+            if (selectedRole === "0" || role === selectedRole) {
+                card.style.display = "block";
+            } else {
+                card.style.display = "none";
+            }
+        });
+    });
+});
+</script>
+
+<script>
+  const addBtn = document.getElementById('addRoleBtn');
+  const inputWrapper = document.getElementById('roleInputWrapper');
+  const select = document.getElementById('roleSelect');
+  const saveBtn = document.getElementById('saveRoleBtn');
+  const input = document.getElementById('newRoleInput');
+
+  // Add Role Click
+  if (addBtn) {
+      addBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        inputWrapper.classList.remove('d-none');
+        select.classList.add('d-none');
+        input.focus();
+      });
+  }
+
+  // Save Role Click
+  if (saveBtn) {
+      saveBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+
+    const newRole = input.value.trim();
+    if (!newRole) return;
+
+    // Create option
+    const option = document.createElement('option');
+    option.value = newRole;
+    option.text = newRole;
+    option.selected = true;
+
+    select.appendChild(option);
+
+    input.value = '';
+    inputWrapper.classList.add('d-none');
+    select.classList.remove('d-none');
+  });
+  }
+
+  if (input) {
+      input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          saveBtn.click();
+        }
+      });
+  }
+</script>
+
+<script>
+  let gridBtn = document.getElementById('grid-view-btn');
+  if (gridBtn) gridBtn.addEventListener('click', function() {
+    document.querySelectorAll('.pricing-card-col').forEach(col => {
+      col.classList.remove('col-12');
+      col.classList.add('col-xl-6');
+
+      const inner = col.querySelector('.pricing-card-inner');
+      inner.classList.remove('flex-row');
+      inner.classList.add('flex-column', 'align-items-start');
+
+      const info = inner.querySelector('.pricing-info');
+      info.style.width = '100%';
+
+      const stats = inner.querySelector('.pricing-stats');
+      stats.style.width = '100%';
+      stats.classList.add('mt-3');
+
+      const actions = inner.querySelector('.pricing-actions');
+      actions.style.width = '100%';
+      actions.classList.remove('text-end');
+      actions.classList.add('text-start', 'mt-3');
+
+      const icons = actions.querySelector('.action-icons');
+      if (icons) {
+          icons.classList.remove('justify-content-end');
+          icons.classList.add('justify-content-start');
+      }
+    });
+  });
+
+  let listBtn = document.getElementById('list-view-btn');
+  if (listBtn) listBtn.addEventListener('click', function() {
+    document.querySelectorAll('.pricing-card-col').forEach(col => {
+      col.classList.remove('col-xl-6');
+      col.classList.add('col-12');
+
+      const inner = col.querySelector('.pricing-card-inner');
+      inner.classList.remove('flex-column', 'align-items-start');
+      inner.classList.add('flex-row');
+
+      const info = inner.querySelector('.pricing-info');
+      info.style.width = '250px';
+
+      const stats = inner.querySelector('.pricing-stats');
+      stats.style.width = '440px';
+      stats.classList.remove('mt-3');
+
+      const actions = inner.querySelector('.pricing-actions');
+      actions.style.width = 'auto';
+      actions.style.minWidth = '150px';
+      actions.classList.remove('text-start', 'mt-3');
+      actions.classList.add('text-end');
+
+      const icons = actions.querySelector('.action-icons');
+      if (icons) {
+          icons.classList.remove('justify-content-start');
+          icons.classList.add('justify-content-end');
+      }
+    });
+  });
+
+  // Live Search functionality (Market Prices tab)
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) {
+      searchInput.addEventListener('keyup', function() {
+        let filter = this.value.toLowerCase();
+        let cards = document.querySelectorAll('.pricing-card-col');
+        cards.forEach(card => {
+          let textContent = card.innerText.toLowerCase();
+          if (textContent.includes(filter)) {
+            card.style.display = '';
+          } else {
+            card.style.display = 'none';
+          }
+        });
+      });
+  }
+
+  // Hub Buyer (Trading Mandis) filter — runs after DOM is ready inside jQuery context
+  function filterCards() {
+      const cropSearchInput = document.getElementById('hubSearchInput');
+      const cropFilter = document.getElementById('cropFilter');
+      const demandFilter = document.getElementById('demandFilter');
+
+      const term = cropSearchInput ? cropSearchInput.value.toLowerCase() : '';
+      const crop = cropFilter ? cropFilter.value.toLowerCase() : 'all';
+      const demand = demandFilter ? demandFilter.value.toLowerCase() : 'all';
+
+      document.querySelectorAll('.hub-buyer-card').forEach(card => {
+          const text = card.innerText.toLowerCase();
+          const cardDemand = (card.getAttribute('data-demand') || '').toLowerCase();
+          const cardCrops = (card.getAttribute('data-crops') || '').toLowerCase();
+
+          let show = true;
+          if (term && !text.includes(term)) show = false;
+          if (demand !== 'all' && demand !== cardDemand) show = false;
+          if (crop !== 'all' && !cardCrops.includes(crop)) show = false;
+
+          card.style.display = show ? '' : 'none';
+      });
+  }
+
+  const hubSearchInput = document.getElementById('hubSearchInput');
+  if (hubSearchInput) hubSearchInput.addEventListener('input', filterCards);
+
+  $('#cropFilter, #demandFilter').on('change', filterCards);
+
+  $(document).ready(function() {
+      // Handle tab switching on load based on hash
+      let hash = window.location.hash;
+      if (hash) {
+          let tabBtn = document.querySelector(`button[data-bs-target="${hash}"]`);
+          if (tabBtn) {
+              tabBtn.click();
+          }
+      }
+
+      // Update hash in URL and active class when a tab is clicked
+      $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
+          document.querySelectorAll('.nav-link').forEach(card => card.classList.remove('active'));
+          $(this).addClass('active');
+          const targetHash = $(this).attr('data-bs-target');
+          if (targetHash && history.replaceState) {
+              history.replaceState(null, null, targetHash);
+          }
+      });
+      
+      // Draw sparklines and badges
+      document.querySelectorAll('.sparkline-canvas').forEach(drawSparkline);
+      document.querySelectorAll('.pct-badge').forEach(renderPctBadge);
+
+      // Dynamic z-index stacking for nested/stacked modals
+      document.addEventListener('show.bs.modal', function (event) {
+          var modal = event.target;
+          if (!modal.classList.contains('modal')) return;
+
+          if (modal.id === 'farmer_quick_add_service_class_modal') {
+              renderFarmerQuickServiceClassList();
+          }
+
+          var openModals = document.querySelectorAll('.modal.show');
+          var baseZ = 1050 + (openModals.length * 20);
+          modal.style.zIndex = baseZ + 10;
+
+          setTimeout(function () {
+              var backdrops = document.querySelectorAll('.modal-backdrop');
+              backdrops.forEach(function (bd, i) {
+                  bd.style.zIndex = 1050 + (i * 20);
+              });
+          }, 10);
+      });
+
+      document.addEventListener('hidden.bs.modal', function () {
+          var openModals = document.querySelectorAll('.modal.show');
+          if (openModals.length > 0) {
+              document.body.classList.add('modal-open');
+              document.body.style.overflow = 'hidden';
+          }
+      });
+
+      var quickInput = document.getElementById('farmer_quick_service_class_input');
+      if (quickInput) {
+          quickInput.addEventListener('keydown', function(e) {
+              if (e.key === 'Enter') {
+                  e.preventDefault();
+                  submitFarmerQuickServiceClassModal();
+              }
+          });
+      }
+  });
+
+  function togglePriceAnalysis() {
+      let terminalView = document.getElementById('terminalListView');
+      let priceView = document.getElementById('priceAnalysisView');
+      let toggleText = document.getElementById('togglePriceAnalysisText');
+      let toggleIcon = document.getElementById('togglePriceAnalysisIcon');
+      let hubHeadingText = document.getElementById('hubHeadingText');
+      let hubHeadingIcon = document.getElementById('hubHeadingIcon');
+      
+      if (priceView.style.display === 'none' || priceView.style.display === '') {
+          terminalView.style.display = 'none';
+          priceView.style.display = 'block';
+          toggleText.innerText = 'Trading Mandis';
+          toggleIcon.className = 'ri-store-2-line';
+          if (hubHeadingText) hubHeadingText.innerText = 'Market Price Analysis';
+          if (hubHeadingIcon) hubHeadingIcon.className = 'ri-line-chart-line text-primary';
+          if (!priceAnalysisChart) {
+              loadPriceAnalysisChart();
+          }
+      } else {
+          priceView.style.display = 'none';
+          terminalView.style.display = 'block';
+          toggleText.innerText = 'Price Analysis';
+          toggleIcon.className = 'ri-line-chart-line';
+          if (hubHeadingText) hubHeadingText.innerText = 'Trading Mandis';
+          if (hubHeadingIcon) hubHeadingIcon.className = 'ri-store-2-line text-primary';
+      }
+  }
+  
+    function renderPctBadge(badge) {
+        const price = parseFloat(badge.dataset.price);
+        const prev = parseFloat(badge.dataset.prev);
+        if (!isNaN(price) && !isNaN(prev) && prev > 0) {
+            const diff = price - prev;
+            const pct = (Math.abs(diff) / prev) * 100;
+            let icon = diff > 0 ? '▵' : diff < 0 ? '▿' : '-';
+            badge.textContent = `${icon} ${pct.toFixed(1)}%`;
+        } else {
+            badge.textContent = '-';
+        }
+    }
+
+    function drawSparkline(canvas) {
+        const raw = canvas.dataset.history || '';
+        const trend = canvas.dataset.trend || 'flat';
+        const values = raw.split(',').map(Number).filter(v => !isNaN(v));
+        if (values.length < 2) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        const W = canvas.offsetWidth || 100;
+        const H = 28;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const range = max - min || 1;
+        const pad = 3;
+
+        const toX = (i) => pad + (i / (values.length - 1)) * (W - pad * 2);
+        const toY = (v) => H - pad - ((v - min) / range) * (H - pad * 2);
+
+        ctx.beginPath();
+        ctx.moveTo(toX(0), toY(values[0]));
+        for (let i = 1; i < values.length; i++) {
+            ctx.lineTo(toX(i), toY(values[i]));
+        }
+        
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        if (trend === 'up') ctx.strokeStyle = '#16a34a';
+        else if (trend === 'down') ctx.strokeStyle = '#dc2626';
+        else ctx.strokeStyle = '#94a3b8';
+        
+        ctx.stroke();
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function filterNearbyLocations() {
+        let searchInput = document.getElementById("nearbySearchInput");
+        let typeFilter = document.getElementById("nearbyTypeFilter");
+        let searchVal = searchInput ? searchInput.value.toLowerCase() : "";
+        let typeVal = typeFilter ? typeFilter.value.toLowerCase() : "";
+        if (typeVal === "class type: all" || typeVal === "all") typeVal = "";
+        
+        let items = document.querySelectorAll(".farmer-location-item");
+        let count = 0;
+        
+        items.forEach(function(item) {
+            let nameEl = item.querySelector(".loc-name");
+            let addrEl = item.querySelector(".loc-address");
+            let typeEl = item.querySelector(".loc-type");
+
+            let name = nameEl ? nameEl.innerText.toLowerCase() : '';
+            let address = addrEl ? addrEl.innerText.toLowerCase() : '';
+            let type = typeEl ? typeEl.innerText.trim().toLowerCase() : '';
+            
+            let matchSearch = name.includes(searchVal) || address.includes(searchVal);
+            let matchType = (typeVal === "") || (type === typeVal);
+            
+            if (matchSearch && matchType) {
+                item.style.display = "block";
+                count++;
+            } else {
+                item.style.display = "none";
+            }
+        });
+        
+        let matchCountEl = document.getElementById("nearbyMatchCount");
+        if (matchCountEl) {
+            matchCountEl.innerText = "Showing " + count + " matches";
+        }
+    }
+
+    function openFarmerQuickServiceClassModal() {
+        var quickModalEl = document.getElementById('farmer_quick_add_service_class_modal');
+        if (!quickModalEl) return;
+        
+        var input = document.getElementById('farmer_quick_service_class_input');
+        if (input) input.value = '';
+        
+        renderFarmerQuickServiceClassList();
+        
+        var modalInstance = bootstrap.Modal.getOrCreateInstance(quickModalEl);
+        modalInstance.show();
+        
+        setTimeout(function() {
+            if (input) input.focus();
+        }, 300);
+    }
+
+    function submitFarmerQuickServiceClassModal() {
+        var input = document.getElementById('farmer_quick_service_class_input');
+        var name = (input ? input.value : '').trim();
+        if (!name) {
+            alert('Please enter a location type name');
+            if (input) input.focus();
+            return;
+        }
+
+        var submitBtn = document.getElementById('farmer_quick_service_class_submit_btn');
+        if (submitBtn) submitBtn.disabled = true;
+
+        var formData = new FormData();
+        formData.append('name', name);
+
+        fetch("{% url 'farmer_quick_add_service_class' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (submitBtn) submitBtn.disabled = false;
+            if (data.success) {
+                if (input) input.value = '';
+                
+                var selects = [
+                    document.getElementById('farmer_add_service_class_select'),
+                    document.getElementById('nearbyTypeFilter')
+                ];
+                
+                selects.forEach(function(sel) {
+                    if (sel) {
+                        var exists = false;
+                        for (var i = 0; i < sel.options.length; i++) {
+                            if (sel.options[i].value.toLowerCase() === data.name.toLowerCase()) {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (!exists) {
+                            var opt = document.createElement('option');
+                            opt.value = data.name;
+                            opt.textContent = data.name;
+                            if (data.id) opt.setAttribute('data-id', data.id);
+                            sel.appendChild(opt);
+                        }
+                        var parentModal = sel.closest('.modal');
+                        if (parentModal && parentModal.classList.contains('show') && sel.id !== 'nearbyTypeFilter') {
+                            sel.value = data.name;
+                        }
+                    }
+                });
+
+                renderFarmerQuickServiceClassList();
+
+                var modalEl = document.getElementById('farmer_quick_add_service_class_modal');
+                if (modalEl) {
+                    var inst = bootstrap.Modal.getInstance(modalEl);
+                    if (inst) inst.hide();
+                }
+            } else {
+                alert(data.error || 'Failed to add location type');
+            }
+        })
+        .catch(err => {
+            if (submitBtn) submitBtn.disabled = false;
+            console.error(err);
+            alert('An error occurred while saving the location type.');
+        });
+    }
+
+    function deleteFarmerQuickServiceClass(name, id) {
+        if (!confirm('Are you sure you want to delete location type "' + name + '"?')) return;
+
+        var formData = new FormData();
+        if (id) formData.append('item_id', id);
+        formData.append('name', name);
+
+        fetch("{% url 'farmer_quick_delete_service_class' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                var selects = [
+                    document.getElementById('farmer_add_service_class_select'),
+                    document.getElementById('nearbyTypeFilter')
+                ];
+                selects.forEach(function(sel) {
+                    if (sel) {
+                        for (var i = sel.options.length - 1; i >= 0; i--) {
+                            if (sel.options[i].value.toLowerCase() === name.toLowerCase()) {
+                                sel.remove(i);
+                            }
+                        }
+                    }
+                });
+                renderFarmerQuickServiceClassList();
+            } else {
+                alert(data.error || 'Failed to delete location type');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('An error occurred while deleting the location type.');
+        });
+    }
+
+    function renderFarmerQuickServiceClassList() {
+        var select = document.getElementById('farmer_add_service_class_select');
+        var container = document.getElementById('farmer_quick_service_class_items_list');
+        var badge = document.getElementById('farmer_quick_service_class_count_badge');
+        if (!select || !container) return;
+
+        container.innerHTML = '';
+        var count = 0;
+        for (var i = 0; i < select.options.length; i++) {
+            var opt = select.options[i];
+            if (opt.value && opt.value !== '') {
+                count++;
+                var valEscaped = opt.value.replace(/'/g, "\\'");
+                var optId = opt.getAttribute('data-id') || '';
+                var itemDiv = document.createElement('div');
+                itemDiv.className = 'd-flex justify-content-between align-items-center py-2 px-3 rounded-3 mb-1.5 quick-sc-item';
+                itemDiv.innerHTML = `
+                    <div class="d-flex align-items-center gap-2 text-truncate me-2">
+                        <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-warning-subtle text-warning flex-shrink-0" style="width: 22px; height: 22px; font-size: 11px;">
+                            <i class="ri-bookmark-3-fill"></i>
+                        </span>
+                        <span class="small fw-semibold text-dark text-truncate">${opt.value}</span>
+                    </div>
+                    <button type="button" class="btn btn-sm p-0 d-flex align-items-center justify-content-center delete-sc-btn"
+                            style="width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;"
+                            onclick="deleteFarmerQuickServiceClass('${valEscaped}', '${optId}')"
+                            title="Delete ${opt.value}">
+                        <i class="ri-delete-bin-line" style="font-size: 14px;"></i>
+                    </button>
+                `;
+                container.appendChild(itemDiv);
+            }
+        }
+        if (count === 0) {
+            container.innerHTML = `
+                <div class="text-center py-4 text-muted">
+                    <i class="ri-inbox-line fs-3 d-block mb-1 opacity-50"></i>
+                    <span class="small">No location types yet</span>
+                </div>
+            `;
+        }
+        if (badge) badge.innerText = count + ' Total';
+    }
+
+    function openFarmerViewLocationModal(btn) {
+        var name = btn.getAttribute('data-name') || '';
+        var type = btn.getAttribute('data-type') || '';
+        var contactPerson = btn.getAttribute('data-contact_person') || '';
+        var designation = btn.getAttribute('data-designation') || '';
+        var phone = btn.getAttribute('data-phone') || '';
+        var email = btn.getAttribute('data-email') || '';
+        var website = btn.getAttribute('data-website') || '';
+        var address = btn.getAttribute('data-address') || '';
+        var notes = btn.getAttribute('data-notes') || '';
+
+        var nameEl = document.getElementById('view_farmer_loc_name');
+        var typeEl = document.getElementById('view_farmer_loc_type');
+        if (nameEl) nameEl.innerText = name || '-';
+        if (typeEl) typeEl.innerText = type || 'Agri Location';
+        
+        var contactWrap = document.getElementById('view_farmer_loc_contact_wrap');
+        var contactEl = document.getElementById('view_farmer_loc_contact');
+        if (contactWrap && contactEl) {
+            if (contactPerson || designation) {
+                contactWrap.style.display = 'block';
+                contactEl.innerText = contactPerson + (designation ? ' (' + designation + ')' : '');
+            } else {
+                contactWrap.style.display = 'none';
+            }
+        }
+
+        var phoneWrap = document.getElementById('view_farmer_loc_phone_wrap');
+        var phoneEl = document.getElementById('view_farmer_loc_phone');
+        var phoneLink = document.getElementById('view_farmer_loc_phone_link');
+        if (phoneWrap && phoneEl && phoneLink) {
+            if (phone) {
+                phoneWrap.style.display = 'inline-flex';
+                phoneEl.innerText = phone;
+                phoneLink.href = 'tel:' + phone;
+            } else {
+                phoneWrap.style.display = 'none';
+            }
+        }
+
+        var emailWrap = document.getElementById('view_farmer_loc_email_wrap');
+        var emailEl = document.getElementById('view_farmer_loc_email');
+        var emailLink = document.getElementById('view_farmer_loc_email_link');
+        if (emailWrap && emailEl && emailLink) {
+            if (email) {
+                emailWrap.style.display = 'inline-flex';
+                emailEl.innerText = email;
+                emailLink.href = 'mailto:' + email;
+            } else {
+                emailWrap.style.display = 'none';
+            }
+        }
+
+        var websiteWrap = document.getElementById('view_farmer_loc_website_wrap');
+        var websiteLink = document.getElementById('view_farmer_loc_website_link');
+        if (websiteWrap && websiteLink) {
+            if (website) {
+                websiteWrap.style.display = 'inline-flex';
+                websiteLink.href = website.startsWith('http') ? website : 'https://' + website;
+            } else {
+                websiteWrap.style.display = 'none';
+            }
+        }
+
+        var addressWrap = document.getElementById('view_farmer_loc_address_wrap');
+        var addressEl = document.getElementById('view_farmer_loc_address');
+        if (addressWrap && addressEl) {
+            if (address) {
+                addressWrap.style.display = 'block';
+                addressEl.innerText = address;
+            } else {
+                addressWrap.style.display = 'none';
+            }
+        }
+
+        var notesWrap = document.getElementById('view_farmer_loc_notes_wrap');
+        var notesEl = document.getElementById('view_farmer_loc_notes');
+        if (notesWrap && notesEl) {
+            if (notes) {
+                notesWrap.style.display = 'block';
+                notesEl.innerText = notes;
+            } else {
+                notesWrap.style.display = 'none';
+            }
+        }
+
+        var modalEl = document.getElementById('farmer_view_near_by_location');
+        if (modalEl) {
+            var modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modalInstance.show();
+        }
+    }
+
+    function openFarmerViewWorkerModal(btn) {
+        var name = btn.getAttribute('data-name') || '';
+        var designation = btn.getAttribute('data-designation') || '';
+        var skill = btn.getAttribute('data-skill') || '';
+        var wage = btn.getAttribute('data-wage') || '';
+        var wageUnit = btn.getAttribute('data-wage_unit') || 'Day';
+        var phone = btn.getAttribute('data-phone') || '';
+        var status = btn.getAttribute('data-status') || 'Available';
+        var state = btn.getAttribute('data-state') || '';
+        var city = btn.getAttribute('data-city') || '';
+        var address = btn.getAttribute('data-address') || '';
+        var notes = btn.getAttribute('data-notes') || '';
+
+        var nameEl = document.getElementById('view_farmer_worker_name');
+        var desigEl = document.getElementById('view_farmer_worker_designation');
+        if (nameEl) nameEl.innerText = name || '-';
+        if (desigEl) {
+            if (designation) {
+                desigEl.innerText = designation;
+                desigEl.style.display = 'inline-block';
+            } else {
+                desigEl.style.display = 'none';
+            }
+        }
+
+        var skillEl = document.getElementById('view_farmer_worker_skill');
+        if (skillEl) skillEl.innerText = skill || '-';
+
+        var statusBadge = document.getElementById('view_farmer_worker_status_badge');
+        if (statusBadge) {
+            statusBadge.innerText = status;
+            if (status === 'Available') {
+                statusBadge.className = 'badge bg-success-subtle text-success border px-3 py-1.5 rounded-pill';
+            } else if (status === 'Booked') {
+                statusBadge.className = 'badge border px-3 py-1.5 rounded-pill text-warning bg-warning-subtle';
+            } else if (status === 'On Leave') {
+                statusBadge.className = 'badge bg-danger-subtle text-danger border px-3 py-1.5 rounded-pill';
+            } else {
+                statusBadge.className = 'badge bg-secondary-subtle text-secondary border px-3 py-1.5 rounded-pill';
+            }
+        }
+
+        var wageEl = document.getElementById('view_farmer_worker_wage');
+        if (wageEl) {
+            wageEl.innerText = '₹' + wage + ' / ' + wageUnit;
+        }
+
+        var phoneEl = document.getElementById('view_farmer_worker_phone');
+        var phoneLink = document.getElementById('view_farmer_worker_phone_link');
+        if (phoneEl && phoneLink) {
+            if (phone) {
+                phoneEl.innerText = phone;
+                phoneLink.href = 'tel:' + phone;
+                phoneLink.style.display = 'inline-flex';
+            } else {
+                phoneLink.style.display = 'none';
+            }
+        }
+
+        var locWrap = document.getElementById('view_farmer_worker_location_wrap');
+        var locEl = document.getElementById('view_farmer_worker_location');
+        if (locWrap && locEl) {
+            var locParts = [city, state].filter(Boolean);
+            if (locParts.length > 0) {
+                locWrap.style.display = 'block';
+                locEl.innerText = locParts.join(', ');
+            } else {
+                locWrap.style.display = 'none';
+            }
+        }
+
+        var addrWrap = document.getElementById('view_farmer_worker_address_wrap');
+        var addrEl = document.getElementById('view_farmer_worker_address');
+        if (addrWrap && addrEl) {
+            if (address) {
+                addrWrap.style.display = 'block';
+                addrEl.innerText = address;
+            } else {
+                addrWrap.style.display = 'none';
+            }
+        }
+
+        var notesWrap = document.getElementById('view_farmer_worker_notes_wrap');
+        var notesEl = document.getElementById('view_farmer_worker_notes');
+        if (notesWrap && notesEl) {
+            if (notes) {
+                notesWrap.style.display = 'block';
+                notesEl.innerText = notes;
+            } else {
+                notesWrap.style.display = 'none';
+            }
+        }
+
+        var modalEl = document.getElementById('farmer_view_worker_modal');
+        if (modalEl) {
+            var modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modalInstance.show();
+        }
+    }
+
+    function toggleFarmerWorkerSearchBox() {
+      var group = document.getElementById('farmer_worker_search_input_group');
+      var isExpanded = group && group.classList.contains('expanded');
+
+      if (isExpanded) {
+        closeFarmerWorkerSearchBox();
+      } else if (group) {
+        group.classList.remove('d-none');
+        setTimeout(function () {
+          group.classList.add('expanded');
+          var input = document.getElementById('workerSearchInput');
+          if (input) input.focus();
+        }, 10);
+      }
+    }
+
+    function closeFarmerWorkerSearchBox() {
+      var group = document.getElementById('farmer_worker_search_input_group');
+      var input = document.getElementById('workerSearchInput');
+      if (group) group.classList.remove('expanded');
+      if (input) {
+        input.value = '';
+        if (typeof filterWorkers === 'function') filterWorkers();
+      }
+      setTimeout(function () {
+        if (group) group.classList.add('d-none');
+      }, 250);
+    }
+
+    document.addEventListener('click', function (e) {
+      var wrapper = document.getElementById('farmer_worker_search_collapse_wrapper');
+      var group = document.getElementById('farmer_worker_search_input_group');
+      if (wrapper && group && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+        closeFarmerWorkerSearchBox();
+      }
+    });
+
+    function loadFarmerWorkerCities(stateSelectId, citySelectId, preselectedCity) {
+        var stateSelect = document.getElementById(stateSelectId);
+        var citySelect = document.getElementById(citySelectId);
+        if (!stateSelect || !citySelect) return;
+
+        var selectedOpt = stateSelect.options[stateSelect.selectedIndex];
+        var stateId = selectedOpt ? (selectedOpt.getAttribute('data-id') || selectedOpt.value) : '';
+
+        citySelect.innerHTML = '<option value="">Select City</option>';
+        if (!stateId) return;
+
+        fetch("{% url 'ajax_get_cities' %}?state_id=" + encodeURIComponent(stateId))
+        .then(r => r.json())
+        .then(data => {
+            data.forEach(function(city) {
+                var opt = document.createElement('option');
+                opt.value = city.name;
+                opt.textContent = city.name;
+                opt.setAttribute('data-id', city.id);
+                if (preselectedCity && preselectedCity.toLowerCase() === city.name.toLowerCase()) {
+                    opt.selected = true;
+                }
+                citySelect.appendChild(opt);
+            });
+            if (preselectedCity && citySelect.value !== preselectedCity) {
+                var opt = document.createElement('option');
+                opt.value = preselectedCity;
+                opt.textContent = preselectedCity;
+                opt.selected = true;
+                citySelect.appendChild(opt);
+            }
+        })
+        .catch(err => {
+            console.error('Error loading cities:', err);
+        });
+    }
+
+    function openFarmerEditWorkerModal(btn) {
+        document.getElementById('farmer_edit_worker_id').value = btn.getAttribute('data-id') || '';
+        document.getElementById('farmer_edit_name').value = btn.getAttribute('data-name') || '';
+        document.getElementById('farmer_edit_designation_select').value = btn.getAttribute('data-designation') || '';
+        document.getElementById('farmer_edit_skill_select').value = btn.getAttribute('data-skill') || '';
+        document.getElementById('farmer_edit_wage_rate').value = btn.getAttribute('data-wage') || '';
+        document.getElementById('farmer_edit_wage_unit_select').value = btn.getAttribute('data-wage_unit') || 'Day';
+        document.getElementById('farmer_edit_contact_phone').value = btn.getAttribute('data-phone') || '';
+        document.getElementById('farmer_edit_status').value = btn.getAttribute('data-status') || 'Available';
+        document.getElementById('farmer_edit_address').value = btn.getAttribute('data-address') || '';
+        document.getElementById('farmer_edit_notes').value = btn.getAttribute('data-notes') || '';
+
+        var stateVal = btn.getAttribute('data-state') || '';
+        var cityVal = btn.getAttribute('data-city') || '';
+        var stateSelect = document.getElementById('farmer_edit_worker_state_select');
+        if (stateSelect) {
+            stateSelect.value = stateVal;
+            loadFarmerWorkerCities('farmer_edit_worker_state_select', 'farmer_edit_worker_city_select', cityVal);
+        }
+    }
+
+    function populateFarmerDeleteWorkerModal(id, name) {
+        document.getElementById('farmer_delete_worker_id').value = id;
+        document.getElementById('farmerDeleteWorkerName').innerText = name;
+    }
+
+    // Quick Add: Farmer Designation
+    function openFarmerQuickDesignationModal() {
+        var modalEl = document.getElementById('farmer_quick_add_designation_modal');
+        if (!modalEl) return;
+        var input = document.getElementById('farmer_quick_designation_input');
+        if (input) input.value = '';
+        renderFarmerQuickDesignationList();
+        var inst = bootstrap.Modal.getOrCreateInstance(modalEl);
+        inst.show();
+        setTimeout(function() { if (input) input.focus(); }, 300);
+    }
+
+    function renderFarmerQuickDesignationList() {
+        var container = document.getElementById('farmer_quick_designation_items_list');
+        var addSelect = document.getElementById('farmer_add_designation_select');
+        var badge = document.getElementById('farmer_quick_designation_count_badge');
+        if (!container || !addSelect) return;
+        container.innerHTML = '';
+        var count = 0;
+        for (var i = 0; i < addSelect.options.length; i++) {
+            var opt = addSelect.options[i];
+            if (!opt.value) continue;
+            count++;
+            var valEscaped = opt.value.replace(/'/g, "\\'");
+            var itemDiv = document.createElement('div');
+            itemDiv.className = 'd-flex justify-content-between align-items-center py-2 px-3 rounded-3 mb-1.5 quick-item-row';
+            itemDiv.innerHTML = `
+                <div class="d-flex align-items-center gap-2 text-truncate me-2">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-warning-subtle text-warning flex-shrink-0" style="width: 22px; height: 22px; font-size: 11px;">
+                        <i class="ri-bookmark-3-fill"></i>
+                    </span>
+                    <span class="small fw-semibold text-dark text-truncate">${opt.text}</span>
+                </div>
+                <button type="button" class="btn btn-sm p-0 d-flex align-items-center justify-content-center delete-item-btn"
+                        style="width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;"
+                        onclick="deleteFarmerQuickDesignation('${valEscaped}')"
+                        title="Delete ${opt.text}">
+                    <i class="ri-delete-bin-line" style="font-size: 14px;"></i>
+                </button>
+            `;
+            container.appendChild(itemDiv);
+        }
+        if (badge) badge.innerText = count + ' Total';
+        if (count === 0) {
+            container.innerHTML = `
+                <div class="text-center py-3 text-muted">
+                    <i class="ri-inbox-line fs-4 d-block mb-1 opacity-50"></i>
+                    <span class="small">No designations found</span>
+                </div>
+            `;
+        }
+    }
+
+    function submitFarmerQuickDesignationModal() {
+        var input = document.getElementById('farmer_quick_designation_input');
+        var name = (input ? input.value : '').trim();
+        if (!name) {
+            alert('Please enter a designation name');
+            if (input) input.focus();
+            return;
+        }
+        var submitBtn = document.getElementById('farmer_quick_designation_submit_btn');
+        if (submitBtn) submitBtn.disabled = true;
+
+        var formData = new FormData();
+        formData.append('name', name);
+
+        fetch("{% url 'ajax_quick_add_designation' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (submitBtn) submitBtn.disabled = false;
+            if (data.success) {
+                if (input) input.value = '';
+                var selects = [
+                    document.getElementById('farmer_add_designation_select'),
+                    document.getElementById('farmer_edit_designation_select')
+                ];
+                selects.forEach(function(sel) {
+                    if (sel) {
+                        var exists = false;
+                        for (var i = 0; i < sel.options.length; i++) {
+                            if (sel.options[i].value.toLowerCase() === data.name.toLowerCase()) {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (!exists) {
+                            var opt = document.createElement('option');
+                            opt.value = data.name;
+                            opt.textContent = data.name;
+                            sel.appendChild(opt);
+                        }
+                        var parentModal = sel.closest('.modal');
+                        if (parentModal && parentModal.classList.contains('show')) {
+                            sel.value = data.name;
+                        }
+                    }
+                });
+                renderFarmerQuickDesignationList();
+                var modalEl = document.getElementById('farmer_quick_add_designation_modal');
+                if (modalEl) {
+                    var inst = bootstrap.Modal.getInstance(modalEl);
+                    if (inst) inst.hide();
+                }
+            } else {
+                alert(data.error || 'Failed to add designation');
+            }
+        })
+        .catch(err => {
+            if (submitBtn) submitBtn.disabled = false;
+            console.error(err);
+            alert('An error occurred while adding designation');
+        });
+    }
+
+    function deleteFarmerQuickDesignation(name) {
+        if (!confirm(`Are you sure you want to delete designation "${name}"?`)) return;
+        var formData = new FormData();
+        formData.append('name', name);
+
+        fetch("{% url 'ajax_quick_delete_designation' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                var selects = [
+                    document.getElementById('farmer_add_designation_select'),
+                    document.getElementById('farmer_edit_designation_select')
+                ];
+                selects.forEach(function(sel) {
+                    if (sel) {
+                        for (var i = 0; i < sel.options.length; i++) {
+                            if (sel.options[i].value.toLowerCase() === name.toLowerCase()) {
+                                sel.remove(i);
+                                break;
+                            }
+                        }
+                    }
+                });
+                renderFarmerQuickDesignationList();
+            } else {
+                alert(data.error || 'Failed to delete designation');
+            }
+        });
+    }
+
+    // Quick Add: Farmer Skill
+    function openFarmerQuickSkillModal() {
+        var modalEl = document.getElementById('farmer_quick_add_skill_modal');
+        if (!modalEl) return;
+        var input = document.getElementById('farmer_quick_skill_input');
+        if (input) input.value = '';
+        renderFarmerQuickSkillList();
+        var inst = bootstrap.Modal.getOrCreateInstance(modalEl);
+        inst.show();
+        setTimeout(function() { if (input) input.focus(); }, 300);
+    }
+
+    function renderFarmerQuickSkillList() {
+        var container = document.getElementById('farmer_quick_skill_items_list');
+        var addSelect = document.getElementById('farmer_add_skill_select');
+        var badge = document.getElementById('farmer_quick_skill_count_badge');
+        if (!container || !addSelect) return;
+        container.innerHTML = '';
+        var count = 0;
+        for (var i = 0; i < addSelect.options.length; i++) {
+            var opt = addSelect.options[i];
+            if (!opt.value) continue;
+            count++;
+            var valEscaped = opt.value.replace(/'/g, "\\'");
+            var itemDiv = document.createElement('div');
+            itemDiv.className = 'd-flex justify-content-between align-items-center py-2 px-3 rounded-3 mb-1.5 quick-item-row';
+            itemDiv.innerHTML = `
+                <div class="d-flex align-items-center gap-2 text-truncate me-2">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-warning-subtle text-warning flex-shrink-0" style="width: 22px; height: 22px; font-size: 11px;">
+                        <i class="ri-bookmark-3-fill"></i>
+                    </span>
+                    <span class="small fw-semibold text-dark text-truncate">${opt.text}</span>
+                </div>
+                <button type="button" class="btn btn-sm p-0 d-flex align-items-center justify-content-center delete-item-btn"
+                        style="width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;"
+                        onclick="deleteFarmerQuickSkill('${valEscaped}')"
+                        title="Delete ${opt.text}">
+                    <i class="ri-delete-bin-line" style="font-size: 14px;"></i>
+                </button>
+            `;
+            container.appendChild(itemDiv);
+        }
+        if (badge) badge.innerText = count + ' Total';
+        if (count === 0) {
+            container.innerHTML = `
+                <div class="text-center py-3 text-muted">
+                    <i class="ri-inbox-line fs-4 d-block mb-1 opacity-50"></i>
+                    <span class="small">No skills found</span>
+                </div>
+            `;
+        }
+    }
+
+    function submitFarmerQuickSkillModal() {
+        var input = document.getElementById('farmer_quick_skill_input');
+        var name = (input ? input.value : '').trim();
+        if (!name) {
+            alert('Please enter a skill name');
+            if (input) input.focus();
+            return;
+        }
+        var submitBtn = document.getElementById('farmer_quick_skill_submit_btn');
+        if (submitBtn) submitBtn.disabled = true;
+
+        var formData = new FormData();
+        formData.append('name', name);
+
+        fetch("{% url 'ajax_quick_add_worker_skill' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (submitBtn) submitBtn.disabled = false;
+            if (data.success) {
+                if (input) input.value = '';
+                var selects = [
+                    document.getElementById('farmer_add_skill_select'),
+                    document.getElementById('farmer_edit_skill_select')
+                ];
+                selects.forEach(function(sel) {
+                    if (sel) {
+                        var exists = false;
+                        for (var i = 0; i < sel.options.length; i++) {
+                            if (sel.options[i].value.toLowerCase() === data.name.toLowerCase()) {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (!exists) {
+                            var opt = document.createElement('option');
+                            opt.value = data.name;
+                            opt.textContent = data.name;
+                            sel.appendChild(opt);
+                        }
+                        var parentModal = sel.closest('.modal');
+                        if (parentModal && parentModal.classList.contains('show')) {
+                            sel.value = data.name;
+                        }
+                    }
+                });
+                renderFarmerQuickSkillList();
+                var modalEl = document.getElementById('farmer_quick_add_skill_modal');
+                if (modalEl) {
+                    var inst = bootstrap.Modal.getInstance(modalEl);
+                    if (inst) inst.hide();
+                }
+            } else {
+                alert(data.error || 'Failed to add skill');
+            }
+        })
+        .catch(err => {
+            if (submitBtn) submitBtn.disabled = false;
+            console.error(err);
+            alert('An error occurred while adding skill');
+        });
+    }
+
+    function deleteFarmerQuickSkill(name) {
+        if (!confirm(`Are you sure you want to delete skill "${name}"?`)) return;
+        var formData = new FormData();
+        formData.append('name', name);
+
+        fetch("{% url 'ajax_quick_delete_worker_skill' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                var selects = [
+                    document.getElementById('farmer_add_skill_select'),
+                    document.getElementById('farmer_edit_skill_select')
+                ];
+                selects.forEach(function(sel) {
+                    if (sel) {
+                        for (var i = 0; i < sel.options.length; i++) {
+                            if (sel.options[i].value.toLowerCase() === name.toLowerCase()) {
+                                sel.remove(i);
+                                break;
+                            }
+                        }
+                    }
+                });
+                renderFarmerQuickSkillList();
+            } else {
+                alert(data.error || 'Failed to delete skill');
+            }
+        });
+    }
+
+    // Quick Add: Farmer Wage Unit
+    function openFarmerQuickWageUnitModal() {
+        var modalEl = document.getElementById('farmer_quick_add_wage_unit_modal');
+        if (!modalEl) return;
+        var input = document.getElementById('farmer_quick_wage_unit_input');
+        if (input) input.value = '';
+        renderFarmerQuickWageUnitList();
+        var inst = bootstrap.Modal.getOrCreateInstance(modalEl);
+        inst.show();
+        setTimeout(function() { if (input) input.focus(); }, 300);
+    }
+
+    function renderFarmerQuickWageUnitList() {
+        var container = document.getElementById('farmer_quick_wage_unit_items_list');
+        var addSelect = document.getElementById('farmer_add_wage_unit_select');
+        var badge = document.getElementById('farmer_quick_wage_unit_count_badge');
+        if (!container || !addSelect) return;
+        container.innerHTML = '';
+        var count = 0;
+        for (var i = 0; i < addSelect.options.length; i++) {
+            var opt = addSelect.options[i];
+            if (!opt.value) continue;
+            count++;
+            var valEscaped = opt.value.replace(/'/g, "\\'");
+            var itemDiv = document.createElement('div');
+            itemDiv.className = 'd-flex justify-content-between align-items-center py-2 px-3 rounded-3 mb-1.5 quick-item-row';
+            itemDiv.innerHTML = `
+                <div class="d-flex align-items-center gap-2 text-truncate me-2">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-warning-subtle text-warning flex-shrink-0" style="width: 22px; height: 22px; font-size: 11px;">
+                        <i class="ri-bookmark-3-fill"></i>
+                    </span>
+                    <span class="small fw-semibold text-dark text-truncate">${opt.text}</span>
+                </div>
+                <button type="button" class="btn btn-sm p-0 d-flex align-items-center justify-content-center delete-item-btn"
+                        style="width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;"
+                        onclick="deleteFarmerQuickWageUnit('${valEscaped}')"
+                        title="Delete ${opt.text}">
+                    <i class="ri-delete-bin-line" style="font-size: 14px;"></i>
+                </button>
+            `;
+            container.appendChild(itemDiv);
+        }
+        if (badge) badge.innerText = count + ' Total';
+        if (count === 0) {
+            container.innerHTML = `
+                <div class="text-center py-3 text-muted">
+                    <i class="ri-inbox-line fs-4 d-block mb-1 opacity-50"></i>
+                    <span class="small">No wage units found</span>
+                </div>
+            `;
+        }
+    }
+
+    function submitFarmerQuickWageUnitModal() {
+        var input = document.getElementById('farmer_quick_wage_unit_input');
+        var name = (input ? input.value : '').trim();
+        if (!name) {
+            alert('Please enter a unit name');
+            if (input) input.focus();
+            return;
+        }
+        var submitBtn = document.getElementById('farmer_quick_wage_unit_submit_btn');
+        if (submitBtn) submitBtn.disabled = true;
+
+        var formData = new FormData();
+        formData.append('name', name);
+
+        fetch("{% url 'ajax_quick_add_wage_unit' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (submitBtn) submitBtn.disabled = false;
+            if (data.success) {
+                if (input) input.value = '';
+                var selects = [
+                    document.getElementById('farmer_add_wage_unit_select'),
+                    document.getElementById('farmer_edit_wage_unit_select')
+                ];
+                selects.forEach(function(sel) {
+                    if (sel) {
+                        var exists = false;
+                        for (var i = 0; i < sel.options.length; i++) {
+                            if (sel.options[i].value.toLowerCase() === data.name.toLowerCase()) {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (!exists) {
+                            var opt = document.createElement('option');
+                            opt.value = data.name;
+                            opt.textContent = data.name;
+                            sel.appendChild(opt);
+                        }
+                        var parentModal = sel.closest('.modal');
+                        if (parentModal && parentModal.classList.contains('show')) {
+                            sel.value = data.name;
+                        }
+                    }
+                });
+                renderFarmerQuickWageUnitList();
+                var modalEl = document.getElementById('farmer_quick_add_wage_unit_modal');
+                if (modalEl) {
+                    var inst = bootstrap.Modal.getInstance(modalEl);
+                    if (inst) inst.hide();
+                }
+            } else {
+                alert(data.error || 'Failed to add unit');
+            }
+        })
+        .catch(err => {
+            if (submitBtn) submitBtn.disabled = false;
+            console.error(err);
+            alert('An error occurred while adding unit');
+        });
+    }
+
+    function deleteFarmerQuickWageUnit(name) {
+        if (!confirm(`Are you sure you want to delete unit "${name}"?`)) return;
+        var formData = new FormData();
+        formData.append('name', name);
+
+        fetch("{% url 'ajax_quick_delete_wage_unit' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                var selects = [
+                    document.getElementById('farmer_add_wage_unit_select'),
+                    document.getElementById('farmer_edit_wage_unit_select')
+                ];
+                selects.forEach(function(sel) {
+                    if (sel) {
+                        for (var i = 0; i < sel.options.length; i++) {
+                            if (sel.options[i].value.toLowerCase() === name.toLowerCase()) {
+                                sel.remove(i);
+                                break;
+                            }
+                        }
+                    }
+                });
+                renderFarmerQuickWageUnitList();
+            } else {
+                alert(data.error || 'Failed to delete unit');
+            }
+        });
+    }
+
+    function filterWorkers() {
+        let searchVal = (document.getElementById("workerSearchInput") ? document.getElementById("workerSearchInput").value : "").toLowerCase();
+        let statusVal = document.getElementById("workerStatusFilter") ? document.getElementById("workerStatusFilter").value : "";
+        let classVal = document.getElementById("workerClassFilter") ? document.getElementById("workerClassFilter").value : "";
+        
+        let items = document.querySelectorAll(".farmer-worker-item");
+        let count = 0;
+        
+        items.forEach(function(item) {
+            let name = (item.querySelector(".worker-name") ? item.querySelector(".worker-name").innerText : "").toLowerCase();
+            let skill = (item.querySelector(".worker-skill") ? item.querySelector(".worker-skill").innerText : "").toLowerCase();
+            let wDesigEl = item.querySelector(".worker-designation");
+            let wDesig = wDesigEl ? wDesigEl.innerText.trim() : "";
+            let wStatusEl = item.querySelector(".worker-status");
+            let wStatus = wStatusEl ? wStatusEl.innerText.trim() : "";
+            let fullText = item.innerText.toLowerCase();
+            
+            let matchSearch = fullText.includes(searchVal) || name.includes(searchVal) || skill.includes(searchVal);
+            let matchStatus = (statusVal === "") || (wStatus.toLowerCase().includes(statusVal.toLowerCase()));
+            let matchClass = (classVal === "") || (wDesig.toLowerCase() === classVal.toLowerCase());
+            
+            let nextEl = item.nextElementSibling;
+            if (matchSearch && matchStatus && matchClass) {
+                item.classList.remove('d-none');
+                item.classList.add('d-flex');
+                if(nextEl && nextEl.classList.contains('worker-hr')) nextEl.style.display = 'block';
+                count++;
+            } else {
+                item.classList.remove('d-flex');
+                item.classList.add('d-none');
+                if(nextEl && nextEl.classList.contains('worker-hr')) nextEl.style.display = 'none';
+            }
+        });
+        
+        let matchCountEl = document.getElementById("workerMatchCount");
+        if (matchCountEl) {
+            matchCountEl.innerText = "Showing " + count + " profiles";
+        }
+    }
+
+    document.querySelectorAll('.worker-status-opt').forEach(item => {
+        item.addEventListener('click', function (e) {
+            e.preventDefault();
+            document.getElementById('workerStatusBtn').innerText = this.innerText;
+            document.getElementById('workerStatusFilter').value = this.getAttribute('data-val');
+            filterWorkers();
+        });
+    });
+
+    document.querySelectorAll('.worker-class-opt').forEach(item => {
+        item.addEventListener('click', function (e) {
+            e.preventDefault();
+            document.getElementById('workerClassBtn').innerText = this.innerText;
+            document.getElementById('workerClassFilter').value = this.getAttribute('data-val');
+            filterWorkers();
+        });
+    });
+
+    function filterFarmerRentals() {
+        let searchVal = document.getElementById("farmerRentalSearchInput").value.toLowerCase();
+        let hwVal = document.getElementById("farmerRentalHardwareFilter").value;
+        
+        let items = document.querySelectorAll(".farmer-rental-item");
+        let count = 0;
+        
+        items.forEach(function(item) {
+            let name = item.querySelector(".farmer-rental-name").innerText.toLowerCase();
+            let owner = item.querySelector(".farmer-rental-owner").innerText.toLowerCase();
+            let hwClass = item.querySelector(".farmer-rental-class").innerText.trim();
+            
+            let matchSearch = name.includes(searchVal) || owner.includes(searchVal);
+            let matchHw = (hwVal === "") || (hwClass === hwVal);
+            
+            let nextEl = item.nextElementSibling;
+            
+            if (matchSearch && matchHw) {
+                item.classList.remove('d-none');
+                item.classList.add('d-flex');
+                if(nextEl && nextEl.tagName === 'HR') nextEl.style.display = 'block';
+                count++;
+            } else {
+                item.classList.remove('d-flex');
+                item.classList.add('d-none');
+                if(nextEl && nextEl.tagName === 'HR') nextEl.style.display = 'none';
+            }
+        });
+        
+        let matchCountEl = document.getElementById("farmerRentalMatchCount");
+        if (matchCountEl) {
+            matchCountEl.innerText = "Showing " + count + " assets";
+        }
+    }
+
+    document.querySelectorAll('.farmer-hw-filter').forEach(item => {
+        item.addEventListener('click', function (e) {
+            e.preventDefault();
+            document.getElementById('farmerRentalHardwareBtn').innerText = this.innerText;
+            document.getElementById('farmerRentalHardwareFilter').value = this.getAttribute('data-val');
+            filterFarmerRentals();
+        });
+    });
+
+    function filterScheduler() {
+        let searchVal = document.getElementById('schedulerSearchInput').value.toLowerCase();
+        let priorityVal = document.getElementById('schedulerPrioritySelect').value;
+
+        if (priorityVal === 'All') priorityVal = '';
+
+        // Filter Blueprints
+        document.querySelectorAll('.blueprint-item').forEach(item => {
+            let text = item.innerText.toLowerCase();
+            if (searchVal === '' || text.includes(searchVal)) {
+                item.style.display = 'block';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+
+        // Filter Stages
+        document.querySelectorAll('.stage-item').forEach(item => {
+            let text = item.innerText.toLowerCase();
+            let priority = item.getAttribute('data-priority') || '';
+
+            let matchSearch = searchVal === '' || text.includes(searchVal);
+            let matchPriority = priorityVal === '' || priority === priorityVal;
+
+            if (matchSearch && matchPriority) {
+                item.style.display = 'block';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    }
+
+    function switchGuideSubTab(tab) {
+        let blueprintsSec = document.getElementById('guideBlueprintsSection');
+        let articlesSec = document.getElementById('guideArticlesSection');
+        let btnBlueprints = document.getElementById('btnShowBlueprints');
+        let btnGuidelines = document.getElementById('btnShowGuidelines');
+        let guideHeadingText = document.getElementById('guideHeadingText');
+        let guideHeadingIcon = document.getElementById('guideHeadingIcon');
+
+        if (tab === 'guidelines') {
+            if (blueprintsSec) blueprintsSec.style.display = 'none';
+            if (articlesSec) articlesSec.style.display = 'block';
+            if (btnBlueprints) {
+                btnBlueprints.classList.remove('btn-primary', 'active');
+                btnBlueprints.classList.add('btn-outline-secondary', 'border-0');
+            }
+            if (btnGuidelines) {
+                btnGuidelines.classList.remove('btn-outline-secondary', 'border-0');
+                btnGuidelines.classList.add('btn-primary', 'active');
+            }
+            if (guideHeadingText) guideHeadingText.innerText = 'Smart Farming Guide';
+            if (guideHeadingIcon) guideHeadingIcon.className = 'ri-lightbulb-line text-primary';
+        } else {
+            if (articlesSec) articlesSec.style.display = 'none';
+            if (blueprintsSec) blueprintsSec.style.display = 'block';
+            if (btnGuidelines) {
+                btnGuidelines.classList.remove('btn-primary', 'active');
+                btnGuidelines.classList.add('btn-outline-secondary', 'border-0');
+            }
+            if (btnBlueprints) {
+                btnBlueprints.classList.remove('btn-outline-secondary', 'border-0');
+                btnBlueprints.classList.add('btn-primary', 'active');
+            }
+            if (guideHeadingText) guideHeadingText.innerText = 'Scheduler';
+            if (guideHeadingIcon) guideHeadingIcon.className = 'ri-calendar-2-line text-primary';
+        }
+    }
+
+    function filterGuidelines() {
+        let searchTerm = ($('#guidelineSearchInput').val() || '').toLowerCase();
+        let selectedCategory = $('#guidelineCategoryFilter').val() || '';
+
+        $('#guidelinesList .guideline-item').each(function() {
+            let itemSearchText = ($(this).attr('data-search') || '').toLowerCase();
+            let itemCategory = $(this).attr('data-category') || '';
+
+            let matchesSearch = itemSearchText.indexOf(searchTerm) > -1;
+            let matchesCategory = selectedCategory === "" || itemCategory === selectedCategory;
+
+            if (matchesSearch && matchesCategory) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    }
+</script>
+
+<script>
+let priceAnalysisChart;
+  function loadPriceAnalysisChart() {
+      let crop = document.getElementById('analysisCrop').value;
+      let market = document.getElementById('analysisMarket').value;
+      let fromDate = document.getElementById('analysisFromDate').value;
+      let toDate = document.getElementById('analysisToDate').value;
+      
+      let displayCrop = crop !== 'All' ? crop : 'All Crops';
+      let displayMarket = market !== 'All' ? market : 'All Markets';
+      
+      document.getElementById('chartTitle').innerText = displayCrop + ' Price Trend';
+      document.getElementById('chartSubtitle').innerText = displayMarket;
+      
+      let url = "{% url 'farmer_get_price_history_ajax' %}?";
+      let params = new URLSearchParams();
+      if(crop) params.append('crop_name', crop);
+      if(market) params.append('terminal_name', market);
+      if(fromDate) params.append('from_date', fromDate);
+      if(toDate) params.append('to_date', toDate);
+      
+      fetch(url + params.toString())
+      .then(response => response.json())
+      .then(data => {
+          if (data.status === 'success') {
+              let dates = data.dates;
+              let prices = data.prices;
+              
+              if (prices.length === 0) {
+                  // Fallback to empty state
+                  document.getElementById('statCurrentPrice').innerText = '₹0';
+                  document.getElementById('statHighestPrice').innerText = '₹0';
+                  document.getElementById('statLowestPrice').innerText = '₹0';
+                  document.getElementById('statAvgPrice').innerText = '₹0';
+                  document.getElementById('priceHistoryTableBody').innerHTML = '<tr><td colspan="4" class="text-center text-muted">No price history available</td></tr>';
+                  if (priceAnalysisChart) { priceAnalysisChart.destroy(); }
+                  return;
+              }
+              
+              let maxP = -Infinity;
+              let minP = Infinity;
+              let sumP = 0;
+              let currentP = prices[prices.length - 1];
+              
+              let tableHtml = '';
+              
+              for (let i = 0; i < prices.length; i++) {
+                  let p = prices[i];
+                  if (p > maxP) maxP = p;
+                  if (p < minP) minP = p;
+                  sumP += p;
+                  
+                  let changeHtml = '<span class="text-muted">-</span>';
+                  if (i > 0) {
+                      let diff = p - prices[i-1];
+                      if (diff > 0) {
+                          changeHtml = `<span class="text-success small fw-bold">▵ +${diff.toFixed(2)}</span>`;
+                      } else if (diff < 0) {
+                          changeHtml = `<span class="text-danger small fw-bold">▿ ${diff.toFixed(2)}</span>`;
+                      }
+                  }
+                  
+                  tableHtml += `
+                    <tr>
+                        <td class="text-muted small py-3">${dates[i]}</td>
+                        <td class="text-muted small py-3">${displayMarket}</td>
+                        <td class="text-dark fw-medium py-3">${p.toFixed(2)}</td>
+                        <td class="py-3">${changeHtml}</td>
+                    </tr>
+                  `;
+              }
+              
+              let avgP = sumP / prices.length;
+              
+              document.getElementById('statCurrentPrice').innerText = '₹' + currentP.toFixed(2);
+              document.getElementById('statHighestPrice').innerText = '₹' + maxP.toFixed(2);
+              document.getElementById('statLowestPrice').innerText = '₹' + minP.toFixed(2);
+              document.getElementById('statAvgPrice').innerText = '₹' + avgP.toFixed(2);
+              
+              document.getElementById('priceHistoryTableBody').innerHTML = tableHtml;
+              
+              if (priceAnalysisChart) {
+                  priceAnalysisChart.destroy();
+              }
+              
+              var options = {
+                  series: [{
+                      name: "Price",
+                      data: prices
+                  }],
+                  chart: {
+                      height: 400,
+                      type: 'line',
+                      zoom: { enabled: false },
+                      toolbar: { show: false }
+                  },
+                  dataLabels: { enabled: false },
+                  stroke: { curve: 'smooth', width: 3, colors: ['#0d6efd'] },
+                  markers: {
+                      size: 5,
+                      colors: ['#0d6efd'],
+                      strokeColors: '#fff',
+                      strokeWidth: 2,
+                      hover: { size: 7 }
+                  },
+                  xaxis: {
+                      categories: dates,
+                      labels: { style: { colors: '#6c757d' } }
+                  },
+                  yaxis: {
+                      title: { text: 'Price (₹/Quintal)' },
+                      labels: { style: { colors: '#6c757d' } }
+                  },
+                  tooltip: {
+                      theme: 'light',
+                      y: {
+                          formatter: function (val) {
+                              return "Price: " + val;
+                          }
+                      }
+                  },
+                  grid: {
+                      borderColor: '#e9ecef',
+                      strokeDashArray: 4
+                  }
+              };
+              
+              priceAnalysisChart = new ApexCharts(document.querySelector("#priceChart"), options);
+              priceAnalysisChart.render();
+          }
+      });
+  }
+</script>
+{% endblock page_js %}
+
+{% block content %}
+<ul class="nav nav-pills gap-2 mb-3" id="agriTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#trending_mania" type="button" role="tab" aria-selected="true">
+      <i class="ri-store-2-line me-1"></i> Market Price & Trading Mandis
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedule_tracker" type="button" role="tab" aria-selected="false">
+      <i class="ri-book-open-line me-1"></i> Scheduler & Smart Farming Guide
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#nearby_location" type="button" role="tab" aria-selected="false">
+      <i class="ri-map-pin-line me-1"></i> Agri Locations
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#workers_availability" type="button" role="tab" aria-selected="false">
+      <i class="ri-group-line me-1"></i> On Demand Labour
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#rental_availability" type="button" role="tab" aria-selected="false">
+      <i class="ri-tools-line me-1"></i> Machinery Rentals
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content p-0 bg-transparent border-0 shadow-none">
+  <div class="tab-pane fade show active" id="trending_mania">
+    <!-- Header with Toggle Button -->
+    <div class="card mb-2">
+      <div class="card-body d-flex justify-content-between align-items-center">
+          <div>
+              <h4 class="mb-1 d-flex align-items-center gap-2">
+                <i class="ri-store-2-line text-primary" id="hubHeadingIcon"></i>
+                <span id="hubHeadingText">Trading Mandis</span>
+              </h4>
+          </div>
+          <div class="d-flex align-items-center justify-content-end gap-2">
+            <button id="togglePriceAnalysisBtn" class="btn btn-primary d-flex align-items-center gap-2" style="font-size:13px;" onclick="togglePriceAnalysis()">
+              <i class="ri-line-chart-line" id="togglePriceAnalysisIcon"></i> <span id="togglePriceAnalysisText">Price Analysis</span>
+            </button>
+          </div>
+      </div>
+    </div>
+
+    <!-- View 1: Terminal / Trading Mandis List -->
+    <div id="terminalListView">
+      <div class="card mb-2">
+        <div class="card-body d-flex gap-2 flex-wrap p-2">
+            <div class="input-group w-50">
+                <span class="input-group-text bg-white">
+                    <i class="ri-search-line"></i>
+                </span>
+                <input type="text"
+                    id="hubSearchInput"
+                    class="form-control"
+                    placeholder="Search by buyer name, location or crops...">
+            </div>
+            <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                <select class="form-select select3" id="locationFilter" data-placeholder="Select Location" style="width: 200px !important;">
+                    <option value="All">Location: All Mandis</option>
+                    {% if farmer_city %}
+                    <option value="{{ farmer_city }}" selected>📍 My City: {{ farmer_city }}</option>
+                    {% endif %}
+                    {% if farmer_state %}
+                    <option value="{{ farmer_state }}">📍 My State: {{ farmer_state }}</option>
+                    {% endif %}
+                </select>
+
+                <select class="form-select select3" id="cropFilter" data-placeholder="Select Crops" style="width: 200px !important;">
+                    <option value="All">Sell Crop: All</option>
+                    {% for crop in all_crops %}
+                    <option value="{{ crop.name }}">{{ crop.name }}</option>
+                    {% endfor %}
+                </select>
+
+                <select class="form-select select3" id="demandFilter" data-placeholder="Select Demand Level" style="width: 200px !important;">
+                    <option value="All">Demand Level: All</option>
+                    <option value="High">High Demand</option>
+                    <option value="Medium">Medium Demand</option>
+                    <option value="Low">Low Demand</option>
+                </select>
+            </div>
+        </div>
+      </div>
+      <div class="row g-3 mb-2">
+    {% for terminal in terminals %}
+    <div class="col-12 col-md-6 hub-buyer-card" data-demand="{{ terminal.demand_level }}" data-location="{{ terminal.location|default:'' }} {{ terminal.district|default:'' }}" data-crops="{{ terminal.available_crops|join:',' }},{{ terminal.custom_crops|join:',' }}">
+      <div class="bg-white rounded-4 p-3 border h-100 d-flex flex-column justify-content-between">
+        <div>
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                <h6 class="fw-bold mb-0">{{ terminal.name }}</h6>
+                {% if terminal.is_city_match %}
+                  <span class="badge bg-success text-white border" style="font-size: 10px;"><i class="ri-map-pin-user-line me-1"></i>Local Mandi ({{ farmer_city }})</span>
+                {% elif terminal.is_state_match %}
+                  <span class="badge bg-info text-white border" style="font-size: 10px;"><i class="ri-map-pin-2-line me-1"></i>State Hub ({{ farmer_state }})</span>
+                {% endif %}
+              </div>
+              <small class="text-muted"><i class="ri-map-pin-line me-1"></i>{{ terminal.location }}</small>
+            </div>
+            {% if terminal.demand_level == 'High' %}
+              <span class="badge bg-primary-subtle text-primary border">High Demand</span>
+            {% elif terminal.demand_level == 'Medium' %}
+              <span class="badge bg-warning-subtle text-black border">Medium Demand</span>
+            {% else %}
+              <span class="badge bg-secondary-subtle text-dark border">Low Demand</span>
+            {% endif %}
+          </div>
+          <div class="mt-3 pt-2 border-top small text-muted">
+            <div class="mb-1"><i class="ri-user-3-line"></i> Representative: <b>{{ terminal.contact_person|default:"-" }}</b></div>
+            <div><i class="ri-phone-line"></i> Contact: <b>{{ terminal.contact_phone|default:"-" }}</b></div>
+          </div>
+          <div class="mt-3 rounded-3 overflow-hidden" style="border: 1px solid #f0e6ff;">
+            <div class="px-3 py-2 d-flex align-items-center justify-content-between" style="background: linear-gradient(135deg, #f8f0ff 0%, #fef3e8 100%); border-bottom: 1px solid #f0e6ff;">
+              <div class="d-flex align-items-center gap-2">
+                <i class="ri-price-tag-3-fill" style="color: #a855f7; font-size: 13px;"></i>
+                <span class="fw-semibold text-uppercase" style="font-size: 11px; letter-spacing: 0.8px; color: #7c3aed;">Source Availability</span>
+              </div>
+              {% if farmer_city or farmer_state %}
+              <span class="badge bg-white text-dark border shadow-sm" style="font-size: 9px;"><i class="ri-compass-3-line me-1 text-primary"></i>Filtered by Location</span>
+              {% endif %}
+            </div>
+            <div class="p-3" style="background: #fdfcff;">
+              <div class="row g-2">
+                {% for c in terminal.available_crops %}
+                <div class="col-6">
+                  <div class="rounded-3 px-2 py-2 d-flex gap-2" style="background: linear-gradient(135deg, #fff7ed 0%, #fef9f5 100%); border: 1px solid #fed7aa; overflow:hidden;">
+                    
+                    <!-- LEFT: top row name+buttons, bottom row price -->
+                    <div class="flex-grow-1 d-flex flex-column justify-content-center" style="min-width:0;">
+                      <!-- Row 1: name + [-] [+] -->
+                      <div class="d-flex align-items-center justify-content-between mb-1" style="gap:4px;">
+                        <div class="fw-semibold" style="font-size: 11px; color: #92400e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;">
+                          {% if c.name %}{{ c.name }}{% else %}{{ c }}{% endif %}
+                          {% if c.name in farmer_crops or c in farmer_crops %}
+                          <span class="badge bg-success text-white px-1 py-0 ms-1" style="font-size: 8px;">Your Crop</span>
+                          {% endif %}
+                        </div>
+                      </div>
+                      <!-- Row 2: price -->
+                      <div style="font-size: 13px; font-weight: 700; {% if c.prev_price and c.price < c.prev_price %}color: #dc2626;{% else %}color: #16a34a;{% endif %}">
+                        ₹ <span class="price-val">{{ c.price }}</span>
+                        <span class="text-muted fw-normal" style="font-size: 9px;">/ {{ c.unit|default:"Qty" }}</span>
+                      </div>
+                    </div>
+
+                    <!-- RIGHT: sparkline + % badge -->
+                    <div class="d-flex flex-column align-items-end justify-content-between" style="min-width:60px; width:60px; flex-shrink:0;">
+                      <!-- % change badge -->
+                      {% if c.price and c.prev_price %}
+                      <span class="pct-badge fw-bold rounded-pill px-1 py-0"
+                        data-price="{{ c.price }}"
+                        data-prev="{{ c.prev_price }}"
+                        style="font-size:10px; white-space:nowrap;
+                          {% if c.price > c.prev_price %}background:#dcfce7; color:#16a34a;
+                          {% elif c.price < c.prev_price %}background:#fee2e2; color:#dc2626;
+                          {% else %}background:#f1f5f9; color:#64748b;{% endif %}">
+                        &nbsp;
+                      </span>
+                      {% endif %}
+                      <!-- Sparkline canvas -->
+                      {% if c.price_history %}
+                      <canvas class="sparkline-canvas"
+                        data-history="{{ c.price_history|join:',' }}"
+                        data-trend="{% if c.price > c.prev_price %}up{% elif c.price < c.prev_price %}down{% else %}flat{% endif %}"
+                        width="60" height="32" style="display:block;"></canvas>
+                      {% else %}
+                      <canvas class="sparkline-canvas"
+                        data-history="{{ c.price }},{{ c.price }}"
+                        data-trend="flat"
+                        width="60" height="32" style="display:block;"></canvas>
+                      {% endif %}
+                    </div>
+
+                  </div>
+                </div>
+                {% empty %}
+                <div class="col-12 text-center py-2">
+                  <i class="ri-seedling-line text-muted" style="font-size: 20px;"></i>
+                  <div class="text-muted small mt-1">No crops listed</div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Card Footer -->
+        <div class="mt-3 pt-3 border-top d-flex justify-content-between align-items-center">
+          <div class="d-flex align-items-center gap-2">
+            <span class="rounded-pill px-2 py-1 d-flex align-items-center gap-1" style="background: #f0fdf4; border: 1px solid #bbf7d0; font-size: 11px; color: #16a34a;">
+              <i class="ri-map-pin-2-line"></i>
+              <span class="fw-semibold">{{ terminal.district|default:"N/A" }}</span>
+            </span>
+          </div>
+          <div class="d-flex align-items-center small">
+            <span class="text-muted">Distance: <b>{{ terminal.distance_km|default:"0.00" }} km</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+        {% empty %}
+        <div class="col-12 text-center text-muted p-4">No Hub Buyers found.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- View 2: Price Analysis View (toggled) -->
+    <div id="priceAnalysisView" style="display: none;">
+      <!-- Filter Card -->
+      <div class="card mb-2">
+        <div class="card-body d-flex flex-wrap gap-3 align-items-end p-3">
+            <div style="flex: 1; min-width: 150px;">
+                <label class="form-label small text-muted mb-1">Crop</label>
+                <select class="form-select text-secondary" id="analysisCrop">
+                    <option value="All">All Crops</option>
+                    {% for crop in all_crops %}
+                    <option value="{{ crop.name }}" {% if crop.name == 'Organic Corn' %}selected{% endif %}>{{ crop.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="flex: 1; min-width: 150px;">
+                <label class="form-label small text-muted mb-1">Market</label>
+                <select class="form-select text-secondary" id="analysisMarket">
+                    <option value="All">All Markets</option>
+                    {% for term in terminals %}
+                    <option value="{{ term.name }}">{{ term.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="flex: 1; min-width: 150px;">
+                <label class="form-label small text-muted mb-1">From Date</label>
+                <input type="date" class="form-control text-secondary" id="analysisFromDate">
+            </div>
+            <div style="flex: 1; min-width: 150px;">
+                <label class="form-label small text-muted mb-1">To Date</label>
+                <input type="date" class="form-control text-secondary" id="analysisToDate">
+            </div>
+            <div>
+                <button type="button" class="btn btn-primary px-4" onclick="loadPriceAnalysisChart()">Go</button>
+            </div>
+        </div>
+      </div>
+
+      <!-- Chart Card -->
+      <div class="card">
+          <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start mb-4">
+                  <div>
+                      <h5 class="mb-1" id="chartTitle">Organic Corn Price Trend</h5>
+                      <div class="text-muted small" id="chartSubtitle">Punjab State Grain Mandi</div>
+                  </div>
+                  <div>
+                      <span class="badge bg-success text-white">Updated Today</span>
+                  </div>
+              </div>
+              <div id="priceChart"></div>
+          </div>
+      </div>
+
+      <!-- Statistics Cards -->
+      <div class="row g-3 mt-1 mb-2">
+          <div class="col-md-3">
+              <div class="card h-100 border-0 shadow-sm">
+                  <div class="card-body text-center py-4">
+                      <div class="text-muted small mb-2">Current Price</div>
+                      <div class="fs-4 fw-bold text-success" id="statCurrentPrice">₹0</div>
+                  </div>
+              </div>
+          </div>
+          <div class="col-md-3">
+              <div class="card h-100 border-0 shadow-sm">
+                  <div class="card-body text-center py-4">
+                      <div class="text-muted small mb-2">Highest</div>
+                      <div class="fs-4 fw-bold text-dark" id="statHighestPrice">₹0</div>
+                  </div>
+              </div>
+          </div>
+          <div class="col-md-3">
+              <div class="card h-100 border-0 shadow-sm">
+                  <div class="card-body text-center py-4">
+                      <div class="text-muted small mb-2">Lowest</div>
+                      <div class="fs-4 fw-bold text-dark" id="statLowestPrice">₹0</div>
+                  </div>
+              </div>
+          </div>
+          <div class="col-md-3">
+              <div class="card h-100 border-0 shadow-sm">
+                  <div class="card-body text-center py-4">
+                      <div class="text-muted small mb-2">Average</div>
+                      <div class="fs-4 fw-bold text-dark" id="statAvgPrice">₹0</div>
+                  </div>
+              </div>
+          </div>
+      </div>
+
+      <!-- Data Table -->
+      <div class="card mt-2 border-0 shadow-sm">
+          <div class="card-body">
+              <div class="mb-3 text-muted small fw-semibold">Daily Price History</div>
+              <div class="table-responsive">
+                  <table class="table table-borderless table-hover align-middle">
+                      <thead class="border-bottom text-muted small">
+                          <tr>
+                              <th class="fw-semibold pb-2 text-uppercase" style="font-size: 11px; letter-spacing: 0.5px;">Date</th>
+                              <th class="fw-semibold pb-2 text-uppercase" style="font-size: 11px; letter-spacing: 0.5px;">Market</th>
+                              <th class="fw-semibold pb-2 text-uppercase" style="font-size: 11px; letter-spacing: 0.5px;">Price (₹)</th>
+                              <th class="fw-semibold pb-2 text-uppercase" style="font-size: 11px; letter-spacing: 0.5px;">Change</th>
+                          </tr>
+                      </thead>
+                      <tbody id="priceHistoryTableBody">
+                          <!-- Populated by JS -->
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      </div>
+    </div>
+  </div>
+    <div class="tab-pane fade" id="schedule_tracker">
+      <div class="card mb-2">
+        <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h4 class="mb-0 d-flex align-items-center gap-2">
+                  <i class="ri-calendar-2-line text-primary" id="guideHeadingIcon"></i>
+                  <span id="guideHeadingText">Field Operational Scheduler</span>
+                </h4>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <div class="btn-group p-1 bg-light rounded-pill border" role="group">
+                <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold guide-subtab-btn active" id="btnShowBlueprints" onclick="switchGuideSubTab('blueprints')">
+                  <i class="ri-calendar-2-line me-1"></i> Crop Blueprints & Scheduler
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-semibold guide-subtab-btn border-0" id="btnShowGuidelines" onclick="switchGuideSubTab('guidelines')">
+                  <i class="ri-lightbulb-line me-1"></i> Smart Farming Guide
+                </button>
+              </div>
+            </div>
+        </div>
+      </div>
+
+      <!-- Sub-view 1: Crop Blueprints & Operational Scheduler -->
+      <div id="guideBlueprintsSection">
+        <div class="card mb-2">
+            <div class="card-body d-flex gap-2 flex-wrap p-2">
+                <div class="input-group w-50">
+                    <span class="input-group-text bg-white">
+                        <i class="ri-search-line"></i>
+                    </span>
+                    <input type="text"
+                        id="schedulerSearchInput"
+                        class="form-control"
+                        placeholder="Search by Crops, Keywords or Assigned Operators..."
+                        onkeyup="filterScheduler()">
+                </div>
+                <div class="d-flex align-items-center justify-content-between gap-3">
+                    <select class="form-select select3" id="schedulerPrioritySelect" onchange="filterScheduler()" data-placeholder="Select Priority" style="width: 200px !important;">
+                        <option value="All">Select Priorities: All</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="card mb-2">
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-12">
+                <div class="row g-3">
+                  <div class="col-lg-4">
+                    <div class="bg-white p-3 rounded-4 border h-100">
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small text-muted fw-bold text-uppercase">Crop Blueprints</span>
+                        <span class="badge bg-gray-100 text-dark border">{{ blueprints|length }} Total</span>
+                      </div>
+                      <div style="max-height:380px; overflow-y:auto;">
+                        {% for bp in blueprints %}
+                        <a href="?blueprint_id={{ bp.id }}#schedule_tracker" class="text-decoration-none blueprint-item">
+                        <div class="p-3 mb-2 border rounded-3 d-flex justify-content-between align-items-center {% if selected_blueprint.id == bp.id %}bg-primary bg-opacity-10 border-primary{% else %}hover-shadow-sm bg-gray-100{% endif %}">
+                          <div>
+                            <div class="fw-bold {% if selected_blueprint.id == bp.id %}text-primary{% else %}text-dark{% endif %}">{{ bp.crop_name }}</div>
+                            <small class="text-muted">{{ bp.cultivation_season }} • ~{{ bp.yield_cycle_days }} days</small>
+                          </div>
+                          <span class="badge {% if selected_blueprint.id == bp.id %}bg-primary-subtle text-primary{% else %}bg-gray-100 text-dark border{% endif %}">{{ bp.stages.count }} chores</span>
+                        </div>
+                        </a>
+                        {% empty %}
+                        <div class="text-center text-muted p-3">No Global Blueprints available.</div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-lg-8">
+                    {% if selected_blueprint %}
+                    <div class="bg-white rounded-4 border h-100">
+                      <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                        <div>
+                          <h6 class="fw-bold mb-0">Blueprint: {{ selected_blueprint.crop_name }}</h6>
+                          <div class="d-flex justify-content-start gap-2 align-items-center">
+                            <small class="badge bg-primary-subtle text-primary rounded-md" style="font-size: 11px;">{{ selected_blueprint.cultivation_season }} Crop</small>
+                            <small class="badge bg-light badge-dot rounded-md" style="font-size: 11px;"></small>
+                            <small class="text-muted">{{ selected_blueprint.yield_cycle_days }} Days lifecycle</small>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="p-3">
+                        <div class="border-start ps-3" style="max-height: 400px; overflow-y: auto;">
+                          {% for stage in stages %}
+                          <div class="mb-3 rounded bg-gray-100 p-2 border position-relative stage-item" data-priority="{{ stage.priority_level }}">
+                            <div class="d-flex align-items-center justify-content-between gap-5">
+                              <div class="d-flex align-items-center justify-content-start gap-1">
+                                <span class="badge bg-primary-subtle text-primary border" style="font-size:11px;">Day {{ stage.day_offset }}</span>
+                                <div class="fw-semibold mt-1">{{ stage.milestone_title }}</div>
+                                <span class="badge bg-info-subtle text-info border" style="font-size:11px;">{{ stage.activity_type }}</span>
+                                <span class="badge {% if stage.priority_level == 'High' %}bg-danger-subtle text-danger border-danger{% elif stage.priority_level == 'Medium' %}bg-warning-subtle text-warning border-warning{% else %}bg-success-subtle text-success border-success{% endif %} border" style="font-size:11px;">{{ stage.priority_level }}</span>
+                              </div>
+                            </div>
+                            <small class="text-muted">Planting Date + {{ stage.day_offset }} days</small>
+                          </div>
+                          {% empty %}
+                          <div class="text-center text-muted p-3">No stages found in this blueprint.</div>
+                          {% endfor %}
+                        </div>
+                      </div>
+                    </div>
+                    {% else %}
+                    <div class="bg-white rounded-4 border h-100 d-flex justify-content-center align-items-center text-muted p-5">
+                        <p>Select a blueprint to view its execution details.</p>
+                    </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sub-view 2: Farming Guidelines & Articles -->
+      <div id="guideArticlesSection" style="display: none;">
+        <div class="card mb-2">
+            <div class="card-body d-flex gap-2 flex-wrap p-2">
+                <div class="input-group w-75">
+                    <span class="input-group-text bg-white">
+                        <i class="ri-search-line"></i>
+                    </span>
+                    <input type="text" id="guidelineSearchInput"
+                        class="form-control"
+                        placeholder="Search by title, tags, or content..."
+                        onkeyup="filterGuidelines()">
+                </div>
+                <div class="d-flex align-items-center justify-content-between gap-3">
+                    <select id="guidelineCategoryFilter" class="form-select select3" data-placeholder="Select Category" style="width: 200px !important;" onchange="filterGuidelines()">
+                        <option value="">Categories: All</option>
+                        {% for cat in guideline_categories %}
+                        <option value="{{ cat.name }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="row g-3 mb-3" id="guidelinesList">
+            {% for g in guidelines %}
+            <div class="col-lg-6 guideline-item" data-category="{{ g.farming_section.name|default:'Uncategorized' }}" data-search="{{ g.title|lower }} {{ g.search_tags|lower }} {{ g.detailed_content|lower }}">
+                <div class="card h-100" style="border: 1px solid #e2e8f0; border-radius: 16px;">
+                    <div class="card-body d-flex flex-column justify-content-between">
+                        <div>
+                            <div class="d-flex align-items-center justify-content-between gap-3 mb-2">
+                                <span class="badge fw-bold px-2 py-1 rounded text-uppercase" style="background: #F0FDF4;border: 1px solid #D0FAE5;color: #008236;font-size: 10px;">{{ g.farming_section.name|default:"Uncategorized" }}</span> 
+                                <span style="color: #99a1af;font-size: 12px;"><i class="ri-time-line me-1"></i>{{ g.read_time|default:"-" }}</span> 
+                            </div>
+                            <h6 class="fw-bold text-dark mb-2" style="font-size: 15px;">{{ g.title }}</h6>
+                            <p class="text-muted small clamp-3 mb-3">
+                                {{ g.detailed_content }}
+                            </p>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between gap-2 pt-2 border-top">
+                            <span style="color: #99a1af;font-size: 12px;"><i class="ri-user-line me-1"></i>By: {{ g.author_name|default:"AgriOT Expert" }}</span> 
+                            <div class="d-flex align-items-center gap-2">
+                                {% if g.document_file %}
+                                <a href="{{ g.document_file.url }}" target="_blank" class="btn btn-sm btn-light border text-primary" download title="Download Attachment">
+                                    <i class="ri-download-2-line"></i>
+                                </a>
+                                {% endif %}
+                                <button type="button" class="btn btn-sm btn-outline-success fw-bold px-3" data-bs-toggle="modal" data-bs-target="#view_full_guide_{{ g.id }}">
+                                    View Full <i class="ri-arrow-right-line ms-1"></i>
+                                </button> 
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12 text-center py-5 text-muted">
+                <i class="ri-book-open-line text-muted" style="font-size: 32px;"></i>
+                <div class="mt-2">No guidelines found.</div>
+            </div>
+            {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="tab-pane fade" id="nearby_location">
+      <div class="card mb-2">
+        <div class="card-body d-flex justify-content-between align-items-center border-bottom">
+            <div>
+                <h4 class="mb-0 d-flex align-items-center gap-2">
+                  <i class="ri-compass-3-line text-primary"></i>
+                  Agri Locations
+                </h4>
+            </div>
+            <div class="d-flex align-items-center justify-content-end gap-2">
+              <button class="btn btn-primary d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#farmer_add_near_by_location">
+                <i class="ri-add-line"></i> Add Locations
+              </button>
+            </div>
+        </div>
+      </div>
+      <div class="card mb-2">
+          <div class="card-body d-flex gap-2 flex-wrap p-2">
+              <div class="input-group w-75">
+                  <span class="input-group-text bg-white">
+                      <i class="ri-search-line"></i>
+                  </span>
+                  <input type="text"
+                      id="nearbySearchInput"
+                      class="form-control"
+                      placeholder="Search by Facilities Name, Keywords and Location..."
+                      onkeyup="filterNearbyLocations()">
+              </div>
+              <div class="d-flex align-items-center justify-content-between gap-3">
+                  <select class="form-select select3" id="nearbyTypeFilter" data-placeholder="Select Type" style="width: 200px !important;" onchange="filterNearbyLocations()">
+                      <option value="All">Class Type: All</option>
+                      {% for sc in service_classes %}
+                        <option value="{{ sc.name }}">{{ sc.name }}</option>
+                      {% empty %}
+                        <option value="Agri Office">Agri Office</option>
+                        <option value="Fishery Office">Fishery Office</option>
+                        <option value="Fertilizer Shop">Fertilizer Shop</option>
+                        <option value="Organic Shop">Organic Shop</option>
+                        <option value="Soil Testing Lab">Soil Testing Lab</option>
+                        <option value="Cold Storage">Cold Storage</option>
+                        <option value="Warehouse">Warehouse</option>
+                        <option value="Seed Processing Center">Seed Processing Center</option>
+                      {% endfor %}
+                  </select>
+              </div>
+          </div>
+      </div>
+      <div class="card mb-2 border-0 shadow-sm rounded-4">
+        <div class="card-body p-3 p-md-4">
+          <div class="container-fluid px-0">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <span class="text-uppercase small fw-bold text-muted" style="letter-spacing: 0.5px;">
+                Verified Nearby Locations Directory
+              </span>
+              <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-1.5 fw-semibold" id="nearbyMatchCount">
+                Showing {{ locations|length }} matches
+              </span>
+            </div>
+            
+            <div class="row g-3" id="farmerNearbyLocationsGrid">
+              {% for loc in locations %}
+              <div class="col-12 col-md-6 col-lg-4 farmer-location-item" data-type="{{ loc.type }}">
+                <div class="location-card-item h-100 d-flex flex-column justify-content-between mb-0">
+                  <div>
+                    <!-- Top Header: Badge + View Details Action -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                      <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2.5 py-1 text-uppercase fw-bold loc-type" style="font-size: 10.5px; letter-spacing: 0.4px;">
+                        {{ loc.type }}
+                      </span>
+                      <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-medium d-inline-flex align-items-center gap-1.5"
+                              style="font-size: 12px;"
+                              data-id="{{ loc.id }}"
+                              data-name="{{ loc.name|escape }}"
+                              data-type="{{ loc.type|escape }}"
+                              data-contact_person="{{ loc.contact_person|escape }}"
+                              data-designation="{{ loc.designation|escape }}"
+                              data-phone="{{ loc.phone|escape }}"
+                              data-email="{{ loc.email|escape }}"
+                              data-website="{{ loc.website|escape }}"
+                              data-address="{{ loc.address|escape }}"
+                              data-notes="{{ loc.notes|escape }}"
+                              onclick="openFarmerViewLocationModal(this)">
+                        <i class="ri-eye-line"></i> View
+                      </button>
+                    </div>
+
+                    <!-- Location Name -->
+                    <h6 class="fw-bold loc-name mb-2 text-dark" style="font-size: 15.5px; line-height: 1.35;">
+                      {{ loc.name }}
+                    </h6>
+
+                    <!-- Contact Person & Designation -->
+                    {% if loc.contact_person %}
+                    <div class="d-flex align-items-center gap-2 small text-dark mb-2">
+                      <span class="loc-icon-circle bg-light text-primary">
+                        <i class="ri-user-3-line"></i>
+                      </span>
+                      <span class="fw-semibold text-truncate">{{ loc.contact_person }}</span>
+                      {% if loc.designation %}
+                      <span class="text-muted small text-truncate">&nbsp;({{ loc.designation }})</span>
+                      {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Address -->
+                    {% if loc.address %}
+                    <div class="d-flex align-items-start gap-2 text-secondary small loc-address mb-3">
+                      <span class="loc-icon-circle bg-danger-subtle text-danger mt-0.5">
+                        <i class="ri-map-pin-2-line"></i>
+                      </span>
+                      <span style="font-size: 12.5px; line-height: 1.45;">{{ loc.address }}</span>
+                    </div>
+                    {% endif %}
+                  </div>
+
+                  <!-- Bottom Section: Contact Badges + Notes -->
+                  <div class="pt-3 border-top mt-2">
+                    {% if loc.phone or loc.email or loc.website %}
+                    <div class="d-flex flex-column gap-2 mb-2">
+                      <!-- Row with Phone & Link -->
+                      {% if loc.phone or loc.website %}
+                      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        {% if loc.phone %}
+                        <a href="tel:{{ loc.phone }}" class="badge-contact-pill phone-pill" title="Call {{ loc.phone }}">
+                          <i class="ri-phone-fill" style="font-size: 12px;"></i>
+                          <span>{{ loc.phone }}</span>
+                        </a>
+                        {% else %}
+                        <div></div>
+                        {% endif %}
+
+                        {% if loc.website %}
+                        <a href="{% if '://' in loc.website %}{{ loc.website }}{% else %}https://{{ loc.website }}{% endif %}" target="_blank" rel="noopener noreferrer" class="badge-contact-pill website-pill ms-auto" title="{{ loc.website }}">
+                          <i class="ri-external-link-line" style="font-size: 12px;"></i>
+                          <span>Link</span>
+                        </a>
+                        {% endif %}
+                      </div>
+                      {% endif %}
+
+                      <!-- Email Full Width Pill -->
+                      {% if loc.email %}
+                      <a href="mailto:{{ loc.email }}" class="badge-contact-pill email-pill" title="Send email to {{ loc.email }}">
+                        <i class="ri-mail-fill text-info flex-shrink-0" style="font-size: 12px;"></i>
+                        <span class="text-truncate">{{ loc.email }}</span>
+                      </a>
+                      {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Notes -->
+                    {% if loc.notes %}
+                    <div class="location-notes-box mt-2">
+                      <i class="ri-sticky-note-line me-1.5 text-warning"></i>
+                      <span>{{ loc.notes }}</span>
+                    </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              {% empty %}
+              <div class="col-12 text-center py-5 text-muted">
+                <i class="ri-map-pin-line fs-1 mb-2 d-block opacity-50"></i>
+                <h6 class="fw-semibold text-secondary">No Agri Locations available</h6>
+                <p class="small text-muted mb-0">No verified locations found matching your criteria.</p>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tab-pane fade" id="workers_availability">
+      <div class="card mb-2">
+        <div class="card-body d-flex justify-content-between align-items-center">
+          <div class="d-flex flex-column">
+            <div>
+                <h4 class="mb-1">
+                <i class="ri-group-line me-2 text-primary"></i>
+                    On Demand Labour
+                </h4>
+            </div>
+            <div>
+                <label class="text-light fw-semibold fs-7">
+                    Dispatch, source and verify certified managers, group contractor fleets, and individual employees.
+                </label>
+            </div>
+          </div>
+          <button class="btn btn-primary d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#farmer_add_worker_modal">
+            <i class="ri-add-line"></i> Add Labour
+          </button>
+        </div>
+      </div>
+
+      <div class="card mb-2">
+        <div class="card-body d-flex justify-content-between align-items-center gap-2 flex-wrap p-3">
+          <div class="search-collapse-wrapper d-flex align-items-center" id="farmer_worker_search_collapse_wrapper">
+            <button class="btn btn-outline-secondary d-flex align-items-center justify-content-center p-0"
+                    style="width: 38px; height: 38px; border-radius: 8px;"
+                    type="button" id="farmerWorkerSearchToggleBtn" onclick="toggleFarmerWorkerSearchBox()" title="Search Workers">
+              <i class="ri-search-line fs-5"></i>
+            </button>
+            <div class="search-input-group d-none" id="farmer_worker_search_input_group">
+              <div class="input-group">
+                <input type="text" id="workerSearchInput" onkeyup="filterWorkers()" class="form-control"
+                       placeholder="Search workers by name, skill, location...">
+                <button class="btn btn-outline-secondary border-start-0" type="button" id="farmer_worker_search_close_btn" onclick="closeFarmerWorkerSearchBox()">
+                  <i class="ri-close-line"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 ms-auto align-items-center flex-wrap">
+            <input type="hidden" id="workerStatusFilter" value="">
+            <div class="dropdown" style="min-width: 150px;">
+              <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown" id="workerStatusBtn">
+                All Status
+              </button>
+              <ul class="dropdown-menu w-100">
+                <li><a class="dropdown-item worker-status-opt" data-val="" href="#">All Status</a></li>
+                <li><a class="dropdown-item worker-status-opt" data-val="Available" href="#">Available</a></li>
+                <li><a class="dropdown-item worker-status-opt" data-val="Booked" href="#">Booked</a></li>
+                <li><a class="dropdown-item worker-status-opt" data-val="On Leave" href="#">On Leave</a></li>
+              </ul>
+            </div>
+
+            <input type="hidden" id="workerClassFilter" value="">
+            <div class="dropdown" style="min-width: 180px;">
+              <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown" id="workerClassBtn">
+                All Designations
+              </button>
+              <ul class="dropdown-menu w-100" style="max-height: 250px; overflow-y: auto;">
+                <li><a class="dropdown-item worker-class-opt" data-val="" href="#">All Designations</a></li>
+                {% for d in designations %}
+                <li><a class="dropdown-item worker-class-opt" data-val="{{ d.name }}" href="#">{{ d.name }}</a></li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-4 mb-2 border-0 shadow-sm rounded-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="text-muted mb-0 fw-semibold">Verified Logistics Workforce</h6>
+          <span class="badge border rounded px-3 py-2" id="workerMatchCount" style="background: #fdf0e6; color: #f69c55;">Showing {{ workers|length }} profiles</span>
+        </div>
+        <div class="row">
+          <div class="col-lg-12">
+            {% for worker in workers %}
+            <div class="d-flex justify-content-between align-items-center gap-4 farmer-worker-item py-3 px-2 rounded-3">
+              <div class="d-flex align-items-start gap-3">
+                <div class="rounded-circle text-white d-flex align-items-center justify-content-center fw-bold shadow-sm flex-shrink-0"
+                     style="width: 48px; height: 48px; background: #f69c55; font-size: 16px;">
+                  {{ worker.initials }}
+                </div>
+                <div class="d-flex flex-column justify-content-center" style="min-width: 280px;">
+                  <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                    <h6 class="mb-0 fw-bold text-dark worker-name">{{ worker.name }}</h6>
+                    {% if worker.designation %}
+                    <span class="badge bg-primary-subtle text-primary border rounded-pill px-2 py-1 worker-designation" style="font-size: 11px;">
+                      {{ worker.designation }}
+                    </span>
+                    {% endif %}
+                  </div>
+                  
+                  <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                    {% if worker.status == 'Available' %}
+                    <span class="badge bg-success-subtle text-success border rounded-pill px-2 py-1 worker-status" style="font-size: 11px;">
+                      <i class="ri-checkbox-circle-line me-1"></i>{{ worker.status }}
+                    </span>
+                    {% elif worker.status == 'Booked' %}
+                    <span class="badge border rounded-pill px-2 py-1 worker-status" style="background: #fdf0e6; color: #f69c55; font-size: 11px;">
+                      <i class="ri-time-line me-1"></i>{{ worker.status }}
+                    </span>
+                    {% elif worker.status == 'On Leave' %}
+                    <span class="badge bg-danger-subtle text-danger border rounded-pill px-2 py-1 worker-status" style="font-size: 11px;">
+                      <i class="ri-user-unfollow-line me-1"></i>{{ worker.status }}
+                    </span>
+                    {% else %}
+                    <span class="badge bg-secondary-subtle text-secondary border rounded-pill px-2 py-1 worker-status" style="font-size: 11px;">
+                      {{ worker.status }}
+                    </span>
+                    {% endif %}
+
+                    {% if worker.skill %}
+                    <span class="text-muted small worker-skill">
+                      <i class="ri-briefcase-line text-primary me-1"></i>{{ worker.skill }}
+                    </span>
+                    {% endif %}
+                  </div>
+
+                  {% if worker.city or worker.state or worker.address %}
+                  <div class="text-muted small worker-location mb-1">
+                    <i class="ri-map-pin-line text-primary me-1"></i>
+                    {% if worker.address %}{{ worker.address }}, {% endif %}
+                    {{ worker.city }}{% if worker.city and worker.state %}, {% endif %}{{ worker.state }}
+                  </div>
+                  {% endif %}
+
+                  {% if worker.notes %}
+                  <div class="small text-muted fst-italic bg-light p-1 px-2 rounded border worker-notes" style="max-width: 450px;">
+                    <i class="ri-sticky-note-line text-warning me-1"></i>{{ worker.notes }}
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="d-flex ms-auto align-items-center flex-wrap gap-4 me-0">
+                <div class="text-end px-2">
+                  <small class="text-muted d-block" style="font-size: 11px;">WAGE RATE</small>
+                  <strong class="fs-6 text-dark">₹{{ worker.wage }} <small class="text-muted fw-normal">/{{ worker.wage_unit|default:'Day' }}</small></strong>
+                </div>
+
+                {% if worker.phone %}
+                <div class="px-2">
+                  <a href="tel:{{ worker.phone }}" class="btn btn-light border rounded-pill px-3 py-1 text-decoration-none text-dark" style="font-size: 12px;">
+                    <i class="ri-phone-line text-success me-1"></i> {{ worker.phone }}
+                  </a>
+                </div>
+                {% endif %}
+
+                <div class="dropdown">
+                  <button class="btn btn-outline-secondary rounded-pill px-3 py-1 dropdown-toggle" style="font-size: 11px;" type="button" data-bs-toggle="dropdown">
+                    SET STATUS
+                  </button>
+                  <ul class="dropdown-menu">
+                    <form method="POST" action="{% url 'farmer-market' %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="update_status">
+                      <input type="hidden" name="worker_id" value="{{ worker.id }}">
+                      <li><button type="submit" name="status" value="Available" class="dropdown-item">Available</button></li>
+                      <li><button type="submit" name="status" value="Booked" class="dropdown-item">Booked</button></li>
+                      <li><button type="submit" name="status" value="On Leave" class="dropdown-item">On Leave</button></li>
+                    </form>
+                  </ul>
+                </div>
+
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#farmer_edit_worker_modal"
+                          data-id="{{ worker.id }}"
+                          data-name="{{ worker.name|escape }}"
+                          data-designation="{{ worker.designation|escape }}"
+                          data-skill="{{ worker.skill|escape }}"
+                          data-wage="{{ worker.wage_val }}"
+                          data-wage_unit="{{ worker.wage_unit|escape }}"
+                          data-phone="{{ worker.phone|escape }}"
+                          data-state="{{ worker.state|escape }}"
+                          data-city="{{ worker.city|escape }}"
+                          data-address="{{ worker.address|escape }}"
+                          data-notes="{{ worker.notes|escape }}"
+                          data-status="{{ worker.status|escape }}"
+                          onclick="openFarmerEditWorkerModal(this)"
+                          title="Edit Worker">
+                    <i class="ri-pencil-line"></i>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#farmer_delete_worker_modal"
+                          onclick="populateFarmerDeleteWorkerModal('{{ worker.id }}', '{{ worker.name|escapejs }}')"
+                          title="Delete Worker">
+                    <i class="ri-delete-bin-line"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            {% if not forloop.last %}<hr class="worker-hr my-2">{% endif %}
+            {% empty %}
+            <div class="text-center text-muted p-5">
+              <i class="ri-user-search-line fs-1 mb-2 d-block text-secondary"></i>
+              No workers registered yet.
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="rental_availability">
+      <div class="card mb-2">
+        <div class="card-body d-flex justify-content-between align-items-center">
+          <div class="d-flex flex-column">
+            <div>
+              <h4 class="mb-1">
+                <i class="ri-map-pin-user-line me-2 text-primary"></i>
+                Rental Availability
+              </h4>
+            </div>
+            <div>
+              <label class="text-light fw-semibold fs-7">
+                Book combine harvesters, automated fertilizer spray drones, or multiphase irrigation pump machines.
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-2">
+        <div class="card-body d-flex justify-content-between gap-2 flex-wrap p-2">
+          <div class="input-group w-50" style="border: 1px solid #f69c55; border-radius: 0.375rem; overflow: hidden;">
+            <span class="input-group-text bg-white border-0 text-muted" style="border-right: 1px solid #f69c55 !important; border-radius: 0;">
+              <i class="ri-search-line"></i>
+            </span>
+            <input type="text"
+              id="farmerRentalSearchInput"
+              onkeyup="filterFarmerRentals()"
+              class="form-control border-0"
+              placeholder="Search equipment model name or owner..."
+              style="box-shadow: none;">
+          </div>
+          <div class="d-flex gap-2 ms-auto me-2">
+            <div class="p-0">
+              <input type="hidden" id="farmerRentalHardwareFilter" value="">
+              <div class="dropdown" style="width: 200px;">
+                <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown" id="farmerRentalHardwareBtn">
+                  All Hardware
+                </button>
+                <ul class="dropdown-menu w-100">
+                  <li><a class="dropdown-item farmer-hw-filter" data-val="" href="#">All Hardware</a></li>
+                  {% for hc in hardware_classes %}
+                  <li><a class="dropdown-item farmer-hw-filter" data-val="{{ hc.name }}" href="#">{{ hc.name }}</a></li>
+                  {% endfor %}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-6 mb-2">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+          <h6 class="text-muted mb-0">Verified Machinery Fleets</h6>
+          <span class="badge border rounded" id="farmerRentalMatchCount" style="background: #fdf0e6; color: #f69c55;">Showing {{ rentals|length }} assets</span>
+        </div>
+        <div class="row border rounded">
+          <div class="col-lg-12 p-3">
+            {% for rental in rentals %}
+            <div class="d-flex justify-content-between align-items-center farmer-rental-item">
+              <div class="d-flex align-items-center gap-3" style="min-width: 340px;">
+                <div class="d-flex flex-column gap-2" style="min-width: 100px;">
+                  <label class="badge bg-secondary-subtle text-secondary border rounded-pill py-1 farmer-rental-class" style="font-size: 10px;">{{ rental.class }}</label>
+                  {% if rental.rating == 'Excellent' %}
+                  <label class="badge bg-primary-subtle text-primary border rounded-pill px-1 py-1" style="font-size: 10px;">{{ rental.rating }} Condition</label>
+                  {% elif rental.rating == 'Good' %}
+                  <label class="badge bg-secondary-subtle text-secondary border rounded-pill px-1 py-1" style="font-size: 10px;">{{ rental.rating }} Condition</label>
+                  {% else %}
+                  <label class="badge bg-warning-subtle text-warning border rounded-pill px-1 py-1" style="font-size: 10px;">{{ rental.rating }} Condition</label>
+                  {% endif %}
+                </div>
+                <div class="d-flex flex-column">
+                  <label class="text-bold text-black fs-6 farmer-rental-name">{{ rental.name }}</label>
+                  <label class="text-dark farmer-rental-owner">
+                    <small class="text-light">Owner: </small>{{ rental.owner }}
+                  </label>
+                </div>
+              </div>
+
+              <div class="d-flex align-items-center gap-4">
+                <div class="d-flex flex-column" style="min-width: 90px;">
+                  <small class="text-muted d-block">WAGE RATE</small>
+                  <strong>₹{{ rental.price }}<small class="text-muted">/day</small></strong>
+                </div>
+                <div>
+                  <button class="btn btn-light border rounded-pill px-3 py-1" style="font-size: 11px;">
+                    <i class="ri-phone-line me-1"></i> {{ rental.phone }}
+                  </button>
+                </div>
+                <div>
+                  {% if rental.status == 'Available' %}
+                  <span class="badge bg-success-subtle text-success border rounded-pill px-2 py-1" style="font-size: 11px;">{{ rental.status }}</span>
+                  {% elif rental.status == 'Rented' %}
+                  <span class="badge border rounded-pill px-2 py-1" style="background: #fdf0e6; color: #f69c55; font-size: 11px;">{{ rental.status }}</span>
+                  {% else %}
+                  <span class="badge bg-danger-subtle text-danger border rounded-pill px-2 py-1" style="font-size: 11px;">{{ rental.status }}</span>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            {% if not forloop.last %}<hr class="farmer-rental-hr">{% endif %}
+            {% empty %}
+            <div class="text-center text-muted p-4">No rental machinery available at this time.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+<script>
+function filterHubBuyers() {
+    var searchVal = ($('#hubSearchInput').val() || '').toLowerCase();
+    var cropVal = ($('#cropFilter').val() || 'All').toLowerCase();
+    var locVal = ($('#locationFilter').val() || 'All').toLowerCase();
+    var demandVal = ($('#demandFilter').val() || 'All').toLowerCase();
+
+    $('.hub-buyer-card').each(function() {
+        var card = $(this);
+        var text = card.text().toLowerCase();
+        var crops = (card.attr('data-crops') || '').toLowerCase();
+        var location = (card.attr('data-location') || '').toLowerCase();
+        var demand = (card.attr('data-demand') || '').toLowerCase();
+
+        var matchesSearch = !searchVal || text.indexOf(searchVal) !== -1 || crops.indexOf(searchVal) !== -1 || location.indexOf(searchVal) !== -1;
+        var matchesCrop = cropVal === 'all' || crops.indexOf(cropVal) !== -1 || text.indexOf(cropVal) !== -1;
+        var matchesLoc = locVal === 'all' || location.indexOf(locVal) !== -1;
+        var matchesDemand = demandVal === 'all' || demand.indexOf(demandVal) !== -1;
+
+        if (matchesSearch && matchesCrop && matchesLoc && matchesDemand) {
+            card.removeClass('d-none');
+        } else {
+            card.addClass('d-none');
+        }
+    });
+}
+
+$(document).ready(function() {
+    $('#hubSearchInput').on('keyup input', filterHubBuyers);
+    $('#cropFilter, #locationFilter, #demandFilter').on('change', filterHubBuyers);
+    filterHubBuyers();
+});
+</script>
+
+{% for g in guidelines %}
+<!-- Full Guideline Modal -->
+<div class="modal fade" id="view_full_guide_{{ g.id }}" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <!-- Header -->
+      <div class="modal-header border-bottom pb-2">
+        <div class="d-flex flex-column">
+            <label>
+                <span class="badge fw-bold px-1 py-1 rounded text-uppercase" style="background: #F0FDF4;border: 1px solid #D0FAE5;color: #008236;font-size: 9px;">{{ g.farming_section.name|default:"Uncategorized" }}</span> 
+            </label>
+            <h5 class="modal-title fw-semibold">{{ g.title }}</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <!-- Body -->
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12 border-bottom d-flex align-items-center justify-content-start gap-3 py-2 flex-wrap">
+            <span class="fw-semibold" style="color: #696969;font-size: 12px;">Author : {{ g.author_name|default:"AgriOT Expert" }}</span> 
+            <span class="fw-bold text-black">|</span>
+            <span class="fw-semibold" style="color: #696969;font-size: 12px;">{{ g.read_time|default:"-" }}</span>
+            {% if g.search_tags %}
+            <span class="fw-bold text-black">|</span>
+            <div class="d-flex align-items-center justify-content-start gap-1 flex-wrap">
+                {% for tag in g.search_tags.split %}
+                <span class="badge bg-light text-dark rounded-3 fw-semibold" style="font-size: 11px;">#{{ tag }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          <div class="col-12">
+            <p class="text-muted mt-2" style="white-space: pre-line; line-height: 1.6;">
+                {{ g.detailed_content }}
+            </p>
+          </div>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="modal-footer d-flex justify-content-between">
+        {% if g.document_file %}
+        <a href="{{ g.document_file.url }}" target="_blank" class="btn btn-secondary" download>
+          <i class="ri-download-2-line me-1"></i> Download Document
+        </a>
+        {% else %}
+        <div></div>
+        {% endif %}
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+          <i class="ri-check-line me-1"></i> Done Reading
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Farmer Add Near by Location Modal -->
+<div class="modal fade" id="farmer_add_near_by_location" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <form method="POST" action="{% url 'farmer-market' %}" class="modal-content border-0 shadow rounded-4 overflow-hidden">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_nearby_location">
+      <div class="modal-header bg-light border-bottom py-3">
+        <h5 class="modal-title fw-semibold text-dark mb-0">Create New Agri Location</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-medium small mb-1">Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control"
+                    placeholder="Eg: North Valley Agro-Marketing Authority" required>
+          </div>
+          <div class="col-md-6">
+            <div class="d-flex align-items-center justify-content-between">
+              <label class="form-label fw-medium small mb-1">Location Type<span class="text-danger">*</span></label>
+              <a href="javascript:void(0);"
+                 class="text-primary small fw-medium text-decoration-none d-inline-flex align-items-center"
+                 onclick="openFarmerQuickServiceClassModal()">
+                <i class="ri-add-line me-1"></i>Add
+              </a>
+            </div>
+            <select name="service_class" id="farmer_add_service_class_select" class="form-select" required>
+              <option value="">Select Location Type</option>
+              {% for sc in service_classes %}
+                <option value="{{ sc.name }}" data-id="{{ sc.id }}">{{ sc.name }}</option>
+              {% empty %}
+                <option value="Agri Office">Agri Office</option>
+                <option value="Fishery Office">Fishery Office</option>
+                <option value="Fertilizer Shop">Fertilizer Shop</option>
+                <option value="Organic Shop">Organic Shop</option>
+                <option value="Soil Testing Lab">Soil Testing Lab</option>
+                <option value="Cold Storage">Cold Storage</option>
+                <option value="Warehouse">Warehouse</option>
+                <option value="Seed Processing Center">Seed Processing Center</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-medium small mb-1">Contact Person Name</label>
+            <input type="text" name="contact_person" class="form-control" placeholder="Eg: Rajesh Kumar">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-medium small mb-1">Designation</label>
+            <input type="text" name="designation" class="form-control" placeholder="Eg: Branch Officer, Field Manager">
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-medium small mb-1">Contact Number</label>
+            <input type="text" name="phone" class="form-control" placeholder="Eg: +91 98765 43210">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-medium small mb-1">Mail ID</label>
+            <input type="email" name="email" class="form-control" placeholder="Eg: contact@agrihub.com">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-medium small mb-1">Website Link</label>
+            <input type="text" name="website" class="form-control" placeholder="Eg: https://agrihub.com">
+          </div>
+
+          <div class="col-md-12">
+            <label class="form-label fw-medium small mb-1">Full Address</label>
+            <textarea class="form-control" name="address" rows="3" placeholder="Enter complete location address..."></textarea>
+          </div>
+
+          <div class="col-md-12">
+            <label class="form-label fw-medium small mb-1">Notes</label>
+            <textarea class="form-control" name="notes" rows="2" placeholder="Enter any additional details, operating hours, etc..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer bg-light border-top py-2 px-3">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="ri-check-line me-1"></i> Register Location
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Farmer View Agri Location Modal -->
+<div class="modal fade" id="farmer_view_near_by_location" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+      <div class="modal-header bg-light border-bottom py-3 px-4">
+        <div class="d-flex align-items-center gap-2">
+          <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 34px; height: 34px;">
+            <i class="ri-compass-3-line fs-5"></i>
+          </div>
+          <div>
+            <h5 class="modal-title fw-semibold text-dark mb-0" id="view_farmer_loc_name">Location Details</h5>
+            <span class="badge bg-primary-subtle text-primary border text-uppercase" id="view_farmer_loc_type" style="font-size: 10px;">Location Type</span>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="row g-3">
+          <div class="col-md-6" id="view_farmer_loc_contact_wrap">
+            <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Contact Person</label>
+            <div class="d-flex align-items-center gap-2 p-2.5 bg-light rounded-3">
+              <i class="ri-user-line text-primary fs-5"></i>
+              <span class="fw-semibold text-dark" id="view_farmer_loc_contact">-</span>
+            </div>
+          </div>
+
+          <div class="col-md-6" id="view_farmer_loc_address_wrap">
+            <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Address</label>
+            <div class="d-flex align-items-start gap-2 p-2.5 bg-light rounded-3">
+              <i class="ri-map-pin-line text-primary fs-5 mt-0.5"></i>
+              <span class="text-dark small" id="view_farmer_loc_address">-</span>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Contact Channels</label>
+            <div class="d-flex flex-wrap gap-2 pt-1">
+              <div id="view_farmer_loc_phone_wrap">
+                <a href="#" id="view_farmer_loc_phone_link" class="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-pill">
+                  <i class="ri-phone-line"></i> <span id="view_farmer_loc_phone">-</span>
+                </a>
+              </div>
+              <div id="view_farmer_loc_email_wrap">
+                <a href="#" id="view_farmer_loc_email_link" class="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-pill">
+                  <i class="ri-mail-line"></i> <span id="view_farmer_loc_email">-</span>
+                </a>
+              </div>
+              <div id="view_farmer_loc_website_wrap">
+                <a href="#" target="_blank" id="view_farmer_loc_website_link" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-pill">
+                  <i class="ri-global-line"></i> Visit Website
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12" id="view_farmer_loc_notes_wrap">
+            <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Additional Notes</label>
+            <div class="p-3 bg-light rounded-3 border">
+              <i class="ri-sticky-note-line text-warning me-1"></i>
+              <span class="text-muted small fst-italic" id="view_farmer_loc_notes">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer bg-light border-top py-2 px-3">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Add Service Class Modal -->
+<div class="modal fade" id="farmer_quick_add_service_class_modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header border-bottom py-3 px-3.5 bg-white">
+        <div class="d-flex align-items-center gap-2">
+          <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+            <i class="ri-price-tag-3-line fs-5"></i>
+          </div>
+          <div>
+            <h6 class="modal-title fw-bold text-dark mb-0">Quick Add Location Type</h6>
+            <span class="text-muted" style="font-size: 11px;">Manage nearby facility categories</span>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body py-3.5 px-3.5 bg-white">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold text-secondary mb-1">Name <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0 text-muted ps-3">
+              <i class="ri-folder-add-line"></i>
+            </span>
+            <input type="text" id="farmer_quick_service_class_input" class="form-control bg-light border-start-0" placeholder="e.g. Soil Lab, Seed Center">
+            <button type="button" id="farmer_quick_service_class_submit_btn" class="btn btn-primary px-3 fw-semibold d-flex align-items-center gap-1" onclick="submitFarmerQuickServiceClassModal()">
+              <i class="ri-add-line"></i> Add
+            </button>
+          </div>
+        </div>
+        <div class="border-top pt-3 mt-3">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="fw-bold text-muted text-uppercase" style="font-size: 11px; letter-spacing: 0.6px;">Existing Location Types</span>
+            <span class="badge bg-primary-subtle text-primary border-0 rounded-pill px-2.5 py-1" id="farmer_quick_service_class_count_badge" style="font-size: 11px;">0 Total</span>
+          </div>
+          <div class="overflow-auto rounded-3 p-2" id="farmer_quick_service_class_items_list" style="max-height: 180px; min-height: 60px; background-color: #f8fafc; border: 1px solid #f1f5f9;"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2.5 px-3.5 bg-light d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-secondary px-3" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Farmer Add Worker Modal -->
+<div class="modal fade" id="farmer_add_worker_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+      <form method="POST" action="{% url 'farmer-market' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create_worker">
+        <!-- Header -->
+        <div class="modal-header bg-light border-bottom py-3">
+          <h5 class="modal-title fw-bold text-dark mb-0">Add Labour / Worker</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <!-- Body -->
+        <div class="modal-body p-4">
+          <div class="row g-3">
+            <!-- Name -->
+            <div class="col-md-6">
+              <label class="form-label fw-medium small mb-1">Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" placeholder="Eg: Ramesh Kumar" required>
+            </div>
+
+            <!-- Designation with Quick Add -->
+            <div class="col-md-6">
+              <div class="d-flex align-items-center justify-content-between">
+                <label class="form-label fw-medium small mb-1">Designation</label>
+                <a href="javascript:void(0);" class="quick-add-link text-primary" onclick="openFarmerQuickDesignationModal()">
+                  <i class="ri-add-line me-1"></i>Add
+                </a>
+              </div>
+              <select name="designation" id="farmer_add_designation_select" class="form-select">
+                <option value="">Select Designation</option>
+                {% for d in designations %}
+                <option value="{{ d.name }}">{{ d.name }}</option>
+                {% empty %}
+                <option value="Manager / Supervisor">Manager / Supervisor</option>
+                <option value="Contract Staff Group">Contract Staff Group</option>
+                <option value="Individual Employee">Individual Employee</option>
+                <option value="Field Specialist">Field Specialist</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Specialty Skill with Quick Add -->
+            <div class="col-md-6">
+              <div class="d-flex align-items-center justify-content-between">
+                <label class="form-label fw-medium small mb-1">Skill</label>
+                <a href="javascript:void(0);" class="quick-add-link text-primary" onclick="openFarmerQuickSkillModal()">
+                  <i class="ri-add-line me-1"></i>Add
+                </a>
+              </div>
+              <select name="specialty_skill" id="farmer_add_skill_select" class="form-select">
+                <option value="">Select Skill</option>
+                {% for wt in work_types %}
+                <option value="{{ wt.name }}">{{ wt.name }}</option>
+                {% empty %}
+                <option value="Farm Operations Director">Farm Operations Director</option>
+                <option value="IoT Maintenance Specialist">IoT Maintenance Specialist</option>
+                <option value="Manual Planting & Weeding Staff">Manual Planting & Weeding Staff</option>
+                <option value="Drone Operations Supervisor">Drone Operations Supervisor</option>
+                <option value="Fruit & Vegetable Pickers">Fruit & Vegetable Pickers</option>
+                <option value="Drip Irrigation Installer">Drip Irrigation Installer</option>
+                <option value="Heavy Machinery & Tractor Operator">Heavy Machinery & Tractor Operator</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Daily Wage Rate -->
+            <div class="col-md-3">
+              <label class="form-label fw-medium small mb-1">Daily Wage Rate (₹) <span class="text-danger">*</span></label>
+              <input type="number" name="wage_rate" step="0.01" class="form-control" placeholder="120.00" value="120" required>
+            </div>
+
+            <!-- Unit with Quick Add -->
+            <div class="col-md-3">
+              <div class="d-flex align-items-center justify-content-between">
+                <label class="form-label fw-medium small mb-1">Unit</label>
+                <a href="javascript:void(0);" class="quick-add-link text-primary" onclick="openFarmerQuickWageUnitModal()">
+                  <i class="ri-add-line me-1"></i>Add
+                </a>
+              </div>
+              <select name="wage_unit" id="farmer_add_wage_unit_select" class="form-select">
+                <option value="Day" selected>Day</option>
+                {% for u in wage_units %}
+                {% if u.name != 'Day' %}
+                <option value="{{ u.name }}">{{ u.name }}</option>
+                {% endif %}
+                {% empty %}
+                <option value="Hour">Hour</option>
+                <option value="Month">Month</option>
+                <option value="Shift">Shift</option>
+                <option value="Acre">Acre</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Contact Phone -->
+            <div class="col-md-6">
+              <label class="form-label fw-medium small mb-1">Contact Phone</label>
+              <input type="text" name="contact_phone" class="form-control" placeholder="+91 98765 43210">
+            </div>
+
+            <!-- Worker State (Status) -->
+            <div class="col-md-6">
+              <label class="form-label fw-medium small mb-1">Worker State <span class="text-danger">*</span></label>
+              <select name="status" class="form-select" required>
+                <option value="Available" selected>Available</option>
+                <option value="Booked">Booked</option>
+                <option value="On Leave">On Leave</option>
+              </select>
+            </div>
+
+            <!-- State -->
+            <div class="col-md-6">
+              <label class="form-label fw-medium small mb-1">State</label>
+              <select name="state" id="farmer_add_worker_state_select" class="form-select" onchange="loadFarmerWorkerCities('farmer_add_worker_state_select', 'farmer_add_worker_city_select', '')">
+                <option value="">Select State</option>
+                {% for state in states %}
+                <option value="{{ state.name }}" data-id="{{ state.id }}">{{ state.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- City -->
+            <div class="col-md-6">
+              <label class="form-label fw-medium small mb-1">City</label>
+              <select name="city" id="farmer_add_worker_city_select" class="form-select">
+                <option value="">Select City</option>
+              </select>
+            </div>
+
+            <!-- Address -->
+            <div class="col-12">
+              <label class="form-label fw-medium small mb-1">Address</label>
+              <textarea name="address" rows="2" class="form-control" placeholder="Enter complete worker address..."></textarea>
+            </div>
+
+            <!-- Notes -->
+            <div class="col-12">
+              <label class="form-label fw-medium small mb-1">Notes</label>
+              <textarea name="notes" rows="2" class="form-control" placeholder="Any specific remarks, availability schedule, or experience notes..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="modal-footer bg-light border-top py-2 px-3 d-flex justify-content-between">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="ri-check-line me-1"></i> Save profile details</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Farmer Edit Worker Modal -->
+<div class="modal fade" id="farmer_edit_worker_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+      <form method="POST" action="{% url 'farmer-market' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="edit_worker">
+        <input type="hidden" name="worker_id" id="farmer_edit_worker_id">
+        <!-- Header -->
+        <div class="modal-header bg-light border-bottom py-3">
+          <h5 class="modal-title fw-bold text-dark mb-0">Edit Operator Profile</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <!-- Body -->
+        <div class="modal-body p-4">
+          <div class="row g-3">
+            <!-- Name -->
+            <div class="col-md-6">
+              <label class="form-label fw-medium small mb-1">Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" id="farmer_edit_name" class="form-control" required>
+            </div>
+
+            <!-- Designation with Quick Add -->
+            <div class="col-md-6">
+              <div class="d-flex align-items-center justify-content-between">
+                <label class="form-label fw-medium small mb-1">Designation</label>
+                <a href="javascript:void(0);" class="quick-add-link text-primary" onclick="openFarmerQuickDesignationModal()">
+                  <i class="ri-add-line me-1"></i>Add
+                </a>
+              </div>
+              <select name="designation" id="farmer_edit_designation_select" class="form-select">
+                <option value="">Select Designation</option>
+                {% for d in designations %}
+                <option value="{{ d.name }}">{{ d.name }}</option>
+                {% empty %}
+                <option value="Manager / Supervisor">Manager / Supervisor</option>
+                <option value="Contract Staff Group">Contract Staff Group</option>
+                <option value="Individual Employee">Individual Employee</option>
+                <option value="Field Specialist">Field Specialist</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Specialty Skill with Quick Add -->
+            <div class="col-md-6">
+              <div class="d-flex align-items-center justify-content-between">
+                <label class="form-label fw-medium small mb-1">Skill</label>
+                <a href="javascript:void(0);" class="quick-add-link text-primary" onclick="openFarmerQuickSkillModal()">
+                  <i class="ri-add-line me-1"></i>Add
+                </a>
+              </div>
+              <select name="specialty_skill" id="farmer_edit_skill_select" class="form-select">
+                <option value="">Select Skill</option>
+                {% for wt in work_types %}
+                <option value="{{ wt.name }}">{{ wt.name }}</option>
+                {% empty %}
+                <option value="Farm Operations Director">Farm Operations Director</option>
+                <option value="IoT Maintenance Specialist">IoT Maintenance Specialist</option>
+                <option value="Manual Planting & Weeding Staff">Manual Planting & Weeding Staff</option>
+                <option value="Drone Operations Supervisor">Drone Operations Supervisor</option>
+                <option value="Fruit & Vegetable Pickers">Fruit & Vegetable Pickers</option>
+                <option value="Drip Irrigation Installer">Drip Irrigation Installer</option>
+                <option value="Heavy Machinery & Tractor Operator">Heavy Machinery & Tractor Operator</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Daily Wage Rate -->
+            <div class="col-md-3">
+              <label class="form-label fw-medium small mb-1">Daily Wage Rate (₹) <span class="text-danger">*</span></label>
+              <input type="number" name="wage_rate" id="farmer_edit_wage_rate" step="0.01" class="form-control" required>
+            </div>
+
+            <!-- Unit with Quick Add -->
+            <div class="col-md-3">
+              <div class="d-flex align-items-center justify-content-between">
+                <label class="form-label fw-medium small mb-1">Unit</label>
+                <a href="javascript:void(0);" class="quick-add-link text-primary" onclick="openFarmerQuickWageUnitModal()">
+                  <i class="ri-add-line me-1"></i>Add
+                </a>
+              </div>
+              <select name="wage_unit" id="farmer_edit_wage_unit_select" class="form-select">
+                <option value="Day">Day</option>
+                {% for u in wage_units %}
+                {% if u.name != 'Day' %}
+                <option value="{{ u.name }}">{{ u.name }}</option>
+                {% endif %}
+                {% empty %}
+                <option value="Hour">Hour</option>
+                <option value="Month">Month</option>
+                <option value="Shift">Shift</option>
+                <option value="Acre">Acre</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Contact Phone -->
+            <div class="col-md-6">
+              <label class="form-label fw-medium small mb-1">Contact Phone</label>
+              <input type="text" name="contact_phone" id="farmer_edit_contact_phone" class="form-control">
+            </div>
+
+            <!-- Worker State (Status) -->
+            <div class="col-md-6">
+              <label class="form-label fw-medium small mb-1">Worker State <span class="text-danger">*</span></label>
+              <select name="status" id="farmer_edit_status" class="form-select" required>
+                <option value="Available">Available</option>
+                <option value="Booked">Booked</option>
+                <option value="On Leave">On Leave</option>
+              </select>
+            </div>
+
+            <!-- State -->
+            <div class="col-md-6">
+              <label class="form-label fw-medium small mb-1">State</label>
+              <select name="state" id="farmer_edit_worker_state_select" class="form-select" onchange="loadFarmerWorkerCities('farmer_edit_worker_state_select', 'farmer_edit_worker_city_select', '')">
+                <option value="">Select State</option>
+                {% for state in states %}
+                <option value="{{ state.name }}" data-id="{{ state.id }}">{{ state.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- City -->
+            <div class="col-md-6">
+              <label class="form-label fw-medium small mb-1">City</label>
+              <select name="city" id="farmer_edit_worker_city_select" class="form-select">
+                <option value="">Select City</option>
+              </select>
+            </div>
+
+            <!-- Address -->
+            <div class="col-12">
+              <label class="form-label fw-medium small mb-1">Address</label>
+              <textarea name="address" id="farmer_edit_address" rows="2" class="form-control"></textarea>
+            </div>
+
+            <!-- Notes -->
+            <div class="col-12">
+              <label class="form-label fw-medium small mb-1">Notes</label>
+              <textarea name="notes" id="farmer_edit_notes" rows="2" class="form-control"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="modal-footer bg-light border-top py-2 px-3 d-flex justify-content-between">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="ri-check-line me-1"></i> Save profile details</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Farmer Delete Worker Modal -->
+<div class="modal fade" id="farmer_delete_worker_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <form method="POST" action="{% url 'farmer-market' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete_worker">
+        <input type="hidden" name="worker_id" id="farmer_delete_worker_id">
+        <div class="modal-header">
+          <h5 class="modal-title text-danger">Confirm Delete</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body text-center">
+          <p class="mb-0">
+            Are you sure you want to delete
+            <strong id="farmerDeleteWorkerName">this Worker</strong>?
+          </p>
+        </div>
+
+        <div class="modal-footer justify-content-center">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">Yes, Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Farmer Quick Add Designation Modal -->
+<div class="modal fade" id="farmer_quick_add_designation_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header border-bottom py-3 px-3.5 bg-white">
+        <div class="d-flex align-items-center gap-2">
+          <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+            <i class="ri-user-star-line fs-5"></i>
+          </div>
+          <div>
+            <h6 class="modal-title fw-bold text-dark mb-0">Quick Add Designation</h6>
+            <span class="text-muted" style="font-size: 11px;">Manage worker designation roles</span>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body py-3.5 px-3.5 bg-white">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold text-secondary mb-1">Designation Name <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0 text-muted ps-3">
+              <i class="ri-folder-add-line"></i>
+            </span>
+            <input type="text" id="farmer_quick_designation_input" class="form-control bg-light border-start-0" placeholder="e.g. Field Manager, Harvest Lead" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitFarmerQuickDesignationModal();}">
+            <button type="button" id="farmer_quick_designation_submit_btn" class="btn btn-primary px-3 fw-semibold d-flex align-items-center gap-1" onclick="submitFarmerQuickDesignationModal()">
+              <i class="ri-add-line"></i> Add
+            </button>
+          </div>
+        </div>
+        <div class="border-top pt-3 mt-3">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="fw-bold text-muted text-uppercase" style="font-size: 11px; letter-spacing: 0.6px;">Existing Designations</span>
+            <span class="badge bg-primary-subtle text-primary border-0 rounded-pill px-2.5 py-1" id="farmer_quick_designation_count_badge" style="font-size: 11px;">0 Total</span>
+          </div>
+          <div class="overflow-auto rounded-3 p-2" id="farmer_quick_designation_items_list" style="max-height: 180px; min-height: 60px; background-color: #f8fafc; border: 1px solid #f1f5f9;"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2.5 px-3.5 bg-light d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-secondary px-3" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Farmer Quick Add Skill Modal -->
+<div class="modal fade" id="farmer_quick_add_skill_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header border-bottom py-3 px-3.5 bg-white">
+        <div class="d-flex align-items-center gap-2">
+          <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+            <i class="ri-tools-line fs-5"></i>
+          </div>
+          <div>
+            <h6 class="modal-title fw-bold text-dark mb-0">Quick Add Skill</h6>
+            <span class="text-muted" style="font-size: 11px;">Manage worker specialty skills</span>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body py-3.5 px-3.5 bg-white">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold text-secondary mb-1">Skill Name <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0 text-muted ps-3">
+              <i class="ri-folder-add-line"></i>
+            </span>
+            <input type="text" id="farmer_quick_skill_input" class="form-control bg-light border-start-0" placeholder="e.g. Organic Pesticide Spraying" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitFarmerQuickSkillModal();}">
+            <button type="button" id="farmer_quick_skill_submit_btn" class="btn btn-primary px-3 fw-semibold d-flex align-items-center gap-1" onclick="submitFarmerQuickSkillModal()">
+              <i class="ri-add-line"></i> Add
+            </button>
+          </div>
+        </div>
+        <div class="border-top pt-3 mt-3">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="fw-bold text-muted text-uppercase" style="font-size: 11px; letter-spacing: 0.6px;">Existing Skills</span>
+            <span class="badge bg-primary-subtle text-primary border-0 rounded-pill px-2.5 py-1" id="farmer_quick_skill_count_badge" style="font-size: 11px;">0 Total</span>
+          </div>
+          <div class="overflow-auto rounded-3 p-2" id="farmer_quick_skill_items_list" style="max-height: 180px; min-height: 60px; background-color: #f8fafc; border: 1px solid #f1f5f9;"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2.5 px-3.5 bg-light d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-secondary px-3" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Farmer Quick Add Wage Unit Modal -->
+<div class="modal fade" id="farmer_quick_add_wage_unit_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header border-bottom py-3 px-3.5 bg-white">
+        <div class="d-flex align-items-center gap-2">
+          <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+            <i class="ri-money-dollar-circle-line fs-5"></i>
+          </div>
+          <div>
+            <h6 class="modal-title fw-bold text-dark mb-0">Quick Add Wage Unit</h6>
+            <span class="text-muted" style="font-size: 11px;">Manage wage payment units</span>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body py-3.5 px-3.5 bg-white">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold text-secondary mb-1">Unit Name <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0 text-muted ps-3">
+              <i class="ri-folder-add-line"></i>
+            </span>
+            <input type="text" id="farmer_quick_wage_unit_input" class="form-control bg-light border-start-0" placeholder="e.g. Shift, Acre, Hour" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitFarmerQuickWageUnitModal();}">
+            <button type="button" id="farmer_quick_wage_unit_submit_btn" class="btn btn-primary px-3 fw-semibold d-flex align-items-center gap-1" onclick="submitFarmerQuickWageUnitModal()">
+              <i class="ri-add-line"></i> Add
+            </button>
+          </div>
+        </div>
+        <div class="border-top pt-3 mt-3">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="fw-bold text-muted text-uppercase" style="font-size: 11px; letter-spacing: 0.6px;">Existing Units</span>
+            <span class="badge bg-primary-subtle text-primary border-0 rounded-pill px-2.5 py-1" id="farmer_quick_wage_unit_count_badge" style="font-size: 11px;">0 Total</span>
+          </div>
+          <div class="overflow-auto rounded-3 p-2" id="farmer_quick_wage_unit_items_list" style="max-height: 180px; min-height: 60px; background-color: #f8fafc; border: 1px solid #f1f5f9;"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2.5 px-3.5 bg-light d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-secondary px-3" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Farmer View Worker Modal -->
+<div class="modal fade" id="farmer_view_worker_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+      <div class="modal-header bg-light border-bottom py-3 px-4">
+        <div class="d-flex align-items-center gap-2">
+          <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+            <i class="ri-user-line fs-5"></i>
+          </div>
+          <div>
+            <h5 class="modal-title fw-bold text-dark mb-0" id="view_farmer_worker_name">Worker Details</h5>
+            <span class="badge bg-primary-subtle text-primary border" id="view_farmer_worker_designation" style="font-size: 11px;">Designation</span>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Specialty Skill</label>
+            <div class="p-2.5 bg-light rounded-3 d-flex align-items-center gap-2">
+              <i class="ri-briefcase-line text-primary fs-5"></i>
+              <span class="fw-semibold text-dark" id="view_farmer_worker_skill">-</span>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Worker State (Status)</label>
+            <div class="p-2.5 bg-light rounded-3 d-flex align-items-center gap-2">
+              <span class="badge px-3 py-1.5 rounded-pill" id="view_farmer_worker_status_badge">-</span>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Wage Rate</label>
+            <div class="p-2.5 bg-light rounded-3 d-flex align-items-center gap-2">
+              <i class="ri-money-dollar-circle-line text-success fs-5"></i>
+              <span class="fw-bold text-dark fs-6" id="view_farmer_worker_wage">-</span>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Contact Phone</label>
+            <div class="p-2.5 bg-light rounded-3 d-flex align-items-center gap-2">
+              <a href="#" id="view_farmer_worker_phone_link" class="btn btn-sm btn-outline-success rounded-pill px-3 py-1 text-decoration-none">
+                <i class="ri-phone-line me-1"></i><span id="view_farmer_worker_phone">-</span>
+              </a>
+            </div>
+          </div>
+          <div class="col-md-6" id="view_farmer_worker_location_wrap">
+            <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Location</label>
+            <div class="p-2.5 bg-light rounded-3 d-flex align-items-center gap-2">
+              <i class="ri-map-pin-line text-primary fs-5"></i>
+              <span class="text-dark small" id="view_farmer_worker_location">-</span>
+            </div>
+          </div>
+          <div class="col-md-6" id="view_farmer_worker_address_wrap">
+            <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Address</label>
+            <div class="p-2.5 bg-light rounded-3 d-flex align-items-start gap-2">
+              <i class="ri-home-4-line text-primary fs-5 mt-0.5"></i>
+              <span class="text-dark small" id="view_farmer_worker_address">-</span>
+            </div>
+          </div>
+          <div class="col-12" id="view_farmer_worker_notes_wrap">
+            <label class="text-muted small fw-semibold text-uppercase d-block mb-1">Notes</label>
+            <div class="p-3 bg-light rounded-3 border">
+              <i class="ri-sticky-note-line text-warning me-1"></i>
+              <span class="text-muted small fst-italic" id="view_farmer_worker_notes">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer bg-light border-top py-2 px-3">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

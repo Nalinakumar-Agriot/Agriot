@@ -1,0 +1,178 @@
+{% load i18n %}
+{% load static %}
+
+{% if navbar_detached %}
+<nav class="layout-navbar {{container_class}} navbar navbar-expand-xl {{navbar_detached_class}} align-items-center bg-navbar-theme" id="layout-navbar">
+  {% endif %}
+
+  {# Horizontal layout (navbar not detached) #}
+
+  {% if not navbar_detached %}
+  <nav class="layout-navbar navbar navbar-expand-xl align-items-center" id="layout-navbar">
+    <div class="{{container_class}}">
+      {% endif %}
+      <!--  Brand demo (display only for navbar-full and hide on below xl) -->
+      {% if navbar_full %}
+      <div class="navbar-brand app-brand demo d-none d-xl-flex py-0 me-6">
+        <a href="{% url 'index' %}" class="app-brand-link gap-2">
+          <span class="app-brand-logo demo">{% include 'partials/logo.html' %}</span>
+          <span class="app-brand-text demo menu-text fw-semibold ms-1">{% get_theme_variables 'template_name' %}</span>
+        </a>
+
+        <!-- ! Display menu close icon only for horizontal-menu with navbar-full -->
+        {% if menu_horizontal %}
+        <a href="javascript:void(0);" class="layout-menu-toggle menu-link text-large ms-auto d-xl-none">
+          <i class="icon-base ri ri-close-line icon-sm"></i>
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- ! Not required for layout-without-menu -->
+      {% if not navbar_hide_toggle %}
+      <div class="layout-menu-toggle navbar-nav align-items-xl-center me-4 me-xl-0 {{ menu_horizontal|yesno:'d-xl-none,' }} {{ content_navbar|yesno:'d-xl-none,' }}">
+        <a class="nav-item nav-link px-0 me-xl-6" href="javascript:void(0)">
+          <i class="icon-base ri ri-menu-line icon-22px"></i>
+        </a>
+      </div>
+      {% endif %}
+
+      <div class="navbar-nav-right d-flex align-items-center justify-content-end" id="navbar-collapse">
+      
+        <ul class="navbar-nav flex-row align-items-center ms-md-auto">
+
+          <!-- Notification -->
+          <li class="nav-item dropdown-notifications navbar-dropdown dropdown me-4 me-xl-1">
+            <a class="nav-link dropdown-toggle hide-arrow btn btn-icon btn-text-secondary rounded-pill" href="javascript:void(0);" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+              <i class="icon-base ri ri-notification-2-line icon-22px"></i>
+              <span class="position-absolute top-0 start-50 translate-middle-y badge badge-dot bg-danger mt-2 border"></span>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end py-0">
+              <li class="dropdown-menu-header border-bottom py-50">
+                <div class="dropdown-header d-flex align-items-center py-2">
+                  <h6 class="mb-0 me-auto">Notifications</h6>
+                  <div class="d-flex align-items-center h6 mb-0">
+                    <span class="badge rounded-pill bg-label-primary fs-xsmall me-2">{{ unread_notifications_count }} New</span>
+                    <a href="javascript:void(0)" class="dropdown-notifications-all p-2" data-bs-toggle="tooltip" data-bs-placement="top" title="Mark all as read"><i class="icon-base ri ri-mail-open-line text-heading"></i></a>
+                  </div>
+                </div>
+              </li>
+              <li class="dropdown-notifications-list scrollable-container">
+                <ul class="list-group list-group-flush">
+                  {% for notification in notifications %}
+                  <li class="list-group-item list-group-item-action dropdown-notifications-item {% if notification.is_read %}marked-as-read{% endif %}">
+                    <div class="d-flex">
+                      <div class="flex-shrink-0 me-3">
+                        <div class="avatar">
+                          <span class="avatar-initial rounded-circle bg-label-{{ notification.bg_color }}">
+                            <i class="icon-base {{ notification.icon_class }} icon-18px"></i>
+                          </span>
+                        </div>
+                      </div>
+                      <div class="flex-grow-1">
+                        <h6 class="small mb-1">{{ notification.title }}</h6>
+                        <small class="mb-1 d-block text-body">{{ notification.message }}</small>
+                        <small class="text-body-secondary">{{ notification.created_at|timesince }} ago</small>
+                      </div>
+                      <div class="flex-shrink-0 dropdown-notifications-actions">
+                        <a href="javascript:void(0)" class="dropdown-notifications-read"><span class="badge badge-dot"></span></a>
+                        <a href="javascript:void(0)" class="dropdown-notifications-archive"><span class="icon-base ri ri-close-line"></span></a>
+                      </div>
+                    </div>
+                  </li>
+                  {% empty %}
+                  <li class="list-group-item text-center p-4">
+                    <small class="text-muted">No notifications.</small>
+                  </li>
+                  {% endfor %}
+                </ul>
+              </li>
+              <li class="border-top">
+                <div class="d-grid p-4">
+                  <a class="btn btn-primary btn-sm d-flex" href="javascript:void(0);">
+                    <small class="align-middle">View all notifications</small>
+                  </a>
+                </div>
+              </li>
+            </ul>
+          </li>
+          <!--/ Notification -->
+
+          <!-- User -->
+          <li class="nav-item navbar-dropdown dropdown-user dropdown">
+            <a class="nav-link dropdown-toggle hide-arrow" href="javascript:void(0);" data-bs-toggle="dropdown">
+              <div class="avatar avatar-online">
+                <!-- Moke condition for displaying user avatar -->
+                {% if request.user|has_group:"admin" %}
+                <img src="{% static 'img/avatars/1.png' %}" alt class="rounded-circle">
+                {% else %}
+                <img src="{% static 'img/avatars/3.png' %}" alt class="rounded-circle">
+                {% endif %}
+              </div>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end mt-3 py-2">
+              <li>
+                <a class="dropdown-item" href="{% url 'pages-account-settings-account' %}">
+                  <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0 me-2">
+                      <div class="avatar avatar-online">
+                        <!-- Moke condition for displaying user avatar -->
+                        {% if request.user|has_group:"admin" %}
+                        <img src="{% static 'img/avatars/1.png' %}" alt class="w-px-40 h-auto rounded-circle">
+                        {% else %}
+                        <img src="{% static 'img/avatars/3.png' %}" alt class="w-px-40 h-auto rounded-circle">
+                        {% endif %}
+                      </div>
+                    </div>
+                    <div class="flex-grow-1">
+                      <h6 class="mb-0 small">{{ request.user.username| capfirst }}</h6>
+                      {% for group in request.user.groups.all %}
+                      <small class="text-body-secondary">{{group.name| capfirst }}</small>
+                      {% endfor %}
+                    </div>
+                  </div>
+                </a>
+              </li>
+              <li>
+                <div class="dropdown-divider"></div>
+              </li>
+              {% if 'farmer' in request.path %}
+              <li>
+                <a class="dropdown-item" href="{% url 'farmer-profile' %}#basic_info"> <i class="icon-base ri ri-user-3-line icon-22px me-3"></i><span class="align-middle">Profile</span> </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="{% url 'farmer-profile' %}#documents"> <i class="icon-base ri ri-folder-shield-2-line icon-22px me-3"></i><span class="align-middle">Documentation</span> </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="{% url 'farmer-profile' %}#subscription"> <i class="icon-base ri ri-vip-crown-line icon-22px me-3"></i><span class="align-middle">Subscription</span> </a>
+              </li>
+              {% else %}
+              <li>
+                <a class="dropdown-item" href="{% url 'pages-profile-user' %}"> <i class="icon-base ri ri-user-3-line icon-22px me-3"></i><span class="align-middle">Profile</span> </a>
+              </li>
+              {% endif %}
+              <li>
+                <div class="dropdown-divider"></div>
+              </li>
+              <li>
+                <form action="{% url 'logout' %}" method="post">
+                  {% csrf_token %}
+                  <button type="submit" class="dropdown-item">
+                    <i class="icon-base ri ri-logout-box-r-line icon-md me-3"></i>
+                    <span class="align-middle">Log Out</span>
+                  </button>
+                </form>
+              </li>
+            </ul>
+          </li>
+          <!--/ User -->
+        </ul>
+      </div>
+
+      {% if not navbar_detached %}
+    </div>
+  </nav>
+  {% endif %}
+  {% if navbar_detached %}
+</nav>
+{% endif %}

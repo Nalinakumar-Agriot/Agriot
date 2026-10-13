@@ -1,0 +1,95 @@
+{
+  "menu": [
+    {
+      "url": "farmer-dashboard",
+      "name": "Dashboards",
+      "icon": "ri-dashboard-line",
+      "i18n": "Dashboards"
+    },
+    {
+      "url": "farmer-farms",
+      "name": "Farms",
+      "icon": "ri-plant-line",
+      "i18n": "Farms"
+    },
+    {
+      "url": "farmer-market",
+      "name": "Market & Resources Hub",
+      "icon": "ri-sparkling-2-line",
+      "i18n": "Market"
+    },
+    {
+      "url": "farmer-tasks",
+      "name": "Task",
+      "icon": "ri-clipboard-line",
+      "i18n": "Task"
+    },
+    {
+      "url": "farmer-financials",
+      "name": "Sales",
+      "icon": "ri-shopping-cart-2-line",
+      "i18n": "Sales"
+    },
+    {
+      "url": "farmer-inventory",
+      "name": "Inventory",
+      "icon": "ri-drop-line",
+      "i18n": "Resources"
+    },
+    {
+      "url": "farmer-expenses",
+      "name": "Expenses",
+      "icon": "ri-bank-card-line",
+      "i18n": "Expenses"
+    },
+    {
+      "url": "farmer-employee",
+      "name": "Employee",
+      "icon": "ri-team-line",
+      "i18n": "Shifts"
+    },
+    {
+      "url": "farmer-reports",
+      "name": "Reports",
+      "icon": "ri-file-chart-line",
+      "slug": "reports",
+      "submenu": [
+        {
+          "name": "Customer Report",
+          "icon": "ri-file-chart-line",
+          "url": "farmer-customer-report"
+        },
+        {
+          "name": "Land Report",
+          "icon": "ri-file-chart-line",
+          "url": "farmer-land-report"
+        },
+        {
+          "name": "Expense Report",
+          "icon": "ri-file-chart-line",
+          "url": "farmer-expense-report"
+        },
+        {
+          "name": "Vendor Report",
+          "icon": "ri-file-chart-line",
+          "url": "farmer-vendor-report"
+        },
+        {
+          "name": "Salary Report",
+          "icon": "ri-file-chart-line",
+          "url": "farmer-salary-report"
+        },
+        {
+          "name": "Attendance Report",
+          "icon": "ri-file-chart-line",
+          "url": "farmer-attendance-report"
+        },
+        {
+          "name": "Advance Report",
+          "icon": "ri-file-chart-line",
+          "url": "farmer-advance-report"
+        }
+      ]
+    }
+  ]
+}

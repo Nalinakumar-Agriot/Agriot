@@ -1,0 +1,492 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Guidelines Management{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+<style>
+.search-collapse-wrapper {
+  position: relative;
+}
+.search-input-group {
+  width: 0;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.25s ease, opacity 0.2s ease;
+  white-space: nowrap;
+}
+.search-input-group.expanded {
+  max-width: 420px;
+  width: 420px;
+  opacity: 1;
+  margin-left: 8px;
+}
+@media (max-width: 576px) {
+  .search-input-group.expanded {
+    max-width: 220px;
+    width: 220px;
+  }
+}
+.clamp-3 {
+  font-size: 0.75rem;        /* text-xs */
+  line-height: 1.625;        /* leading-relaxed */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+
+<script>
+function toggleGuideSearchBox() {
+  var group = document.getElementById('guide_search_input_group');
+  var isExpanded = group && group.classList.contains('expanded');
+
+  if (isExpanded) {
+    closeGuideSearchBox();
+  } else if (group) {
+    group.classList.remove('d-none');
+    setTimeout(function () {
+      group.classList.add('expanded');
+      var input = document.getElementById('searchInput');
+      if (input) input.focus();
+    }, 10);
+  }
+}
+
+function closeGuideSearchBox() {
+  var group = document.getElementById('guide_search_input_group');
+  var input = document.getElementById('searchInput');
+  if (group) group.classList.remove('expanded');
+  if (input) {
+    input.value = '';
+    if (typeof filterGuidelines === 'function') filterGuidelines();
+  }
+  setTimeout(function () {
+    if (group) group.classList.add('d-none');
+  }, 250);
+}
+
+document.addEventListener('click', function (e) {
+  var wrapper = document.getElementById('guide_search_collapse_wrapper');
+  var group = document.getElementById('guide_search_input_group');
+  if (wrapper && group && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+    closeGuideSearchBox();
+  }
+});
+
+let fileInput = document.getElementById("dropzone-file");
+let dropZone = document.getElementById("dropzone");
+
+if (dropZone && fileInput) {
+  dropZone.addEventListener("click", () => fileInput.click());
+
+  dropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropZone.classList.add("border-primary");
+  });
+
+  dropZone.addEventListener("dragleave", () => {
+    dropZone.classList.remove("border-primary");
+  });
+
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    fileInput.files = e.dataTransfer.files;
+    dropZone.classList.remove("border-primary");
+  });
+}
+
+function filterGuidelines() {
+    let searchTerm = ($('#searchInput').val() || '').toLowerCase();
+    let selectedCategory = $('#categoryFilter').val();
+
+    $('.guideline-item').each(function() {
+        let itemSearchText = $(this).data('search') || '';
+        let itemCategory = $(this).data('category');
+
+        let matchesSearch = itemSearchText.indexOf(searchTerm) > -1;
+        let matchesCategory = selectedCategory === "" || itemCategory === selectedCategory;
+
+        if (matchesSearch && matchesCategory) {
+            $(this).show();
+        } else {
+            $(this).hide();
+        }
+    });
+}
+
+$(document).ready(function() {
+    $('#searchInput').on('keyup', filterGuidelines);
+    $('#categoryFilter').on('change', filterGuidelines);
+});
+</script>
+
+{% endblock page_js %}
+
+{% block content %}
+
+<!-- Header Card -->
+<div class="card mb-3 border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex justify-content-between align-items-center p-3 border-bottom">
+        <div>
+            <h4 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+            <i class="ri-book-open-line text-primary"></i>
+               {% trans "Guidelines & Manuals Management" %}
+            </h4>
+        </div>
+        <div class="d-flex align-items-center justify-content-end gap-2">
+          <button class="btn btn-primary d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#add_manual_guide">
+            <i class="ri-add-line"></i> Add Manual
+          </button>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Toolbar Card -->
+<div class="card border-0 shadow-sm rounded-4 mb-3">
+    <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+        <!-- Collapsible Search -->
+        <div class="d-flex align-items-center search-collapse-wrapper" id="guide_search_collapse_wrapper">
+          <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="guide_search_toggle_btn" onclick="toggleGuideSearchBox()" style="width: 38px; height: 38px;">
+            <i class="ri-search-line"></i>
+          </button>
+          <div class="input-group search-input-group d-none" id="guide_search_input_group">
+            <span class="input-group-text bg-white border-end-0">
+              <i class="ri-search-line text-muted"></i>
+            </span>
+            <input type="text"
+                id="searchInput"
+                class="form-control border-start-0"
+                placeholder="Search by title, tags, or content...">
+            <button class="btn btn-outline-secondary border-start-0" type="button" id="guide_search_close_btn" onclick="closeGuideSearchBox()">
+              <i class="ri-close-line"></i>
+            </button>
+          </div>
+        </div>
+
+        <select id="categoryFilter" class="form-select form-select-sm w-auto">
+            <option value="">All Categories</option>
+            {% for cat in categories %}
+            <option value="{{ cat.name }}">{{ cat.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+<div class="row g-3" id="guidelinesList">
+    {% for g in guidelines %}
+    <div class="col-lg-6 guideline-item" data-category="{{ g.farming_section.name|default:'Uncategorized' }}" data-search="{{ g.title|lower }} {{ g.search_tags|lower }} {{ g.detailed_content|lower }}">
+        <div class="card" style="border: 1px solid #696969;">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between gap-5 mb-2">
+                    <span class="badge fw-bold px-1 py-1 rounded text-uppercase" style="background: #F0FDF4;border: 1px solid #D0FAE5;color: #008236;font-size: 9px;">{{ g.farming_section.name|default:"Uncategorized" }}</span>
+                    <span style="color: #99a1af;font-size: 12px;">{{ g.read_time|default:"-" }}</span>
+                </div>
+                <label class="fw-semibold text-black" style="font-size: 14px;">{{ g.title }}</label>
+                <p class="text-muted mt-2 clamp-3">
+                    {{ g.detailed_content }}
+                </p>
+                <div class="d-flex align-items-center justify-content-between gap-5 mb-2 border-top py-2">
+                    <span style="color: #99a1af;font-size: 12px;">By : {{ g.author_name|default:"-" }}</span>
+                    <div class="d-flex align-items-center justify-content-end gap-2">
+                        {% if g.document_file %}
+                        <a href="{{ g.document_file.url }}" target="_blank" class="btn btn-sm btn-gray-100 border text-primary" download>
+                            <i class="ri-download-2-line"></i>
+                        </a>
+                        {% endif %}
+                        <button class="btn btn-sm btn-gray-100 border" data-bs-toggle="modal" data-bs-target="#edit_manual_guide_{{ g.id }}">
+                            <i class="ri-pencil-line"></i>
+                        </button>
+                        <button class="btn btn-sm btn-gray-100 border text-danger" onclick="document.getElementById('delete_guideline_id').value='{{ g.id }}'" data-bs-toggle="modal" data-bs-target="#delete_manual_guide">
+                            <i class="ri-delete-bin-7-line"></i>
+                        </button>
+                        <span class="fw-bold cursor-pointer" data-bs-toggle="modal" data-bs-target="#view_full_guide_{{ g.id }}" style="color: #008236;font-size: 11px;">View full <i class="ri-arrow-right-double-line" style="color: #008236;"></i></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12 text-center py-5 text-muted">
+        No guidelines found. Click 'Manual Directory' to add one.
+    </div>
+    {% endfor %}
+</div>
+
+
+{% for g in guidelines %}
+<!-- Full Guideline -->
+<div class="modal fade" id="view_full_guide_{{ g.id }}" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <!-- Header -->
+      <div class="modal-header border-bottom pb-2">
+        <div class="d-flex flex-column">
+            <label>
+                <span class="badge fw-bold px-1 py-1 rounded text-uppercase" style="background: #F0FDF4;border: 1px solid #D0FAE5;color: #008236;font-size: 9px;">{{ g.farming_section.name|default:"Uncategorized" }}</span>
+            </label>
+            <h5 class="modal-title fw-semibold">{{ g.title }}</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <!-- Body -->
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12 border-bottom d-flex align-items-center justify-content-start gap-3 py-2">
+            <span class="fw-semibold" style="color: #696969;font-size: 12px;">Author : {{ g.author_name|default:"-" }}</span>
+            <span class="fw-bold text-black">|</span>
+            <span class="fw-semibold" style="color: #696969;font-size: 12px;">{{ g.read_time|default:"-" }}</span>
+            <span class="fw-bold text-black">|</span>
+            <div class="d-flex align-items-center justify-content-start gap-2">
+                {% if g.search_tags %}
+                {% for tag in g.search_tags.split %}
+                <span class="badge bg-gray-100 rounded-3 fw-semibold" style="color: #353535;font-size: 12px;">#{{ tag }}</span>
+                {% endfor %}
+                {% endif %}
+            </div>
+          </div>
+          <div class="col-12">
+            <p class="text-muted mt-2 clamp-3">
+                {{ g.detailed_content }}
+            </p>
+          </div>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="modal-footer d-flex justify-content-between">
+        {% if g.document_file %}
+        <a href="{{ g.document_file.url }}" target="_blank" class="btn btn-secondary" download>
+          <i class="ri-download-2-line me-1"></i> Download Document
+        </a>
+        {% else %}
+        <div></div>
+        {% endif %}
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+          <i class="ri-check-line me-1"></i> Done Reading
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Add Manual Guide Modal -->
+<div class="modal fade" id="add_manual_guide" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Create Guideline Manual</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_guideline">
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Guideline Title</label>
+            <input type="text" name="title" class="form-control" placeholder="Eg: Optimizing Soil Moisture for High-Yield Deccan Tomatoes" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Farming Section</label>
+            <select name="category_id" class="form-select" required>
+              <option value="">Select Category</option>
+              {% for cat in categories %}
+              <option value="{{ cat.id }}">{{ cat.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Author Name/Entity</label>
+            <input type="text" name="author" class="form-control" placeholder="Dr.Rajeshwar Rao">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Read Time Metric</label>
+            <input type="text" name="read_time" class="form-control" placeholder="5 Min read">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Search Tags (comma separated)</label>
+            <input type="text" name="tags" class="form-control">
+          </div>
+          <div class="col-md-7">
+            <label class="form-label">Detailed Content</label>
+            <textarea class="form-control" name="content" rows="5" required></textarea>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Upload Document</label>
+            <input type="file" name="document_file" class="form-control" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+          </div>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="ri-check-line me-1"></i> Confirm Publication
+        </button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+{% for g in guidelines %}
+<!-- Edit Manual Guide Modal -->
+<div class="modal fade" id="edit_manual_guide_{{ g.id }}" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Edit Guideline Manual</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="edit_guideline">
+      <input type="hidden" name="guideline_id" value="{{ g.id }}">
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Guideline Title</label>
+            <input type="text" name="title" class="form-control" value="{{ g.title }}" placeholder="Eg: Optimizing Soil Moisture for High-Yield Deccan Tomatoes" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Farming Section</label>
+            <select name="category_id" class="form-select" required>
+              <option value="">Select Category</option>
+              {% for cat in categories %}
+              <option value="{{ cat.id }}" {% if g.farming_section_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Author Name/Entity</label>
+            <input type="text" name="author" class="form-control" value="{{ g.author_name|default:'' }}" placeholder="Dr.Rajeshwar Rao">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Read Time Metric</label>
+            <input type="text" name="read_time" class="form-control" value="{{ g.read_time|default:'' }}" placeholder="5 Min read">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Search Tags (comma separated)</label>
+            <input type="text" name="tags" class="form-control" value="{{ g.search_tags|default:'' }}">
+          </div>
+          <div class="col-md-7">
+            <label class="form-label">Detailed Content</label>
+            <textarea class="form-control" name="content" rows="5" required>{{ g.detailed_content|default:'' }}</textarea>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Upload Document</label>
+            <input type="file" name="document_file" class="form-control" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+            {% if g.document_file %}
+              <small class="text-muted d-block mt-1">Current file: <a href="{{ g.document_file.url }}" target="_blank">View Document</a></small>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="ri-check-line me-1"></i> Update Publication
+        </button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Delete Manual Guide Modal -->
+<div class="modal fade" id="delete_manual_guide" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <form method="POST">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="delete_guideline">
+      <input type="hidden" name="guideline_id" id="delete_guideline_id">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger">Confirm Delete</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body text-center">
+        <p class="mb-0">
+          Are you sure you want to delete
+          <strong id="deleteFarmerName">this Manual Guide</strong>?
+        </p>
+      </div>
+
+      <div class="modal-footer justify-content-center">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-danger" id="confirmDeleteBtn">
+          Yes, Delete
+        </button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Upload manual Modal -->
+<div class="modal fade" id="upload_doc_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Upload Crop PDF Guidelines Manual</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="border-2 border-dashed rounded-4 p-5 text-center cursor-pointer bg-gray-100"
+            id="pdf-drag-drop">
+        <input type="file" name="pdf_file" accept=".pdf" class="d-none" id="pdfInput">
+        <div class="mb-3">
+            <div class="px-3 py-1 bg-white rounded-4 border d-inline-flex">
+            <i class="ri-upload-cloud-line fs-1 text-primary"></i>
+            </div>
+        </div>
+        <p class="fw-bold mb-1">Drag and Drop crop PDF manuals here</p>
+        <small class="text-muted">
+            Or click to browse • PDF only (Max 25MB)
+        </small>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary">
+          <i class="ri-check-line me-1"></i> Upload
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

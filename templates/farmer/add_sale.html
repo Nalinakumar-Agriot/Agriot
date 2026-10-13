@@ -1,0 +1,1387 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block menu %}
+  {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+
+{% block title %}{% if is_edit %}Edit Sale{% else %}Add Sale{% endif %}{% endblock title %}
+
+{% block page_css %}
+{{ block.super }}
+<style>
+  .nav-tabs .nav-link.active, .nav-pills .nav-link.active {
+    background-color: #F79D4E !important;
+    color: #fff !important;
+    border-radius: 10px;
+    border: none;
+  }
+  .nav-pills .nav-link {
+    border: none;
+    color: #64748b;
+    border-radius: 10px;
+    transition: 0.2s ease;
+    font-weight: 500;
+  }
+  .nav-pills .nav-link:hover {
+    background-color: #f1f5f9;
+    color: #0f172a;
+  }
+  .form-label {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+  .card-form {
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    background: #ffffff;
+  }
+  .summary-card {
+    background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+  }
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    font-size: 14px;
+  }
+  .summary-divider {
+    border-top: 1px dashed #cbd5e1;
+    margin: 12px 0;
+  }
+  .net-total-box {
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .btn-type-toggle {
+    font-size: 11px;
+    padding: 3px 10px;
+    font-weight: 600;
+    color: #64748b;
+    border-color: #cbd5e1;
+    background-color: #f8fafc;
+    transition: all 0.2s ease-in-out;
+  }
+  .btn-type-toggle:hover {
+    color: #334155;
+    background-color: #f1f5f9;
+    border-color: #cbd5e1;
+  }
+  .btn-check:checked + .btn-type-toggle,
+  .btn-check:checked + .btn-outline-secondary.btn-type-toggle {
+    background-color: #F79D4E !important;
+    border-color: #F79D4E !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(247, 157, 78, 0.35) !important;
+  }
+</style>
+{% endblock page_css %}
+
+{% block content %}
+<div class="container-fluid px-0">
+
+  <!-- Navigation Tabs -->
+  <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <ul class="nav nav-pills gap-2" role="tablist">
+      <li class="nav-item">
+        <a href="{% url 'farmer-financials' %}" class="nav-link active">
+          Sales
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="{% url 'farmer-customer' %}" class="nav-link">
+          Customer
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="{% url 'farmer-upcoming-payments' %}" class="nav-link">
+          Upcoming Payments
+        </a>
+      </li>
+    </ul>
+
+    <a href="{% url 'farmer-financials' %}" class="btn btn-outline-secondary d-flex align-items-center gap-2 px-3 shadow-sm">
+      <i class="ri-arrow-left-line"></i>
+      {% trans "Back to Sales List" %}
+    </a>
+  </div>
+
+  <!-- Main Form wrapping entire screen -->
+  <form method="POST" id="saleForm" onsubmit="return validateSaleFormSubmit(event)">
+    {% csrf_token %}
+
+    <!-- Page Header Title Card with TOP SAVE BUTTONS -->
+    <div class="card card-form mb-4">
+      <div class="card-body py-3 px-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="avatar avatar-sm flex-shrink-0" style="background: rgba(247, 157, 78, 0.15); width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+            <i class="ri-shopping-cart-2-line fs-3" style="color: #F79D4E !important;"></i>
+          </div>
+          <div>
+            <h5 class="mb-0 fw-bold text-dark">
+              {% if is_edit %}Edit Sale Record{% else %}New Sale{% endif %}
+            </h5>
+          </div>
+        </div>
+
+        <!-- Top Action Buttons -->
+        <div class="d-flex align-items-center gap-2">
+          <a href="{% url 'farmer-financials' %}" class="btn btn-light px-4">
+            {% trans "Cancel" %}
+          </a>
+          <button type="submit" class="btn btn-primary px-4 shadow-sm" id="saveSaleBtn">
+            <i class="ri-check-line me-1"></i>
+            {% if is_edit %}{% trans "Update Sale" %}{% else %}{% trans "Save Sale" %}{% endif %}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2 Column Split Layout: Left Form & Right Summary -->
+    <div class="row g-4 mb-4">
+
+      <!-- ================= LEFT SIDE: FORM INPUTS ================= -->
+      <div class="col-lg-7">
+        <div class="card card-form h-100">
+          <div class="card-body p-4">
+            <div class="row g-3">
+
+              <!-- Customer Type Selection with Quick Add -->
+              <div class="col-md-6">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                  <label class="form-label fw-semibold mb-0">
+                    Customer Type <span class="text-danger">*</span>
+                  </label>
+                  <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2 d-flex align-items-center gap-1"
+                          style="font-size: 11px; height: 22px;"
+                          data-bs-toggle="modal" data-bs-target="#quick_add_customer_type_modal">
+                    <i class="ri-add-line"></i> Quick Add
+                  </button>
+                </div>
+                <select class="form-select" name="customer_type" id="customerTypeSelect" onchange="filterCustomersByType()">
+                  <option value="" disabled {% if not is_edit %}selected{% endif %}>Select Customer Type</option>
+                  {% for ct in customer_types %}
+                  <option value="{{ ct.id }}">{{ ct.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <!-- Customer / Buyer Selection with Quick Add -->
+              <div class="col-md-6">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                  <label class="form-label fw-semibold mb-0">
+                    Customer <span class="text-danger">*</span>
+                  </label>
+                  <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2 d-flex align-items-center gap-1"
+                          style="font-size: 11px; height: 22px;"
+                          data-bs-toggle="modal" data-bs-target="#quick_add_customer_modal">
+                    <i class="ri-add-line"></i> Quick Add
+                  </button>
+                </div>
+                <select class="form-select select2-customer" name="description" id="buyerSelect" onchange="updateSummary()" required>
+                  <option value="" disabled {% if not is_edit %}selected{% endif %}>Select Buyer</option>
+                  {% for customer in customers %}
+                  <option value="{{ customer.name }}"
+                    data-company="{{ customer.company_name|default:'' }}"
+                    data-type-id="{{ customer.customer_type_id|default:'' }}"
+                    data-type-name="{{ customer.customer_type.name|default:'' }}"
+                    {% if is_edit and customer.name in sale.description %}selected{% endif %}>
+                    {{ customer.name }}{% if customer.company_name %} - {{ customer.company_name }}{% endif %}
+                  </option>
+                  {% empty %}
+                  <option disabled>No customers registered - add one first</option>
+                  {% endfor %}
+                  {% if is_edit and sale.description %}
+                    <option value="{{ sale.description }}" selected>{{ sale.description }}</option>
+                  {% endif %}
+                </select>
+                <div class="invalid-feedback">Please select a buyer or customer.</div>
+              </div>
+
+              <!-- Associated Farm Land (Triggers Farm-based Item filter) -->
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Farm</label>
+                <select class="form-select" name="farm_id" id="farmSelect" onchange="onFarmChange()">
+                  <option value="" {% if not is_edit or not sale.farm_id %}selected{% endif %}>All Farms (Optional)</option>
+                  {% for f in farms %}
+                  <option value="{{ f.id }}" {% if is_edit and sale.farm_id == f.id %}selected{% endif %}>
+                    {{ f.land_name }} ({{ f.total_area }} Ac)
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <!-- Items / Crop Variety Selection (Filtered by Farm) -->
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">
+                  Items <span class="text-danger">*</span>
+                </label>
+                <select class="form-select" name="category" id="cropSelect" onchange="onCropChange()" required>
+                  <option value="" disabled {% if not is_edit %}selected{% endif %} data-price="0" data-available="0">Select Items</option>
+                  {% for crop in farmer_crops %}
+                  <option value="{{ crop.crop__name }}"
+                    data-farm-id="{{ crop.farm__id|default:'' }}"
+                    data-available="{{ crop.available }}"
+                    data-price="{{ crop.price }}"
+                    {% if is_edit and not is_other_category and sale.category == crop.crop__name %}selected{% endif %}>
+                    {{ crop.crop__name }} ({{ crop.available }} Tons - ₹{{ crop.price }}/Ton)
+                  </option>
+                  {% empty %}
+                  <option disabled>No harvested crops found in inventory</option>
+                  {% endfor %}
+                  <option value="__other__" data-available="999999" data-price="0" {% if is_edit and is_other_category %}selected{% endif %}>
+                    Other / Custom Item
+                  </option>
+                </select>
+                <small class="text-muted" style="font-size: 11px;" id="cropHelpText"></small>
+                <div class="invalid-feedback">Please select an item or choose Other.</div>
+              </div>
+
+              <!-- Custom / Manual Item Name Input Wrapper (Shown when "Other" chosen) -->
+              <div class="col-md-6" id="customItemWrapper" style="display: {% if is_edit and is_other_category %}block{% else %}none{% endif %};">
+                <label class="form-label fw-semibold">
+                  Custom Item Name <span class="text-danger">*</span>
+                </label>
+                <input type="text" name="custom_item_name" id="customItemInput" class="form-control"
+                  placeholder="e.g. Organic Manure, Straw / Hay, Agri Service, Equipment"
+                  value="{% if is_edit and is_other_category %}{{ sale.category }}{% endif %}"
+                  oninput="onCustomItemChange()">
+                <div class="invalid-feedback">Please enter the custom item name.</div>
+              </div>
+
+              <!-- Quantity & Unit -->
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">
+                  Quantity & Unit <span class="text-danger">*</span>
+                </label>
+                <div class="input-group">
+                  <input type="number" step="0.01" name="load_weight" class="form-control" id="loadWeightInput"
+                    placeholder="e.g. 2.50"
+                    value="{% if is_edit %}{{ sale.quantity|default:'' }}{% endif %}"
+                    oninput="recalculateTotals()" required>
+                  <select name="unit" id="unitSelect" class="form-select bg-light text-dark fw-semibold" style="max-width: 120px;" onchange="onUnitChange()">
+                    <option value="Tons" {% if not is_edit or sale.unit == 'Tons' or not sale.unit %}selected{% endif %}>Tons</option>
+                    <option value="Kg" {% if is_edit and sale.unit == 'Kg' %}selected{% endif %}>Kg</option>
+                    <option value="Quintal" {% if is_edit and sale.unit == 'Quintal' %}selected{% endif %}>Quintal</option>
+                    <option value="Bags" {% if is_edit and sale.unit == 'Bags' %}selected{% endif %}>Bags</option>
+                    <option value="Boxes" {% if is_edit and sale.unit == 'Boxes' %}selected{% endif %}>Boxes</option>
+                    <option value="Liters" {% if is_edit and sale.unit == 'Liters' %}selected{% endif %}>Liters</option>
+                    <option value="Units" {% if is_edit and sale.unit == 'Units' %}selected{% endif %}>Units / Nos</option>
+                    <option value="Bundles" {% if is_edit and sale.unit == 'Bundles' %}selected{% endif %}>Bundles</option>
+                    <option value="Bales" {% if is_edit and sale.unit == 'Bales' %}selected{% endif %}>Bales</option>
+                    <option value="Loads" {% if is_edit and sale.unit == 'Loads' %}selected{% endif %}>Loads</option>
+                    <option value="Acres" {% if is_edit and sale.unit == 'Acres' %}selected{% endif %}>Acres</option>
+                    <option value="Hours" {% if is_edit and sale.unit == 'Hours' %}selected{% endif %}>Hours</option>
+                  </select>
+                </div>
+                <small id="weightErrorMsg" class="text-danger fw-bold d-none mt-1" style="font-size: 11px;">
+                  Exceeds available crop inventory
+                </small>
+                <div class="invalid-feedback">Quantity is required.</div>
+              </div>
+
+              <!-- Total Valuation Amount (₹) -->
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">
+                  Total Amount (₹) <span class="text-danger">*</span>
+                </label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-success fw-bold">₹</span>
+                  <input type="number" step="0.01" name="amount" class="form-control" id="totalAmountInput"
+                    placeholder="e.g. 45000"
+                    value="{% if is_edit %}{{ subtotal_valuation }}{% endif %}"
+                    oninput="recalculateTotals()" required>
+                </div>
+                <div class="invalid-feedback">Total Valuation Amount is required.</div>
+              </div>
+
+              <!-- GST Rate Selection with Custom % Option -->
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">GST Rate (%)</label>
+                <select class="form-select" name="gst_rate" id="gstRateSelect" onchange="onGstRateChange()">
+                  <option value="0" {% if not is_edit or saved_gst_rate == '0' %}selected{% endif %}>0% (No GST)</option>
+                  <option value="5" {% if is_edit and saved_gst_rate == '5' %}selected{% endif %}>5% GST</option>
+                  <option value="12" {% if is_edit and saved_gst_rate == '12' %}selected{% endif %}>12% GST</option>
+                  <option value="18" {% if is_edit and saved_gst_rate == '18' %}selected{% endif %}>18% GST</option>
+                  <option value="28" {% if is_edit and saved_gst_rate == '28' %}selected{% endif %}>28% GST</option>
+                  <option value="custom" {% if is_edit and saved_gst_rate == 'custom' %}selected{% endif %}>Custom %</option>
+                </select>
+              </div>
+
+              <!-- Custom GST % Input (Shown when custom chosen) -->
+              <div class="col-md-6" id="customGstWrapper" style="display: {% if is_edit and saved_gst_rate == 'custom' %}block{% else %}none{% endif %};">
+                <label class="form-label fw-semibold">Custom GST Rate (%)</label>
+                <div class="input-group">
+                  <input type="number" step="0.01" name="custom_gst_rate" id="customGstInput" class="form-control"
+                    placeholder="e.g. 2.5 or 7" value="{% if is_edit %}{{ saved_custom_gst_rate }}{% endif %}" oninput="recalculateTotals()">
+                  <span class="input-group-text bg-light text-muted">%</span>
+                </div>
+              </div>
+
+              <!-- Discount (% or ₹) with Type Toggle -->
+              <div class="col-md-6">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                  <label class="form-label fw-semibold mb-0">Discount</label>
+                  <div class="btn-group btn-group-sm" role="group">
+                    <input type="radio" class="btn-check" name="discount_type" id="disc_type_amt" value="amount" {% if not is_edit or saved_discount_type != 'percent' %}checked{% endif %} onchange="onDiscountTypeChange()">
+                    <label class="btn btn-outline-secondary btn-type-toggle" for="disc_type_amt">₹ (Rs)</label>
+                    <input type="radio" class="btn-check" name="discount_type" id="disc_type_pct" value="percent" {% if is_edit and saved_discount_type == 'percent' %}checked{% endif %} onchange="onDiscountTypeChange()">
+                    <label class="btn btn-outline-secondary btn-type-toggle" for="disc_type_pct">%</label>
+                  </div>
+                </div>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-muted" id="discountPrefix">{% if is_edit and saved_discount_type == 'percent' %}%{% else %}₹{% endif %}</span>
+                  <input type="number" step="0.01" name="discount" id="discountInput" class="form-control" placeholder="0.00" value="{% if is_edit %}{{ saved_discount }}{% endif %}" oninput="recalculateTotals()" />
+                </div>
+                <small class="text-muted" style="font-size: 11px;" id="discountCalculatedText"></small>
+              </div>
+
+              <!-- Commission (% or ₹) with Type Toggle -->
+              <div class="col-md-6">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                  <label class="form-label fw-semibold mb-0">Commission</label>
+                  <div class="btn-group btn-group-sm" role="group">
+                    <input type="radio" class="btn-check" name="commission_type" id="comm_type_amt" value="amount" {% if not is_edit or saved_commission_type != 'percent' %}checked{% endif %} onchange="onCommissionTypeChange()">
+                    <label class="btn btn-outline-secondary btn-type-toggle" for="comm_type_amt">₹ (Rs)</label>
+                    <input type="radio" class="btn-check" name="commission_type" id="comm_type_pct" value="percent" {% if is_edit and saved_commission_type == 'percent' %}checked{% endif %} onchange="onCommissionTypeChange()">
+                    <label class="btn btn-outline-secondary btn-type-toggle" for="comm_type_pct">%</label>
+                  </div>
+                </div>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-muted" id="commissionPrefix">{% if is_edit and saved_commission_type == 'percent' %}%{% else %}₹{% endif %}</span>
+                  <input type="number" step="0.01" name="commission" id="commissionInput" class="form-control" placeholder="0.00" value="{% if is_edit %}{{ saved_commission }}{% endif %}" oninput="recalculateTotals()" />
+                </div>
+                <small class="text-muted" style="font-size: 11px;" id="commissionCalculatedText"></small>
+              </div>
+
+              <!-- Payment Method (Direct Input Collect with Quick Datalist Suggestions) -->
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Payment Method</label>
+                <div class="input-group">
+                  <input type="text" name="payment_method" id="paymentMethodInput" class="form-control" list="paymentMethodsList"
+                    placeholder="e.g. Cash, Bank Transfer, UPI"
+                    value="{% if is_edit %}{{ sale.payment_method|default:'Bank Transfer' }}{% else %}Bank Transfer{% endif %}"
+                    oninput="updateSummary()">
+                  <datalist id="paymentMethodsList">
+                    <option value="Bank Transfer">
+                    <option value="Cash">
+                    <option value="UPI / QR">
+                    <option value="GPay / PhonePe">
+                    <option value="Cheque">
+                    <option value="RTGS / NEFT">
+                    <option value="Credit / Due">
+                  </datalist>
+                </div>
+              </div>
+
+              <!-- Deal Date -->
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Deal Date <span class="text-danger">*</span></label>
+                <input type="date" name="close_date" class="form-control" id="closeDateInput"
+                  value="{% if is_edit %}{{ sale.close_date|date:'Y-m-d' }}{% else %}{{ today }}{% endif %}"
+                  onchange="updateSummary()" required>
+                <div class="invalid-feedback">Deal Date is required.</div>
+              </div>
+
+              <!-- ── Payment Settlement & Outstanding Due Breakdown ── -->
+              <div class="col-12 mt-2 pt-3 border-top">
+                <div class="row g-3">
+                  <!-- Paid Amount (₹) -->
+                  <div class="col-md-6">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                      <label class="form-label fw-semibold mb-0">
+                        Paid Amount (₹) <span class="text-danger">*</span>
+                      </label>
+                      <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-success py-0 px-2" style="font-size: 11px;" onclick="setPaidFull()">Full Paid</button>
+                        <button type="button" class="btn btn-outline-secondary py-0 px-2" style="font-size: 11px;" onclick="setPaidZero()">Credit (₹0)</button>
+                      </div>
+                    </div>
+                    <div class="input-group">
+                      <span class="input-group-text bg-light text-success fw-bold">₹</span>
+                      <input type="number" step="0.01" name="paid_amount" id="paidAmountInput" class="form-control"
+                        placeholder="0.00"
+                        value="{% if is_edit %}{{ saved_paid_amount }}{% endif %}"
+                        oninput="onPaidAmountChange()" required>
+                    </div>
+                    <small class="text-muted" style="font-size: 11px;">Amount received from buyer upfront</small>
+                  </div>
+
+                  <!-- Balance Due (Goes to Outstanding) -->
+                  <div class="col-md-6">
+                    <label class="form-label fw-semibold">Balance Due (Outstanding Receivable)</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-light text-danger fw-bold">₹</span>
+                      <input type="text" id="balanceAmountDisplay" class="form-control bg-light fw-bold text-danger"
+                        value="{% if is_edit %}{{ saved_balance_amount }}{% else %}0.00{% endif %}" readonly>
+                    </div>
+                    <small id="balanceStatusText" class="text-success fw-semibold" style="font-size: 11px;">Fully Settled</small>
+                  </div>
+
+                  <!-- Payment Due Date (Required if Balance Due > 0) -->
+                  <div class="col-md-6" id="dueDateWrapper" style="display: {% if is_edit and saved_balance_amount != '0.00' and saved_balance_amount != '' and saved_balance_amount != '0' %}block{% else %}none{% endif %};">
+                    <label class="form-label fw-semibold text-danger">
+                      Payment Due Date <span class="text-danger">*</span>
+                    </label>
+                    <input type="date" name="due_date" class="form-control border-danger" id="dueDateInput"
+                      value="{% if is_edit %}{{ saved_due_date|default:today }}{% else %}{{ today }}{% endif %}">
+                    <small class="text-muted" style="font-size: 11px;">Deadline for buyer to pay remaining balance</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ── Toggle Sale Expense Section ─────────────────────── -->
+              <div class="col-12 mt-3 pt-3 border-top">
+                <div class="d-flex align-items-center justify-content-between p-3 rounded-3" style="background: #fdfaf7; border: 1px solid #fed7aa;">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="avatar avatar-sm flex-shrink-0" style="background: rgba(247, 157, 78, 0.2); width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                      <i class="ri-truck-line fs-5" style="color: #ea580c;"></i>
+                    </div>
+                    <div>
+                      <h6 class="mb-0 fw-bold text-dark" style="font-size: 14px;">Add Sale Expenses</h6>
+                      <small class="text-muted" style="font-size: 11px;">Transport, Labor, Loading, Packaging, Mandi charges linked to this sale</small>
+                    </div>
+                  </div>
+                  <div class="form-check form-switch form-switch-md mb-0">
+                    <input class="form-check-input" type="checkbox" id="toggleSaleExpense" name="has_sale_expenses" value="1"
+                           onchange="onToggleSaleExpenses(this.checked)" {% if linked_expenses %}checked{% endif %}>
+                  </div>
+                </div>
+
+                <!-- Collapsible Dynamic Expense Items Container -->
+                <div id="saleExpensesContainer" class="mt-3 p-3 rounded-3 border" style="display: {% if linked_expenses %}block{% else %}none{% endif %}; background: #ffffff; border-color: #e2e8f0 !important;">
+                  <div class="d-flex align-items-center justify-content-between mb-3">
+                    <span class="fw-semibold text-dark small"><i class="ri-list-check me-1 text-danger"></i> Expense Breakdown</span>
+                    <button type="button" class="btn btn-xs btn-outline-primary py-1 px-2 d-flex align-items-center gap-1 rounded-2"
+                            style="font-size: 11px;" onclick="addExpenseRow()">
+                      <i class="ri-add-line"></i> Add Expense Item
+                    </button>
+                  </div>
+
+                  <div id="expenseRowsWrapper" class="d-flex flex-column gap-2">
+                    <!-- Dynamic rows inserted here -->
+                  </div>
+
+                  <div class="mt-3 pt-2 border-top d-flex align-items-center justify-content-between text-muted small" style="font-size: 12px;">
+                    <span>Total Associated Sale Expenses:</span>
+                    <strong class="text-danger fs-6" id="totalSaleExpensesText">₹ 0.00</strong>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= RIGHT SIDE: SALE SUMMARY ONLY ================= -->
+      <div class="col-lg-5">
+        <div class="card summary-card h-100">
+          <div class="card-header border-bottom py-3 px-4 bg-white d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+              <div class="avatar avatar-sm flex-shrink-0" style="background: rgba(247, 157, 78, 0.15); width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                <i class="ri-bill-line text-warning fs-5" style="color: #F79D4E !important;"></i>
+              </div>
+              <h6 class="mb-0 fw-bold text-dark">Sale Summary</h6>
+            </div>
+          </div>
+
+          <div class="card-body p-4 d-flex flex-column justify-content-between">
+            <div>
+
+              <!-- Customer Info Block -->
+              <div class="p-3 bg-light rounded-3 mb-3 border">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                  <span class="text-muted small">Customer / Buyer</span>
+                  <span class="badge bg-primary-subtle text-primary" id="summaryCustomerType" style="font-size: 11px;">Customer</span>
+                </div>
+                <h6 class="mb-0 fw-bold text-dark" id="summaryCustomerName">--</h6>
+              </div>
+
+              <!-- Product & Farm Item Details -->
+              <div class="summary-row">
+                <span class="text-muted"><i class="ri-plant-line me-1 text-success"></i> Item / Produce</span>
+                <strong class="text-dark" id="summaryCropName">--</strong>
+              </div>
+
+              <div class="summary-row">
+                <span class="text-muted"><i class="ri-map-pin-line me-1 text-primary"></i> Farm Plot</span>
+                <span class="text-dark" id="summaryFarmName">All / Unspecified</span>
+              </div>
+
+              <div class="summary-row">
+                <span class="text-muted"><i class="ri-scales-3-line me-1 text-secondary"></i> Quantity</span>
+                <strong class="text-dark" id="summaryQuantity">0.00 Tons</strong>
+              </div>
+
+              <div class="summary-divider"></div>
+
+              <!-- Calculation Financial Breakdown -->
+              <div class="summary-row">
+                <span class="text-muted">Subtotal Valuation</span>
+                <span class="fw-semibold text-dark" id="summarySubtotal">₹ 0.00</span>
+              </div>
+
+              <div class="summary-row" id="summaryGstRow">
+                <span class="text-muted" id="summaryGstLabel">GST (0%)</span>
+                <span class="fw-semibold text-dark" id="summaryGstAmount">+ ₹ 0.00</span>
+              </div>
+
+              <div class="summary-row" id="summaryDiscountRow" style="display: none;">
+                <span class="text-danger" id="summaryDiscountLabel">Discount</span>
+                <span class="fw-semibold text-danger" id="summaryDiscountAmount">- ₹ 0.00</span>
+              </div>
+
+              <div class="summary-row" id="summaryCommissionRow" style="display: none;">
+                <span class="text-warning" id="summaryCommissionLabel">Commission</span>
+                <span class="fw-semibold text-warning" id="summaryCommissionAmount">- ₹ 0.00</span>
+              </div>
+
+              <!-- Sale Expenses Row in Summary -->
+              <div class="summary-row" id="summarySaleExpenseRow" style="display: none;">
+                <span class="text-danger" id="summarySaleExpenseLabel"><i class="ri-truck-line me-1"></i> Sale Expenses</span>
+                <span class="fw-semibold text-danger" id="summarySaleExpenseAmount">- ₹ 0.00</span>
+              </div>
+
+              <div class="summary-divider"></div>
+
+              <!-- Net Grand Total Box -->
+              <div class="net-total-box mt-3">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div>
+                    <small class="text-muted fw-semibold text-uppercase d-block" style="font-size: 11px; letter-spacing: 0.5px;">Net Total Payable</small>
+                    <span class="text-secondary small" style="font-size: 11px;">Buyer Invoice Total</span>
+                  </div>
+                  <div class="text-end">
+                    <span class="fs-4 fw-bold text-dark" id="summaryGrandTotal">₹ 0.00</span>
+                  </div>
+                </div>
+
+                <!-- Settlement breakdown (Paid vs Balance) -->
+                <div class="mt-2 pt-2 border-top">
+                  <div class="d-flex justify-content-between align-items-center py-1">
+                    <small class="text-success fw-semibold"><i class="ri-check-line me-1"></i>Paid Amount (Received):</small>
+                    <strong class="text-success" id="summaryPaidAmount">₹ 0.00</strong>
+                  </div>
+                  <div class="d-flex justify-content-between align-items-center py-1" id="summaryBalanceRow" style="display: none;">
+                    <small class="text-danger fw-semibold"><i class="ri-time-line me-1"></i>Balance Due (Outstanding):</small>
+                    <strong class="text-danger" id="summaryBalanceAmount">₹ 0.00</strong>
+                  </div>
+                </div>
+
+                <div class="mt-2 pt-2 border-top d-flex align-items-center justify-content-between" id="summaryRealizedBox" style="display: none;">
+                  <div>
+                    <small class="text-muted fw-semibold d-block" style="font-size: 11px;">Farmer Realized Inflow</small>
+                    <span class="text-muted" style="font-size: 10px;">(Paid Amount - Sale Expenses)</span>
+                  </div>
+                  <div class="text-end">
+                    <strong class="fs-5 fw-bold text-primary" id="summaryRealizedAmount">₹ 0.00</strong>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Bottom metadata strip -->
+            <div class="pt-3 mt-3 border-top d-flex align-items-center justify-content-between flex-wrap gap-2 text-muted small" style="font-size: 12px;">
+              <span><i class="ri-calendar-line me-1"></i> <span id="summaryDealDate">--</span></span>
+              <span><i class="ri-bank-card-line me-1"></i> <span id="summaryPaymentMethod">Bank Transfer</span></span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </form>
+
+</div>
+
+<!-- ================= QUICK ADD CUSTOMER TYPE MODAL ================= -->
+<div class="modal fade" id="quick_add_customer_type_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <div class="modal-header border-bottom">
+        <h6 class="modal-title fw-bold text-dark"><i class="ri-add-circle-line me-1 text-primary"></i> Add Customer Type</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body py-3">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Type Name <span class="text-danger">*</span></label>
+          <input type="text" id="quick_customer_type_name" class="form-control" placeholder="e.g. Wholesaler, Mandi Trader" required>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold">Description</label>
+          <textarea id="quick_customer_type_desc" class="form-control" rows="2" placeholder="Optional description"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer border-top-0 pt-0">
+        <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm px-3" id="saveQuickCustomerTypeBtn" onclick="submitQuickAddCustomerType()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= QUICK ADD CUSTOMER MODAL ================= -->
+<div class="modal fade" id="quick_add_customer_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <div class="modal-header border-bottom">
+        <h6 class="modal-title fw-bold text-dark"><i class="ri-user-add-line me-1 text-primary"></i> Quick Add Customer</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body py-3">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label fw-semibold">Customer Name <span class="text-danger">*</span></label>
+            <input type="text" id="quick_cust_name" class="form-control" placeholder="e.g. Ramesh Kumar" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Business / Company Name</label>
+            <input type="text" id="quick_cust_company" class="form-control" placeholder="e.g. RK Agro Traders">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Mobile Number</label>
+            <input type="tel" id="quick_cust_mobile" class="form-control" placeholder="e.g. 9876543210">
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Customer Type</label>
+            <select class="form-select" id="quick_cust_type_select">
+              <option value="">Select Type (Optional)</option>
+              {% for ct in customer_types %}
+              <option value="{{ ct.id }}">{{ ct.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-top-0 pt-0">
+        <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm px-3" id="saveQuickCustomerBtn" onclick="submitQuickAddCustomer()">Save Customer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 1. Farm-based crop filtering
+  function onFarmChange() {
+    let farmSelect = document.getElementById('farmSelect');
+    let cropSelect = document.getElementById('cropSelect');
+    if (!farmSelect || !cropSelect) return;
+
+    let selectedFarmId = farmSelect.value;
+
+    for (let i = 1; i < cropSelect.options.length; i++) {
+      let opt = cropSelect.options[i];
+      let optFarmId = opt.getAttribute('data-farm-id');
+
+      if (opt.value === '__other__' || !selectedFarmId || !optFarmId || optFarmId === selectedFarmId) {
+        opt.hidden = false;
+      } else {
+        opt.hidden = true;
+      }
+    }
+
+    // If selected crop option is now hidden, reset selection
+    if (cropSelect.selectedIndex > 0 && cropSelect.options[cropSelect.selectedIndex].hidden) {
+      cropSelect.selectedIndex = 0;
+    }
+
+    onCropChange();
+  }
+
+  // 2. Crop selection change
+  function onCropChange() {
+    let cropSelect = document.getElementById('cropSelect');
+    let helpText = document.getElementById('cropHelpText');
+    let customWrap = document.getElementById('customItemWrapper');
+    let customInput = document.getElementById('customItemInput');
+
+    if (!cropSelect || cropSelect.selectedIndex <= 0) {
+      if (helpText) helpText.textContent = '';
+      if (customWrap) customWrap.style.display = 'none';
+      if (customInput) customInput.required = false;
+      recalculateTotals();
+      return;
+    }
+
+    let selectedOption = cropSelect.options[cropSelect.selectedIndex];
+    let isOther = selectedOption.value === '__other__';
+
+    if (customWrap && customInput) {
+      if (isOther) {
+        customWrap.style.display = 'block';
+        customInput.required = true;
+        if (helpText) helpText.textContent = 'Manual item entry — no inventory limit restriction.';
+      } else {
+        customWrap.style.display = 'none';
+        customInput.required = false;
+        let price = parseFloat(selectedOption.getAttribute('data-price') || '0');
+        let available = parseFloat(selectedOption.getAttribute('data-available') || '0');
+        if (available > 0) {
+          if (helpText) helpText.textContent = available + " Tons available. Rate: ₹" + price + " / Ton";
+        } else {
+          if (helpText) helpText.textContent = '';
+        }
+      }
+    }
+
+    recalculateTotals();
+  }
+
+  function onCustomItemChange() {
+    let customInput = document.getElementById('customItemInput');
+    if (customInput && customInput.value.trim()) {
+      customInput.classList.remove('is-invalid');
+    }
+    updateSummary();
+  }
+
+  function onUnitChange() {
+    updateSummary();
+  }
+
+  // 3. GST Rate Change
+  function onGstRateChange() {
+    let gstSelect = document.getElementById('gstRateSelect');
+    let customWrapper = document.getElementById('customGstWrapper');
+    let customInput = document.getElementById('customGstInput');
+
+    if (gstSelect.value === 'custom') {
+      customWrapper.style.display = 'block';
+      if (!customInput.value) {
+        customInput.value = '5';
+      }
+    } else {
+      customWrapper.style.display = 'none';
+    }
+    recalculateTotals();
+  }
+
+  // 4. Discount & Commission Type Toggles
+  function onDiscountTypeChange() {
+    let isPct = document.getElementById('disc_type_pct').checked;
+    document.getElementById('discountPrefix').textContent = isPct ? '%' : '₹';
+    recalculateTotals();
+  }
+
+  function onCommissionTypeChange() {
+    let isPct = document.getElementById('comm_type_pct').checked;
+    document.getElementById('commissionPrefix').textContent = isPct ? '%' : '₹';
+    recalculateTotals();
+  }
+
+  // 5. Live Calculations & Summary Updater
+  function recalculateTotals() {
+    let cropSelect = document.getElementById('cropSelect');
+    let weightInput = document.getElementById('loadWeightInput');
+    let totalInput = document.getElementById('totalAmountInput');
+    let errorMsg = document.getElementById('weightErrorMsg');
+    let saveBtn = document.getElementById('saveSaleBtn');
+
+    let gstSelect = document.getElementById('gstRateSelect');
+    let customGstInput = document.getElementById('customGstInput');
+    let discountInput = document.getElementById('discountInput');
+    let commissionInput = document.getElementById('commissionInput');
+
+    let isDiscPct = document.getElementById('disc_type_pct').checked;
+    let isCommPct = document.getElementById('comm_type_pct').checked;
+
+    if (!weightInput || !totalInput) return;
+
+    let loadWeight = parseFloat(weightInput.value || '0');
+
+    // Crop inventory validation
+    if (cropSelect && cropSelect.selectedIndex > 0) {
+      let selectedOption = cropSelect.options[cropSelect.selectedIndex];
+      let isOther = selectedOption.value === '__other__';
+      let available = isOther ? 999999 : parseFloat(selectedOption.getAttribute('data-available') || '0');
+      let price = parseFloat(selectedOption.getAttribute('data-price') || '0');
+
+      if (!isOther && available > 0 && loadWeight > available) {
+        errorMsg.textContent = "Exceeds available crop inventory (" + available + " Tons available)";
+        errorMsg.classList.remove('d-none');
+        weightInput.classList.add('is-invalid');
+        if (saveBtn) saveBtn.disabled = true;
+      } else {
+        errorMsg.classList.add('d-none');
+        weightInput.classList.remove('is-invalid');
+        if (saveBtn) saveBtn.disabled = false;
+      }
+
+      // Auto-populate valuation if not manually locked
+      if (price > 0 && loadWeight > 0 && !isNaN(loadWeight)) {
+        if (!totalInput.dataset.manualEdited) {
+          totalInput.value = (loadWeight * price).toFixed(2);
+        }
+      }
+    }
+
+    let valuation = parseFloat(totalInput.value || '0');
+
+    // Calculate GST %
+    let gstPct = 0;
+    if (gstSelect.value === 'custom') {
+      gstPct = parseFloat(customGstInput.value || '0');
+    } else {
+      gstPct = parseFloat(gstSelect.value || '0');
+    }
+
+    let gstAmount = (valuation * gstPct) / 100.0;
+
+    // Calculate Discount
+    let discRaw = parseFloat(discountInput.value || '0');
+    let discAmount = 0;
+    if (isDiscPct) {
+      discAmount = (valuation * discRaw) / 100.0;
+      document.getElementById('discountCalculatedText').textContent = discRaw > 0 ? ("= ₹ " + discAmount.toFixed(2)) : "";
+    } else {
+      discAmount = discRaw;
+      document.getElementById('discountCalculatedText').textContent = "";
+    }
+
+    // Calculate Commission
+    let commRaw = parseFloat(commissionInput.value || '0');
+    let commAmount = 0;
+    if (isCommPct) {
+      commAmount = (valuation * commRaw) / 100.0;
+      document.getElementById('commissionCalculatedText').textContent = commRaw > 0 ? ("= ₹ " + commAmount.toFixed(2)) : "";
+    } else {
+      commAmount = commRaw;
+      document.getElementById('commissionCalculatedText').textContent = "";
+    }
+
+    let grandTotal = valuation + gstAmount - discAmount - commAmount;
+    if (grandTotal < 0) grandTotal = 0;
+
+    // Handle Paid & Balance Calculations
+    let paidInput = document.getElementById('paidAmountInput');
+    if (paidInput) {
+      if (!isPaidAmountManuallyEdited && (!paidInput.value || paidInput.dataset.autoFilled === "true")) {
+        paidInput.value = grandTotal.toFixed(2);
+        paidInput.dataset.autoFilled = "true";
+      }
+    }
+
+    let paidVal = parseFloat(paidInput?.value || '0');
+    if (isNaN(paidVal) || paidVal < 0) paidVal = 0;
+    if (paidVal > grandTotal) paidVal = grandTotal;
+
+    let balanceVal = grandTotal - paidVal;
+    if (balanceVal < 0.001) balanceVal = 0;
+
+    let balanceDisplay = document.getElementById('balanceAmountDisplay');
+    if (balanceDisplay) {
+      balanceDisplay.value = balanceVal.toFixed(2);
+    }
+
+    let balanceStatus = document.getElementById('balanceStatusText');
+    let dueDateWrap = document.getElementById('dueDateWrapper');
+    let dueDateInput = document.getElementById('dueDateInput');
+
+    if (balanceVal > 0) {
+      if (balanceStatus) {
+        balanceStatus.textContent = "₹ " + balanceVal.toFixed(2) + " will be recorded in Customer Outstanding";
+        balanceStatus.className = "text-danger fw-semibold";
+      }
+      if (dueDateWrap) dueDateWrap.style.display = "block";
+      if (dueDateInput) dueDateInput.required = true;
+    } else {
+      if (balanceStatus) {
+        balanceStatus.textContent = "Fully Settled (No Outstanding)";
+        balanceStatus.className = "text-success fw-semibold";
+      }
+      if (dueDateWrap) dueDateWrap.style.display = "none";
+      if (dueDateInput) dueDateInput.required = false;
+    }
+
+    // Calculate Sale Associated Expenses
+    let totalSaleExpenses = 0;
+    let toggleExp = document.getElementById('toggleSaleExpense');
+    let hasExpenses = toggleExp && toggleExp.checked;
+
+    if (hasExpenses) {
+      let expInputs = document.querySelectorAll('.expense-amt-input');
+      expInputs.forEach(inp => {
+        let v = parseFloat(inp.value || '0');
+        if (!isNaN(v) && v > 0) totalSaleExpenses += v;
+      });
+    }
+
+    let totalSaleExpText = document.getElementById('totalSaleExpensesText');
+    if (totalSaleExpText) {
+      totalSaleExpText.textContent = "₹ " + totalSaleExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    let saleExpRow = document.getElementById('summarySaleExpenseRow');
+    if (saleExpRow) {
+      if (hasExpenses && totalSaleExpenses > 0) {
+        saleExpRow.style.display = 'flex';
+        document.getElementById('summarySaleExpenseAmount').textContent = "- ₹ " + totalSaleExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      } else {
+        saleExpRow.style.display = 'none';
+      }
+    }
+
+    let realizedAmount = paidVal - (hasExpenses ? totalSaleExpenses : 0);
+
+    let realizedBox = document.getElementById('summaryRealizedBox');
+    if (realizedBox) {
+      if (hasExpenses && totalSaleExpenses > 0) {
+        realizedBox.style.display = 'flex';
+        document.getElementById('summaryRealizedAmount').textContent = "₹ " + realizedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      } else {
+        realizedBox.style.display = 'none';
+      }
+    }
+
+    // Update Right Summary Panel
+    document.getElementById('summarySubtotal').textContent = "₹ " + valuation.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    document.getElementById('summaryGstLabel').textContent = "GST (" + gstPct + "%)";
+    document.getElementById('summaryGstAmount').textContent = "+ ₹ " + gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    let discRow = document.getElementById('summaryDiscountRow');
+    if (discAmount > 0) {
+      discRow.style.display = 'flex';
+      document.getElementById('summaryDiscountLabel').textContent = "Discount" + (isDiscPct ? " (" + discRaw + "%)" : "");
+      document.getElementById('summaryDiscountAmount').textContent = "- ₹ " + discAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    } else {
+      discRow.style.display = 'none';
+    }
+
+    let commRow = document.getElementById('summaryCommissionRow');
+    if (commAmount > 0) {
+      commRow.style.display = 'flex';
+      document.getElementById('summaryCommissionLabel').textContent = "Commission" + (isCommPct ? " (" + commRaw + "%)" : "");
+      document.getElementById('summaryCommissionAmount').textContent = "- ₹ " + commAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    } else {
+      commRow.style.display = 'none';
+    }
+
+    let grandTotalEl = document.getElementById('summaryGrandTotal');
+    if (grandTotalEl) {
+      grandTotalEl.textContent = "₹ " + grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      grandTotalEl.dataset.rawTotal = grandTotal.toString();
+    }
+
+    let paidEl = document.getElementById('summaryPaidAmount');
+    if (paidEl) {
+      paidEl.textContent = "₹ " + paidVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    let balRow = document.getElementById('summaryBalanceRow');
+    let balEl = document.getElementById('summaryBalanceAmount');
+    if (balRow && balEl) {
+      if (balanceVal > 0) {
+        balRow.style.display = 'flex';
+        balEl.textContent = "₹ " + balanceVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      } else {
+        balRow.style.display = 'none';
+      }
+    }
+
+    updateSummary();
+  }
+
+  let isPaidAmountManuallyEdited = {% if is_edit and saved_paid_amount %}true{% else %}false{% endif %};
+
+  function setPaidFull() {
+    let grandTotal = parseFloat(document.getElementById('summaryGrandTotal')?.dataset?.rawTotal || '0');
+    let paidInput = document.getElementById('paidAmountInput');
+    if (paidInput) {
+      paidInput.value = grandTotal.toFixed(2);
+      isPaidAmountManuallyEdited = true;
+      recalculateTotals();
+    }
+  }
+
+  function setPaidZero() {
+    let paidInput = document.getElementById('paidAmountInput');
+    if (paidInput) {
+      paidInput.value = "0.00";
+      isPaidAmountManuallyEdited = true;
+      recalculateTotals();
+    }
+  }
+
+  function onPaidAmountChange() {
+    isPaidAmountManuallyEdited = true;
+    recalculateTotals();
+  }
+
+  // ── Sale Expense Toggle & Dynamic Item Functions ─────────────────
+  const availableExpenseTypes = [
+    "Transport & Logistics",
+    "Labor & Loading",
+    "Packaging & Bags",
+    "Storage & Warehousing",
+    "Mandi Fee / Tax",
+    "Weighing Charges",
+    "Commission / Brokerage",
+    "Other Expense"
+    {% for et in expense_types %}, "{{ et.name|escapejs }}"{% endfor %}
+  ];
+  const uniqueExpenseTypes = [...new Set(availableExpenseTypes)];
+
+  const availableVendors = [
+    {% for v in vendors %}
+    { id: "{{ v.id }}", name: "{{ v.vendor_name|escapejs }}" }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  function onToggleSaleExpenses(isChecked) {
+    let container = document.getElementById('saleExpensesContainer');
+    if (container) {
+      container.style.display = isChecked ? 'block' : 'none';
+    }
+    if (isChecked) {
+      let wrapper = document.getElementById('expenseRowsWrapper');
+      if (wrapper && wrapper.children.length === 0) {
+        addExpenseRow();
+      }
+    }
+    recalculateTotals();
+  }
+
+  function addExpenseRow(category = "Transport & Logistics", vendorId = "", note = "", amount = "") {
+    let wrapper = document.getElementById('expenseRowsWrapper');
+    if (!wrapper) return;
+
+    let row = document.createElement('div');
+    row.className = 'expense-row card border shadow-none p-2 mb-2';
+    row.style.background = '#fafbfc';
+    row.style.borderRadius = '8px';
+
+    let catOptions = uniqueExpenseTypes.map(c => `<option value="${c}" ${c === category ? 'selected' : ''}>${c}</option>`).join('');
+    let vendorOptions = `<option value="">Direct / Unlinked</option>` + availableVendors.map(v => `<option value="${v.id}" ${v.id == vendorId ? 'selected' : ''}>${v.name}</option>`).join('');
+
+    row.innerHTML = `
+      <div class="row g-2 align-items-center">
+        <div class="col-md-3 col-sm-6">
+          <label class="form-label mb-1 text-muted" style="font-size: 11px;">Category</label>
+          <select name="sale_expense_category[]" class="form-select form-select-sm" onchange="recalculateTotals()">
+            ${catOptions}
+          </select>
+        </div>
+        <div class="col-md-3 col-sm-6">
+          <label class="form-label mb-1 text-muted" style="font-size: 11px;">Vendor / Transporter</label>
+          <select name="sale_expense_vendor[]" class="form-select form-select-sm">
+            ${vendorOptions}
+          </select>
+        </div>
+        <div class="col-md-3 col-sm-6">
+          <label class="form-label mb-1 text-muted" style="font-size: 11px;">Remarks / Note</label>
+          <input type="text" name="sale_expense_note[]" class="form-control form-select-sm" placeholder="e.g. Freight to Mandi" value="${note || ''}">
+        </div>
+        <div class="col-md-2 col-sm-4">
+          <label class="form-label mb-1 text-muted" style="font-size: 11px;">Amount (₹) <span class="text-danger">*</span></label>
+          <input type="number" step="0.01" name="sale_expense_amount[]" class="form-control form-select-sm expense-amt-input" placeholder="0.00" value="${amount || ''}" oninput="recalculateTotals()" required>
+        </div>
+        <div class="col-md-1 col-sm-2 text-end pt-3">
+          <button type="button" class="btn btn-sm btn-outline-danger p-1 rounded-2" title="Remove Item" onclick="removeExpenseRow(this)">
+            <i class="ri-delete-bin-line"></i>
+          </button>
+        </div>
+      </div>
+    `;
+
+    wrapper.appendChild(row);
+    recalculateTotals();
+  }
+
+  function removeExpenseRow(btn) {
+    let row = btn.closest('.expense-row');
+    if (row) {
+      row.remove();
+      recalculateTotals();
+    }
+  }
+
+  function updateSummary() {
+    let buyer = document.getElementById('buyerSelect');
+    let farm = document.getElementById('farmSelect');
+    let crop = document.getElementById('cropSelect');
+    let weight = document.getElementById('loadWeightInput');
+    let payMethod = document.getElementById('paymentMethodInput');
+    let date = document.getElementById('closeDateInput');
+
+    if (buyer && buyer.selectedIndex > 0) {
+      let opt = buyer.options[buyer.selectedIndex];
+      document.getElementById('summaryCustomerName').textContent = opt.text;
+      let typeName = opt.getAttribute('data-type-name') || 'Customer';
+      document.getElementById('summaryCustomerType').textContent = typeName;
+    } else {
+      document.getElementById('summaryCustomerName').textContent = '--';
+    }
+
+    if (crop && crop.selectedIndex > 0) {
+      let selectedOption = crop.options[crop.selectedIndex];
+      if (selectedOption.value === '__other__') {
+        let customInput = document.getElementById('customItemInput');
+        let customVal = customInput ? customInput.value.trim() : '';
+        document.getElementById('summaryCropName').textContent = customVal || 'Other (Custom Item)';
+      } else {
+        document.getElementById('summaryCropName').textContent = selectedOption.text.split('(')[0].trim();
+      }
+    } else {
+      document.getElementById('summaryCropName').textContent = '--';
+    }
+
+    if (farm && farm.selectedIndex > 0) {
+      document.getElementById('summaryFarmName').textContent = farm.options[farm.selectedIndex].text;
+    } else {
+      document.getElementById('summaryFarmName').textContent = 'All / Unspecified';
+    }
+
+    let w = parseFloat(weight.value || '0');
+    let unitSelect = document.getElementById('unitSelect');
+    let unitLabel = unitSelect ? unitSelect.value : 'Tons';
+    document.getElementById('summaryQuantity').textContent = w.toFixed(2) + " " + unitLabel;
+
+    if (payMethod) {
+      document.getElementById('summaryPaymentMethod').textContent = payMethod.value || 'Bank Transfer';
+    }
+    if (date) {
+      document.getElementById('summaryDealDate').textContent = date.value || '--';
+    }
+  }
+
+  function filterCustomersByType() {
+    let typeSelect = document.getElementById('customerTypeSelect');
+    let buyerSelect = document.getElementById('buyerSelect');
+    if (!typeSelect || !buyerSelect) return;
+
+    let selectedTypeId = typeSelect.value;
+    for (let i = 0; i < buyerSelect.options.length; i++) {
+      let opt = buyerSelect.options[i];
+      let optTypeId = opt.getAttribute('data-type-id');
+      if (!selectedTypeId || !optTypeId || optTypeId === selectedTypeId) {
+        opt.hidden = false;
+      } else {
+        opt.hidden = false;
+      }
+    }
+  }
+
+  // 6. Quick Add Customer Type
+  function submitQuickAddCustomerType() {
+    let nameInput = document.getElementById('quick_customer_type_name');
+    let descInput = document.getElementById('quick_customer_type_desc');
+    let btn = document.getElementById('saveQuickCustomerTypeBtn');
+
+    let name = nameInput.value.trim();
+    let desc = descInput.value.trim();
+
+    if (!name) {
+      nameInput.classList.add('is-invalid');
+      return;
+    }
+    nameInput.classList.remove('is-invalid');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+    let formData = new FormData();
+    formData.append('name', name);
+    formData.append('description', desc);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    fetch("{% url 'quick_add_customer_type' %}", {
+      method: 'POST',
+      body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+      btn.disabled = false;
+      btn.innerHTML = 'Save';
+
+      if (data.success) {
+        let select = document.getElementById('customerTypeSelect');
+        let newOption = new Option(data.name, data.id, true, true);
+        select.add(newOption);
+        select.value = data.id;
+
+        // Also add to quick customer modal select
+        let modalSelect = document.getElementById('quick_cust_type_select');
+        if (modalSelect) {
+          modalSelect.add(new Option(data.name, data.id, false, false));
+        }
+
+        nameInput.value = '';
+        descInput.value = '';
+        let modalEl = document.getElementById('quick_add_customer_type_modal');
+        let modalInstance = bootstrap.Modal.getInstance(modalEl);
+        if (modalInstance) {
+          modalInstance.hide();
+        }
+
+        if (window.showAppToast) {
+          window.showAppToast("Customer Type '" + data.name + "' added successfully!", "success");
+        }
+      } else {
+        alert(data.error || 'Failed to add customer type.');
+      }
+    })
+    .catch(err => {
+      btn.disabled = false;
+      btn.innerHTML = 'Save';
+      console.error(err);
+      alert('Error occurred while adding customer type.');
+    });
+  }
+
+  // 7. Quick Add Customer
+  function submitQuickAddCustomer() {
+    let nameInput = document.getElementById('quick_cust_name');
+    let companyInput = document.getElementById('quick_cust_company');
+    let mobileInput = document.getElementById('quick_cust_mobile');
+    let typeSelect = document.getElementById('quick_cust_type_select');
+    let btn = document.getElementById('saveQuickCustomerBtn');
+
+    let name = nameInput.value.trim();
+    if (!name) {
+      nameInput.classList.add('is-invalid');
+      return;
+    }
+    nameInput.classList.remove('is-invalid');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+    let formData = new FormData();
+    formData.append('name', name);
+    formData.append('company_name', companyInput.value.trim());
+    formData.append('contact_number', mobileInput.value.trim());
+    formData.append('customer_type_id', typeSelect.value);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    fetch("{% url 'quick_add_customer_api' %}", {
+      method: 'POST',
+      body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+      btn.disabled = false;
+      btn.innerHTML = 'Save Customer';
+
+      if (data.success) {
+        let buyerSelect = document.getElementById('buyerSelect');
+        let labelText = data.name + (data.company_name ? " - " + data.company_name : "");
+        let newOpt = new Option(labelText, data.name, true, true);
+        newOpt.setAttribute('data-company', data.company_name);
+        newOpt.setAttribute('data-type-id', data.customer_type_id);
+        buyerSelect.add(newOpt);
+        buyerSelect.value = data.name;
+
+        nameInput.value = '';
+        companyInput.value = '';
+        mobileInput.value = '';
+        typeSelect.value = '';
+
+        let modalEl = document.getElementById('quick_add_customer_modal');
+        let modalInstance = bootstrap.Modal.getInstance(modalEl);
+        if (modalInstance) {
+          modalInstance.hide();
+        }
+
+        updateSummary();
+
+        if (window.showAppToast) {
+          window.showAppToast("Customer '" + data.name + "' added successfully!", "success");
+        }
+      } else {
+        alert(data.error || 'Failed to add customer.');
+      }
+    })
+    .catch(err => {
+      btn.disabled = false;
+      btn.innerHTML = 'Save Customer';
+      console.error(err);
+      alert('Error occurred while adding customer.');
+    });
+  }
+
+  // 8. Form Validation on Submit
+  function validateSaleFormSubmit(e) {
+    let buyer = document.getElementById('buyerSelect');
+    let crop = document.getElementById('cropSelect');
+    let weight = document.getElementById('loadWeightInput');
+    let amount = document.getElementById('totalAmountInput');
+    let date = document.getElementById('closeDateInput');
+
+    let valid = true;
+
+    if (!buyer.value) { buyer.classList.add('is-invalid'); valid = false; }
+    else { buyer.classList.remove('is-invalid'); }
+
+    if (!crop.value) { crop.classList.add('is-invalid'); valid = false; }
+    else {
+      crop.classList.remove('is-invalid');
+      if (crop.value === '__other__') {
+        let customInput = document.getElementById('customItemInput');
+        if (!customInput || !customInput.value.trim()) {
+          if (customInput) customInput.classList.add('is-invalid');
+          valid = false;
+        } else {
+          customInput.classList.remove('is-invalid');
+        }
+      }
+    }
+
+    if (!weight.value || parseFloat(weight.value) <= 0) { weight.classList.add('is-invalid'); valid = false; }
+    else { weight.classList.remove('is-invalid'); }
+
+    if (!amount.value || parseFloat(amount.value) <= 0) { amount.classList.add('is-invalid'); valid = false; }
+    else { amount.classList.remove('is-invalid'); }
+
+    if (!date.value) { date.classList.add('is-invalid'); valid = false; }
+    else { date.classList.remove('is-invalid'); }
+
+    if (!valid) {
+      e.preventDefault();
+      return false;
+    }
+    return true;
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    let totalInput = document.getElementById('totalAmountInput');
+    if (totalInput) {
+      totalInput.addEventListener('input', function() {
+        totalInput.dataset.manualEdited = "true";
+      });
+    }
+
+    {% if linked_expenses_json %}
+    try {
+      const existingExpenses = {{ linked_expenses_json|safe }};
+      if (existingExpenses && existingExpenses.length > 0) {
+        let toggle = document.getElementById('toggleSaleExpense');
+        if (toggle) toggle.checked = true;
+        let container = document.getElementById('saleExpensesContainer');
+        if (container) container.style.display = 'block';
+        existingExpenses.forEach(item => {
+          addExpenseRow(item.category, item.vendor_id, item.note, item.amount);
+        });
+      }
+    } catch(e) {
+      console.error("Error loading linked expenses:", e);
+    }
+    {% endif %}
+
+    onCropChange();
+    recalculateTotals();
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,671 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Attendance Report{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.3.6/css/buttons.bootstrap5.min.css" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="https://cdn.datatables.net/buttons/2.3.6/js/dataTables.buttons.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.3/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.3.6/js/buttons.html5.min.js"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<style>
+  .nav-pills .nav-link.active,
+  .nav-pills .show > .nav-link {
+    background-color: #F69C55 !important;
+    color: #fff !important;
+    border-radius: 8px;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(246, 156, 85, 0.25);
+  }
+  .nav-pills .nav-link {
+    border-radius: 8px;
+    font-weight: 500;
+    color: #566a7f;
+    padding: 0.5rem 1.25rem;
+    transition: all 0.2s ease;
+  }
+  .nav-pills .nav-link:hover:not(.active) {
+    background-color: #f5f5f9;
+    color: #F69C55;
+  }
+  .sub-tab-btn.active {
+    background-color: #F69C55 !important;
+    color: #fff !important;
+    border-color: #F69C55 !important;
+  }
+  .search-collapse-wrapper {
+    position: relative;
+  }
+  .search-input-group {
+    width: 0;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-width 0.25s ease, opacity 0.2s ease;
+    white-space: nowrap;
+  }
+  .search-input-group.expanded {
+    max-width: 380px;
+    width: 380px;
+    opacity: 1;
+    margin-left: 8px;
+  }
+  @media (max-width: 576px) {
+    .search-input-group.expanded {
+      max-width: 200px;
+      width: 200px;
+    }
+  }
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+var summaryDataTable = null;
+var logsDataTable = null;
+
+// Robust Date Parser
+function parseDateValue(dateStr, cellNode) {
+    if (cellNode && cellNode.getAttribute('data-date')) {
+        return cellNode.getAttribute('data-date');
+    }
+    if (cellNode && cellNode.getAttribute('data-order')) {
+        return cellNode.getAttribute('data-order');
+    }
+    if (!dateStr) return null;
+    var trimmed = dateStr.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    var months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+    var m = trimmed.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+    if (m) {
+        var day = m[1].padStart(2, '0');
+        var mon = months[m[2].substring(0,3).toLowerCase()];
+        var yr = m[3];
+        if (mon) return yr + '-' + mon + '-' + day;
+    }
+    var d = new Date(trimmed);
+    if (!isNaN(d.getTime())) {
+        return d.toISOString().split('T')[0];
+    }
+    return null;
+}
+
+// Custom Date Filter for Daily Logs
+$.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
+    if (settings.nTable && settings.nTable.id !== 'dailyLogsTable') {
+        return true;
+    }
+    var min = $('#startDate').val();
+    var max = $('#endDate').val();
+    if (!min && !max) return true;
+
+    var cellNode = null;
+    try {
+        cellNode = settings.aoData[dataIndex].anCells ? settings.aoData[dataIndex].anCells[1] : null;
+    } catch(e) {}
+
+    var rowDate = parseDateValue(data[1], cellNode);
+    if (!rowDate) return true;
+
+    if (min && rowDate < min) return false;
+    if (max && rowDate > max) return false;
+
+    return true;
+});
+
+function updateAttendanceKPIs() {
+    if (!logsDataTable) return;
+    var rows = logsDataTable.rows({ search: 'applied' }).nodes();
+    var pCount = 0, aCount = 0, hCount = 0, total = 0;
+    var staffSet = new Set();
+
+    $(rows).each(function() {
+        var text = $(this).text();
+        var staffText = $(this).find('td:nth-child(3)').text().trim();
+        if (staffText) staffSet.add(staffText);
+        
+        var statusBadge = $(this).find('td:nth-child(5)').text().trim();
+        if (statusBadge.includes('Present') || statusBadge.includes('(P)')) {
+            pCount++;
+        } else if (statusBadge.includes('Absent') || statusBadge.includes('(A)')) {
+            aCount++;
+        } else if (statusBadge.includes('Half Day') || statusBadge.includes('(H)')) {
+            hCount++;
+        }
+        total++;
+    });
+
+    var rate = total > 0 ? (((pCount + (0.5 * hCount)) / total) * 100).toFixed(1) : 0;
+
+    $('#kpiTotalStaff').text(staffSet.size);
+    $('#kpiTotalPresent').text(pCount);
+    $('#kpiTotalAbsent').text(aCount);
+    $('#kpiTotalHalfday').text(hCount);
+    $('#kpiOverallRate').text(rate + '%');
+}
+
+$(document).ready(function () {
+    // Summary Table DataTable
+    summaryDataTable = $('#staffSummaryTable').DataTable({
+        pageLength: 10,
+        responsive: true,
+        destroy: true,
+        dom: 't<"bottom d-flex align-items-center justify-content-between mt-3"ip>B',
+        buttons: [
+            {
+                extend: 'excelHtml5',
+                className: 'd-none btn-export-summary-excel',
+                title: 'Staff_Attendance_Summary_Report'
+            }
+        ]
+    });
+
+    // Daily Logs Table DataTable
+    logsDataTable = $('#dailyLogsTable').DataTable({
+        pageLength: 15,
+        responsive: true,
+        destroy: true,
+        dom: 't<"bottom d-flex align-items-center justify-content-between mt-3"ip>B',
+        buttons: [
+            {
+                extend: 'excelHtml5',
+                className: 'd-none btn-export-logs-excel',
+                title: 'Daily_Attendance_Logs_Report'
+            }
+        ],
+        drawCallback: function () {
+            updateAttendanceKPIs();
+        }
+    });
+
+    // Universal Search Box
+    $('#reportSearchInput').on('input keyup', function() {
+        var val = this.value.trim();
+        if (summaryDataTable) summaryDataTable.search(val).draw();
+        if (logsDataTable) logsDataTable.search(val).draw();
+    });
+
+    // Staff Filter for Daily Logs & Summary
+    $('#staffFilterSelect').on('change', function() {
+        var staffVal = $(this).val().trim();
+        if (logsDataTable) {
+            logsDataTable.column(2).search(staffVal || '', false, true).draw();
+        }
+        if (summaryDataTable) {
+            summaryDataTable.column(1).search(staffVal || '', false, true).draw();
+        }
+    });
+
+    // Status Filter for Daily Logs
+    $('#statusFilterSelect').on('change', function() {
+        var statusVal = $(this).val().trim();
+        if (logsDataTable) {
+            logsDataTable.column(4).search(statusVal || '', false, true).draw();
+        }
+    });
+
+    // Date Range Pickers
+    $('#startDate, #endDate').on('change input', function () {
+        if (logsDataTable) logsDataTable.draw();
+    });
+
+    // Recalculate tables on tab switch
+    $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function () {
+        if (summaryDataTable) summaryDataTable.columns.adjust().responsive.recalc();
+        if (logsDataTable) logsDataTable.columns.adjust().responsive.recalc();
+    });
+});
+
+function toggleSearchBox() {
+  var group = document.getElementById('search_input_group');
+  var toggleBtn = document.getElementById('search_toggle_btn');
+  var input = document.getElementById('reportSearchInput');
+  if (!group) return;
+  if (group.classList.contains('expanded')) {
+    closeSearchBox();
+  } else {
+    group.classList.remove('d-none');
+    setTimeout(function () {
+      group.classList.add('expanded');
+      if (toggleBtn) toggleBtn.classList.add('d-none');
+      if (input) input.focus();
+    }, 10);
+  }
+}
+
+function closeSearchBox() {
+  var group = document.getElementById('search_input_group');
+  var toggleBtn = document.getElementById('search_toggle_btn');
+  var input = document.getElementById('reportSearchInput');
+  if (!group) return;
+  group.classList.remove('expanded');
+  if (input) {
+    input.value = '';
+    if (summaryDataTable) summaryDataTable.search('').draw();
+    if (logsDataTable) logsDataTable.search('').draw();
+  }
+  if (toggleBtn) toggleBtn.classList.remove('d-none');
+  setTimeout(function () {
+    group.classList.add('d-none');
+  }, 250);
+}
+
+document.addEventListener('click', function (e) {
+  var wrapper = document.getElementById('search_collapse_wrapper');
+  var group = document.getElementById('search_input_group');
+  if (wrapper && group && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+    closeSearchBox();
+  }
+});
+
+function applyQuickDate(preset) {
+    var now = new Date();
+    var start = '', end = '';
+    if (preset === 'today') {
+        start = now.toISOString().split('T')[0];
+        end = start;
+    } else if (preset === 'yesterday') {
+        var y = new Date(now);
+        y.setDate(y.getDate() - 1);
+        start = y.toISOString().split('T')[0];
+        end = start;
+    } else if (preset === 'this_week') {
+        var day = now.getDay() || 7;
+        var mon = new Date(now);
+        mon.setDate(now.getDate() - day + 1);
+        start = mon.toISOString().split('T')[0];
+        end = now.toISOString().split('T')[0];
+    } else if (preset === 'this_month') {
+        var firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        var lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        start = firstDay.toISOString().split('T')[0];
+        end = lastDay.toISOString().split('T')[0];
+    } else if (preset === 'last_month') {
+        var firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        var lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+        start = firstDay.toISOString().split('T')[0];
+        end = lastDay.toISOString().split('T')[0];
+    } else if (preset === 'this_year') {
+        var firstDay = new Date(now.getFullYear(), 0, 1);
+        var lastDay = new Date(now.getFullYear(), 11, 31);
+        start = firstDay.toISOString().split('T')[0];
+        end = lastDay.toISOString().split('T')[0];
+    } else if (preset === 'all') {
+        start = '';
+        end = '';
+    }
+    $('#startDate').val(start);
+    $('#endDate').val(end);
+    if (logsDataTable) logsDataTable.draw();
+}
+
+function exportTableToExcel() {
+    var activeTab = document.querySelector('.attendance-tab-btn.active');
+    var isSummary = activeTab && activeTab.getAttribute('data-bs-target') === '#staff-summary-tab';
+    if (isSummary && summaryDataTable) {
+        summaryDataTable.button('.btn-export-summary-excel').trigger();
+    } else if (logsDataTable) {
+        logsDataTable.button('.btn-export-logs-excel').trigger();
+    }
+}
+</script>
+{% endblock page_js %}
+
+{% block content %}
+<!-- Navigation Tabs -->
+<div class="mb-3">
+  <ul class="nav nav-pills gap-2 flex-wrap" role="tablist">
+    <li class="nav-item">
+      <a href="{% url 'farmer-reports' %}" class="nav-link">
+        <i class="ri-dashboard-line me-1"></i> Reports Hub
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'farmer-customer-report' %}" class="nav-link">
+        Customer
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'farmer-land-report' %}" class="nav-link">
+        Land
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'farmer-expense-report' %}" class="nav-link">
+        Expense
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'farmer-vendor-report' %}" class="nav-link">
+        Vendor
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'farmer-salary-report' %}" class="nav-link">
+        Salary
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'farmer-attendance-report' %}" class="nav-link active">
+        Attendance
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'farmer-advance-report' %}" class="nav-link">
+        Advance
+      </a>
+    </li>
+  </ul>
+</div>
+
+<!-- Title Header -->
+<div class="card mb-3 border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+        <div>
+            <h4 class="mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="ri-calendar-check-line text-success"></i>
+                {% trans "Attendance Report" %}
+            </h4>
+            <p class="text-muted small mb-0">Staff-wise attendance statistics, present/absent breakdown, and daily shift logs.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-primary d-flex align-items-center gap-2 px-4 shadow-sm rounded-3" onclick="exportTableToExcel()">
+                <i class="ri-file-excel-2-line fs-5"></i>
+                {% trans "Export Excel" %}
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- KPI Summary Cards -->
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3 col-lg-2">
+        <div class="card border-0 shadow-sm rounded-4 h-100 p-3 bg-white">
+            <div class="d-flex align-items-center gap-3">
+                <span class="d-flex align-items-center justify-content-center rounded-3 bg-label-primary p-2" style="width:42px;height:42px;">
+                    <i class="ri-team-line fs-4 text-primary"></i>
+                </span>
+                <div>
+                    <span class="text-muted text-uppercase fw-bold d-block" style="font-size:10px;letter-spacing:0.5px;">Total Staff</span>
+                    <h5 class="fw-bold mb-0 text-dark" id="kpiTotalStaff">{{ total_staff|default:0 }}</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 col-lg-2">
+        <div class="card border-0 shadow-sm rounded-4 h-100 p-3 bg-white">
+            <div class="d-flex align-items-center gap-3">
+                <span class="d-flex align-items-center justify-content-center rounded-3 bg-label-success p-2" style="width:42px;height:42px;">
+                    <i class="ri-checkbox-circle-line fs-4 text-success"></i>
+                </span>
+                <div>
+                    <span class="text-muted text-uppercase fw-bold d-block" style="font-size:10px;letter-spacing:0.5px;">Present (P)</span>
+                    <h5 class="fw-bold mb-0 text-success" id="kpiTotalPresent">{{ total_present|default:0 }}</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 col-lg-2">
+        <div class="card border-0 shadow-sm rounded-4 h-100 p-3 bg-white">
+            <div class="d-flex align-items-center gap-3">
+                <span class="d-flex align-items-center justify-content-center rounded-3 bg-label-danger p-2" style="width:42px;height:42px;">
+                    <i class="ri-close-circle-line fs-4 text-danger"></i>
+                </span>
+                <div>
+                    <span class="text-muted text-uppercase fw-bold d-block" style="font-size:10px;letter-spacing:0.5px;">Absent (A)</span>
+                    <h5 class="fw-bold mb-0 text-danger" id="kpiTotalAbsent">{{ total_absent|default:0 }}</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 col-lg-3">
+        <div class="card border-0 shadow-sm rounded-4 h-100 p-3 bg-white">
+            <div class="d-flex align-items-center gap-3">
+                <span class="d-flex align-items-center justify-content-center rounded-3 bg-label-info p-2" style="width:42px;height:42px;">
+                    <i class="ri-time-line fs-4 text-info"></i>
+                </span>
+                <div>
+                    <span class="text-muted text-uppercase fw-bold d-block" style="font-size:10px;letter-spacing:0.5px;">Half Days (H)</span>
+                    <h5 class="fw-bold mb-0 text-info" id="kpiTotalHalfday">{{ total_halfday|default:0 }}</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-12 col-lg-3">
+        <div class="card border-0 shadow-sm rounded-4 h-100 p-3 bg-white">
+            <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="d-flex align-items-center justify-content-center rounded-3 bg-label-warning p-2" style="width:42px;height:42px;">
+                        <i class="ri-percent-line fs-4 text-warning"></i>
+                    </span>
+                    <div>
+                        <span class="text-muted text-uppercase fw-bold d-block" style="font-size:10px;letter-spacing:0.5px;">Overall Attendance</span>
+                        <h5 class="fw-bold mb-0 text-dark" id="kpiOverallRate">{{ overall_rate|default:0 }}%</h5>
+                    </div>
+                </div>
+                <div class="badge bg-success-subtle text-success rounded-pill px-2 py-1" style="font-size:11px;">
+                    Active Range
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters & Table Card -->
+<div class="card border-0 shadow-sm rounded-4">
+  <div class="card-body d-flex gap-2 align-items-center justify-content-between flex-wrap p-3 border-bottom">
+
+    <!-- Left Controls: Sub Tabs -->
+    <ul class="nav nav-pills gap-2" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link attendance-tab-btn sub-tab-btn active px-3 py-1-5 fw-semibold" style="font-size:13px;" data-bs-toggle="tab" data-bs-target="#staff-summary-tab" type="button">
+                <i class="ri-user-star-line me-1"></i> Staff-wise Summary
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link attendance-tab-btn sub-tab-btn px-3 py-1-5 fw-semibold" style="font-size:13px;" data-bs-toggle="tab" data-bs-target="#daily-logs-tab" type="button">
+                <i class="ri-history-line me-1"></i> Daily Logs
+            </button>
+        </li>
+    </ul>
+
+    <!-- Right Controls: Search & Filters -->
+    <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
+        <!-- Collapsible Search -->
+        <div class="d-flex align-items-center search-collapse-wrapper" id="search_collapse_wrapper">
+          <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="search_toggle_btn" onclick="toggleSearchBox()">
+            <i class="ri-search-line"></i>
+          </button>
+          <div class="input-group search-input-group d-none" id="search_input_group">
+            <span class="input-group-text bg-white border-end-0">
+              <i class="ri-search-line text-muted"></i>
+            </span>
+            <input type="text"
+                id="reportSearchInput"
+                class="form-control border-start-0"
+                placeholder="Search staff, date, status...">
+            <button class="btn btn-outline-secondary border-start-0" type="button" id="search_close_btn" onclick="closeSearchBox()">
+              <i class="ri-close-line"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Date Range Filter -->
+        <div class="d-flex align-items-center gap-1 bg-light border rounded px-2 py-1">
+            <small class="text-muted fw-semibold me-1"><i class="ri-calendar-line"></i> Date:</small>
+            <input type="date" id="startDate" class="form-control form-control-sm border-0 bg-transparent" style="width: 125px;">
+            <span class="text-muted small">to</span>
+            <input type="date" id="endDate" class="form-control form-control-sm border-0 bg-transparent" style="width: 125px;">
+        </div>
+
+        <!-- Staff Filter -->
+        <select id="staffFilterSelect" class="form-select form-select-sm w-auto">
+            <option value="">All Staff Members</option>
+            {% for s in staff_list %}
+            <option value="{{ s.name }}">{{ s.name }}</option>
+            {% endfor %}
+        </select>
+
+        <!-- Status Filter -->
+        <select id="statusFilterSelect" class="form-select form-select-sm w-auto">
+            <option value="">All Statuses</option>
+            <option value="Present (P)">Present (P)</option>
+            <option value="Absent (A)">Absent (A)</option>
+            <option value="Half Day (H)">Half Day (H)</option>
+        </select>
+
+        <!-- Quick Filter Dropdown -->
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm dropdown-toggle d-flex align-items-center gap-1 px-3 py-1-5" type="button" data-bs-toggle="dropdown">
+              <i class="ri-filter-3-line"></i> Presets
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+              <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyQuickDate('today')">Today</a></li>
+              <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyQuickDate('this_month')">This Month</a></li>
+              <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyQuickDate('last_month')">Last Month</a></li>
+              <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyQuickDate('this_year')">This Year</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyQuickDate('all')">All Time</a></li>
+            </ul>
+        </div>
+    </div>
+
+  </div>
+
+  <!-- Tab Contents -->
+  <div class="tab-content p-0">
+      
+      <!-- TAB 1: Staff-wise Summary -->
+      <div class="tab-pane fade show active" id="staff-summary-tab" role="tabpanel">
+          <div class="table-responsive text-nowrap p-4">
+              <table class="table table-hover align-middle border-top" id="staffSummaryTable">
+                  <thead class="table-light text-uppercase" style="font-size:11px;">
+                      <tr>
+                          <th style="width:40px;">#</th>
+                          <th>Staff Details</th>
+                          <th>Contact</th>
+                          <th class="text-center">Total Days</th>
+                          <th class="text-center">Present (P)</th>
+                          <th class="text-center">Absent (A)</th>
+                          <th class="text-center">Half Day (H)</th>
+                          <th class="text-center">Payable Days</th>
+                          <th class="text-center">Attendance %</th>
+                      </tr>
+                  </thead>
+                  <tbody class="fs-7 fw-medium text-dark">
+                      {% for row in staff_summary %}
+                      <tr>
+                          <td>{{ forloop.counter }}</td>
+                          <td>
+                              <div class="d-flex align-items-center gap-2">
+                                  <span class="d-flex align-items-center justify-content-center rounded-circle bg-primary bg-opacity-10 text-primary fw-bold" style="width:34px;height:34px;font-size:12px;">
+                                      {{ row.staff.name|slice:":2"|upper }}
+                                  </span>
+                                  <div>
+                                      <div class="fw-bold text-dark">{{ row.staff.name }}</div>
+                                      <small class="text-muted" style="font-size:11px;">{{ row.staff.designation.name|default:row.staff.role|default:"Staff" }}</small>
+                                  </div>
+                              </div>
+                          </td>
+                          <td class="text-muted">{{ row.staff.mobile_number|default:"N/A" }}</td>
+                          <td class="text-center fw-bold">{{ row.total_days }}</td>
+                          <td class="text-center">
+                              <span class="badge bg-success-subtle text-success fw-bold px-2 py-1">{{ row.present }}</span>
+                          </td>
+                          <td class="text-center">
+                              <span class="badge bg-danger-subtle text-danger fw-bold px-2 py-1">{{ row.absent }}</span>
+                          </td>
+                          <td class="text-center">
+                              <span class="badge bg-info-subtle text-info fw-bold px-2 py-1">{{ row.half_day }}</span>
+                          </td>
+                          <td class="text-center fw-bold text-primary">{{ row.payable_days }}</td>
+                          <td class="text-center">
+                              <div class="d-flex align-items-center justify-content-center gap-2">
+                                  <div class="progress flex-grow-1" style="height:6px;min-width:60px;">
+                                      <div class="progress-bar {% if row.attendance_pct >= 85 %}bg-success{% elif row.attendance_pct >= 65 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                           style="width: {{ row.attendance_pct }}%;"></div>
+                                  </div>
+                                  <span class="fw-bold {% if row.attendance_pct >= 85 %}text-success{% elif row.attendance_pct >= 65 %}text-warning{% else %}text-danger{% endif %}" style="font-size:12px;">
+                                      {{ row.attendance_pct }}%
+                                  </span>
+                              </div>
+                          </td>
+                      </tr>
+                      {% empty %}
+                      <tr>
+                          <td colspan="9" class="text-center text-muted py-4">No staff attendance records found.</td>
+                      </tr>
+                      {% endfor %}
+                  </tbody>
+              </table>
+          </div>
+      </div>
+
+      <!-- TAB 2: Daily Attendance Logs -->
+      <div class="tab-pane fade" id="daily-logs-tab" role="tabpanel">
+          <div class="table-responsive text-nowrap p-4">
+              <table class="table table-hover align-middle border-top" id="dailyLogsTable">
+                  <thead class="table-light text-uppercase" style="font-size:11px;">
+                      <tr>
+                          <th style="width:40px;">#</th>
+                          <th>Date</th>
+                          <th>Staff Name</th>
+                          <th>Designation</th>
+                          <th>Status</th>
+                      </tr>
+                  </thead>
+                  <tbody class="fs-7 fw-medium text-dark">
+                      {% for item in records %}
+                      <tr>
+                          <td>{{ forloop.counter }}</td>
+                          <td data-order="{{ item.date|date:'Y-m-d' }}" data-date="{{ item.date|date:'Y-m-d' }}" class="text-muted fw-semibold">{{ item.date|date:"d M Y" }}</td>
+                          <td>
+                              <div class="d-flex align-items-center gap-2">
+                                  <span class="d-flex align-items-center justify-content-center rounded-circle bg-secondary bg-opacity-10 text-secondary fw-bold" style="width:30px;height:30px;font-size:11px;">
+                                      {{ item.staff.name|slice:":2"|upper }}
+                                  </span>
+                                  <span class="fw-bold text-dark">{{ item.staff.name }}</span>
+                              </div>
+                          </td>
+                          <td class="text-muted">{{ item.staff.designation.name|default:item.staff.role|default:"Staff" }}</td>
+                          <td>
+                              {% if item.status == 'P' %}
+                              <span class="badge bg-success-subtle text-success fw-bold px-3 py-1">Present (P)</span>
+                              {% elif item.status == 'A' %}
+                              <span class="badge bg-danger-subtle text-danger fw-bold px-3 py-1">Absent (A)</span>
+                              {% elif item.status == 'H' %}
+                              <span class="badge bg-info-subtle text-info fw-bold px-3 py-1">Half Day (H)</span>
+                              {% else %}
+                              <span class="badge bg-secondary-subtle text-secondary">{{ item.status }}</span>
+                              {% endif %}
+                          </td>
+                      </tr>
+                      {% empty %}
+                      <tr>
+                          <td colspan="5" class="text-center text-muted py-4">No daily logs found for the selected filter.</td>
+                      </tr>
+                      {% endfor %}
+                  </tbody>
+              </table>
+          </div>
+      </div>
+
+  </div>
+</div>
+{% endblock %}

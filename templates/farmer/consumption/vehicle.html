@@ -1,0 +1,589 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+{% block title %}farmer consumption{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+
+<script>
+$(document).ready(function () {
+
+    $('.datatable').each(function () {
+
+        // 🔥 prevent double init
+        if ($.fn.dataTable.isDataTable(this)) {
+            $(this).DataTable().destroy();
+        }
+
+        $(this).DataTable({
+            pageLength: $(this).data('page-length') || 5,
+            lengthMenu: [5, 10, 25, 50],
+            responsive: true
+        });
+
+    });
+
+});
+
+</script>
+
+<style>
+    /* container look */
+  .border.rounded {
+      background: #f8f9fa;
+      padding: 4px;
+  }
+
+  /* tab buttons */
+  .active-tab,
+  .btn[data-bs-toggle="tab"] {
+      border: none !important;
+      background: transparent;
+      color: #555;
+      font-weight: 500;
+      transition: all 0.25s ease;
+  }
+
+  /* active tab */
+  .active-tab,
+  .btn.active {
+      background: #0c9e6d !important;
+      color: #fff !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+
+  /* hover effect */
+  .btn[data-bs-toggle="tab"]:hover {
+      background: rgba(138, 212, 18, 0.15);
+      color: #000;
+  }
+
+</style>
+
+{% endblock page_js %}
+
+{% block content %}
+<div class="mb-3">
+  <ul class="nav nav-pills gap-2" role="tablist">
+    <li class="nav-item">
+      <a href="{% url 'farmer-inventory' %}" class="nav-link">
+        Inventory
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'farmer-consumption-register' %}" class="nav-link">
+        Consumption
+      </a>
+    </li>
+  </ul>
+</div>
+<div class="card mb-2">
+    <div class="card-body d-flex justify-content-between align-items-center">
+      <div class="d-flex flex-column">
+        <div>
+            <h4 class="mb-1">
+            <i class="ri-pulse-line me-2 text-primary"></i>
+                Supply Depot & Fleet Operations
+            </h4>
+        </div>
+      </div>
+
+      <a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#add_consumption_modal">
+          <i class="ri-add-line"></i> Add Vehicle & Tools
+      </a>
+    </div>
+</div>
+
+<div class="row p-3">
+  <div class="border rounded p-3 gap-2" style="width: 700px; background: #fff;">
+  <ul class="nav nav-tabs gap-2" role="tablist">
+      <li class="nav-item" role="tab">
+        <a href="{% url 'farmer-consumption' %}"  class="nav-link border rounded p-2"
+          type="button">
+          <i class="ri-home-6-line me-2"></i>
+          Warehouse Stock(3)
+        </a>
+      </li>
+
+      <li class="nav-item" role="tab">
+        <a href="{% url 'farmer-consumption-vehicle' %}" class="nav-link active "
+          type="button">
+          <i class="ri-truck-line me-2"></i>
+          Vehicles & Tools(4)
+        </a>
+      </li>
+    </ul>
+  </div>
+</div>
+
+    <div class="card mb-2">
+      <div class="card-body d-flex gap-2 flex-wrap p-2">
+          <div class="input-group" style="width: 500px;">
+              <span class="input-group-text bg-white">
+                  <i class="ri-search-line"></i>
+              </span>
+              <input type="text"
+                  class="form-control"
+                  placeholder="Search registered vehicles by blate configuration or tools...">
+          </div>
+          <div class="d-flex gap-3 ms-auto me-2">
+            <div class="dropdown" style="width: 200px;">
+              <!-- Button -->
+              <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown" id="roleDropdown">
+                All Categories
+              </button>
+
+              <!-- Dropdown Menu -->
+              <ul class="dropdown-menu w-100">
+                <li><a class="dropdown-item role-filter" data-role="0" href="#">All Categories</a></li>
+                <li><a class="dropdown-item role-filter" data-role="1" href="#">Vehicles</a></li>
+                <li><a class="dropdown-item role-filter" data-role="2" href="#">Tools</a></li>
+              </ul>
+            </div>
+
+            <div class="dropdown" style="width: 200px;">
+              <!-- Button -->
+              <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown" id="roleDropdown">
+                All Levels
+              </button>
+
+              <!-- Dropdown Menu -->
+              <ul class="dropdown-menu w-100">
+                <li><a class="dropdown-item role-filter" data-role="0" href="#">All Levels</a></li>
+                <li><a class="dropdown-item role-filter" data-role="1" href="#">In stock</a></li>
+                <li><a class="dropdown-item role-filter" data-role="2" href="#">Low stock</a></li>
+                <li><a class="dropdown-item role-filter" data-role="2" href="#">Out of stock</a></li>
+              </ul>
+            </div>
+          </div>
+      </div>
+    </div>
+
+    <div class="card mb-2">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6 col-lg-3">
+            <div class="border rounded h-60">
+              <div class="d-flex flex-column align-items-start ms-3 gap-3">
+                <p class="text-muted small mb-1">Fleet Count</p>
+                <h5 class="fw-bold mb-2" style="color: #404ace;">3 Vehicles</h5>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6 col-lg-3">
+            <div class="border rounded h-60">
+              <div class="d-flex flex-column align-items-start ms-3 gap-3">
+                <p class="text-muted text-primary small mb-1">Operational (Active)</p>
+                <h5 class="fw-bold text-primary mb-2">2 OK</h5>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6 col-lg-3">
+            <div class="border rounded h-60">
+              <div class="d-flex flex-column align-items-start ms-3 gap-3">
+                <p class="text-muted text-warning small mb-1">In Maintenance</p>
+                <h5 class="fw-bold text-warning mb-2">1 Units</h5>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6 col-lg-3">
+            <div class="border rounded h-60">
+              <div class="d-flex flex-column align-items-start ms-3 gap-3">
+                <p class="text-muted text-dark small mb-1">Tools Registered</p>
+                <h5 class="fw-bold text-dark mb-2">1 Tools</h5>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body py-0 px-0">
+        <div class="table">
+          <table class="table">
+            <thead class="bg-gray-200">
+              <tr>
+                <th class="min-width-30px">Machine or Tool Record</th>
+                <th class="min-width-30px">Category</th>
+                <th class="min-width-30px">License Plate / Plate Number</th>
+                <th class="min-width-30px">Status Condition</th>
+                <th class="min-width-30px">Last Inspected Service</th>
+                <th class="min-width-30px">Qty / Total</th>
+                <th class="min-width-30px">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div class="d-flex gap-3">
+                    <div class="d-flex align-items-center">
+                      <i class="ri-tools-line border rounded" style="background: #e9dd98; color: #9b8e1a;"></i>
+                    </div>
+                    <div class="d-flex flex-column">
+                      <label class="text-dark fw-semibold fs-6">Drip Nozzle Connectors (Adjustable)</label>
+                      <small class="me-2" style="font-size: 0.7rem;">Storage Bay: <span class="text-dark">Tool Cabinet Drawer B</span></small>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class="badge bg-warning-subtle text-warning border rounded">Tools</span>
+                </td>
+                <td>
+                  <label class="text-muted">— N/A For Tools</label>
+                </td>
+                <td>
+                  <span class="badge bg-primary-subtle text-primary border rounded">Working Tool</span>
+                </td>
+                <td>
+                  <label class="text-muted">No schedules logged</label>
+                </td>
+                <td>
+                  <label class="text-dark">150 Units</label>
+                </td>
+                <td class="text-center">
+                  <div class="d-flex">
+                    <div class="qty-wrapper d-flex justify-content-between align-items-center border rounded p-1">
+                      <span type="btn" class="btn minus p-0">−</span>
+                      <input
+                          class="qtyInput form-control text-center border-0 p-0"
+                          value="150"
+                      >
+                      <span type="btn" class="btn plus p-0">+</span>
+                    </div>
+
+                    <button class="btn btn-sm"
+                      style="font-size: 18px;"
+                      data-bs-toggle="modal"
+                      data-bs-target="#delete_consumption_modal">
+                      <i class="ri-delete-bin-line text-danger"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="d-flex gap-3">
+                    <div class="d-flex align-items-center">
+                      <i class="ri-truck-line border rounded" style="background: #c4d2ec; color: #306bc4;"></i>
+                    </div>
+                    <div class="d-flex flex-column">
+                      <label class="text-dark fw-semibold fs-6">Mahindra Arjun 555 DI Tractor</label>
+                      <small class="me-2" style="font-size: 0.7rem;">Storage Bay: <span class="text-dark">East Machinery Shed</span></small>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class="badge border rounded" style="background: #c4d2ec; color: #306bc4;">Vehicles</span>
+                </td>
+                <td>
+                  <label class="text-muted border rounded">🎫 HR-26-CH-9876</label>
+                </td>
+                <td>
+                  <span class="badge bg-primary-subtle text-primary border rounded">active</span>
+                </td>
+                <td>
+                  <div class="d-flex gap-2">
+                    <i class="ri-calendar-line"></i>
+                    <label class="text-muted">2026-05-15</label>
+                  </div>
+                </td>
+                <td>
+                  <label class="text-dark">1 Unit</label>
+                </td>
+                <td class="text-center">
+                  <div class="d-flex">
+                    <div class="qty-wrapper d-flex justify-content-between align-items-center border rounded p-1">
+                      <span type="btn" class="btn minus p-0">−</span>
+                      <input
+                          class="qtyInput form-control text-center border-0 p-0"
+                          value="1"
+
+                      >
+                      <span type="btn" class="btn plus p-0">+</span>
+                    </div>
+
+                    <button class="btn btn-sm"
+                      style="font-size: 18px;"
+                      data-bs-toggle="modal"
+                      data-bs-target="#delete_consumption_modal">
+                      <i class="ri-delete-bin-line text-danger"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="d-flex gap-3">
+                    <div class="d-flex align-items-center">
+                      <i class="ri-truck-line border rounded" style="background: #c4d2ec; color: #306bc4;"></i>
+                    </div>
+                    <div class="d-flex flex-column">
+                      <label class="text-dark fw-semibold fs-6">Class Combined Harvester 760</label>
+                      <small class="me-2" style="font-size: 0.7rem;">Storage Bay: <span class="text-dark">Main Machinery hangar</span></small>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class="badge border rounded" style="background: #c4d2ec; color: #306bc4;">Vehicles</span>
+                </td>
+                <td>
+                  <label class="text-muted border rounded">🎫 DL-04-SM-4521</label>
+                </td>
+                <td>
+                  <span class="badge bg-warning-subtle text-warning border rounded">Workshop</span>
+                </td>
+                <td>
+                  <div class="d-flex gap-2">
+                    <i class="ri-calendar-line"></i>
+                    <label class="text-muted">2026-06-1</label>
+                  </div>
+                </td>
+                <td>
+                  <label class="text-dark">1 Unit</label>
+                </td>
+                <td class="text-center">
+                  <div class="d-flex">
+                    <div class="qty-wrapper d-flex justify-content-between align-items-center border rounded p-1">
+                      <span type="btn" class="btn minus p-0">−</span>
+                      <input
+                          class="qtyInput form-control text-center border-0 p-0"
+                          value="1"
+
+                      >
+                      <span type="btn" class="btn plus p-0">+</span>
+                    </div>
+
+                    <button class="btn btn-sm"
+                      style="font-size: 18px;"
+                      data-bs-toggle="modal"
+                      data-bs-target="#delete_consumption_modal">
+                      <i class="ri-delete-bin-line text-danger"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="d-flex gap-3">
+                    <div class="d-flex align-items-center">
+                      <i class="ri-truck-line border rounded" style="background: #c4d2ec; color: #306bc4;"></i>
+                    </div>
+                    <div class="d-flex flex-column">
+                      <label class="text-dark fw-semibold fs-6">Electric Field Tata Ace EV Utility Bed</label>
+                      <small class="me-2" style="font-size: 0.7rem;">Storage Bay: <span class="text-dark">North Gate EV Chargers</span></small>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class="badge border rounded" style="background: #c4d2ec; color: #306bc4;">Vehicles</span>
+                </td>
+                <td>
+                  <label class="text-muted border rounded">🎫 MH-12-TR-2035</label>
+                </td>
+                <td>
+                  <span class="badge bg-primary-subtle text-primary border rounded">active</span>
+                </td>
+                <td>
+                  <div class="d-flex gap-2">
+                    <i class="ri-calendar-line"></i>
+                    <label class="text-muted">2026-04-20</label>
+                  </div>
+                </td>
+                <td>
+                  <label class="text-dark">2 Units</label>
+                </td>
+                <td class="text-center">
+                  <div class="d-flex">
+                    <div class="qty-wrapper d-flex justify-content-between align-items-center border rounded p-1">
+                      <span type="btn" class="btn minus p-0">−</span>
+                      <input
+                          class="qtyInput form-control text-center border-0 p-0"
+                          value="2"
+
+                      >
+                      <span type="btn" class="btn plus p-0">+</span>
+                    </div>
+
+                    <button class="btn btn-sm"
+                      style="font-size: 18px;"
+                      data-bs-toggle="modal"
+                      data-bs-target="#delete_consumption_modal">
+                      <i class="ri-delete-bin-line text-danger"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+
+<!-- Add consumption Modal -->
+<div class="modal fade" id="add_consumption_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+
+      <!-- Header -->
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Register New Vehicle or Tool</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body">
+
+        <div class="row g-3">
+
+          <div class="col-md-12">
+            <label class="form-label">Item or Fleet Machine Name</label>
+            <input type="text" class="form-control" placeholder="e.g. john deere 5050D 4WD">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Store Category</label>
+            <select class="select3 form-select" placeholder="Vehicles & Fleet">
+              <option value="0">Vehicles & Fleet</option>
+              <option value="1">Tool & Implements</option>
+            </select>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Stock Measure Unit</label>
+            <input type="number" class="form-control" placeholder="units">
+          </div>
+
+          <div class="col-md-12 border rounded">
+            <div class="row p-3">
+              <div class="col-6">
+                <label class="form-label">HSRP License Plate</label>
+                <input type="number" class="form-control" placeholder="HR-26-CH-9130">
+              </div>
+
+              <div class="col-6">
+                <label class="form-label">Initial Condition</label>
+                <select class="select3 form-select"  placeholder="Operational">
+                  <option value="0">Operational</option>
+                  <option value="1">Maintenance</option>
+                  <option value="2">Idle</option>
+                </select>
+              </div>
+
+              <div class="col-md-12">
+                <label class="form-label">Last Service Date</label>
+                <input type="date" class="form-control">
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-12">
+            <label class="form-label">Initial Fleet Count</label>
+            <input type="number" class="form-control" value="1">
+          </div>
+
+          <div class="col-md-12">
+            <label class="form-label">Storage Barn Shed / Garage Stall Locator</label>
+            <input type="text" class="form-control" value="Machinery Bay Shed">
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary">
+          <i class="ri-check-line me-1"></i>Save Record
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Delete consumption Modal -->
+<div class="modal fade" id="delete_consumption_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title text-danger">Confirm Delete</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body text-center">
+        <p class="mb-0">
+          Are you sure you want to delete
+          <strong id="deleteFarmerName">this record</strong>?
+        </p>
+      </div>
+
+      <div class="modal-footer justify-content-center">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+          Yes, Delete
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('click', function (e) {
+
+    // PLUS
+    if (e.target.classList.contains('plus')) {
+        const wrapper = e.target.closest('.qty-wrapper');
+        const input = wrapper.querySelector('.qtyInput');
+
+        input.value = parseInt(input.value || 0) + 1;
+    }
+
+    // MINUS
+    if (e.target.classList.contains('minus')) {
+        const wrapper = e.target.closest('.qty-wrapper');
+        const input = wrapper.querySelector('.qtyInput');
+
+        input.value = Math.max(0, parseInt(input.value || 0) - 1);
+    }
+
+});
+</script>
+
+{% endblock %}

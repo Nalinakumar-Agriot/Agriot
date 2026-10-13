@@ -1,0 +1,455 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Land Report{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.3.6/css/buttons.bootstrap5.min.css" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="https://cdn.datatables.net/buttons/2.3.6/js/dataTables.buttons.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.3/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.3.6/js/buttons.html5.min.js"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<style>
+  .nav-pills .nav-link.active,
+  .nav-pills .show > .nav-link {
+    background-color: #F69C55 !important;
+    color: #fff !important;
+    border-radius: 8px;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(246, 156, 85, 0.25);
+  }
+  .nav-pills .nav-link {
+    border-radius: 8px;
+    font-weight: 500;
+    color: #566a7f;
+    padding: 0.5rem 1.25rem;
+    transition: all 0.2s ease;
+  }
+  .nav-pills .nav-link:hover:not(.active) {
+    background-color: #f5f5f9;
+    color: #F69C55;
+  }
+  .search-collapse-wrapper {
+    position: relative;
+  }
+  .search-input-group {
+    width: 0;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-width 0.25s ease, opacity 0.2s ease;
+    white-space: nowrap;
+  }
+  .search-input-group.expanded {
+    max-width: 380px;
+    width: 380px;
+    opacity: 1;
+    margin-left: 8px;
+  }
+  @media (max-width: 576px) {
+    .search-input-group.expanded {
+      max-width: 200px;
+      width: 200px;
+    }
+  }
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+var reportDataTable = null;
+
+$.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
+    var min = $('#startDate').val();
+    var max = $('#endDate').val();
+    var dateString = data[7]; // Added date column
+    
+    if (!dateString) return true;
+
+    var parsedDate = new Date(dateString);
+    if (isNaN(parsedDate)) return true;
+
+    if (min) {
+        var minDate = new Date(min);
+        minDate.setHours(0,0,0,0);
+        if (parsedDate < minDate) return false;
+    }
+    if (max) {
+        var maxDate = new Date(max);
+        maxDate.setHours(23,59,59,999);
+        if (parsedDate > maxDate) return false;
+    }
+
+    return true;
+});
+
+$(document).ready(function () {
+    reportDataTable = $('.report-table').DataTable({
+        pageLength: 10,
+        responsive: true,
+        destroy: true,
+        dom: 't<"bottom d-flex align-items-center justify-content-between mt-3"ip>B',
+        buttons: [
+            {
+                extend: 'excelHtml5',
+                className: 'd-none btn-export-excel-hidden',
+                title: 'Land_Report'
+            }
+        ],
+        initComplete: function () {
+            // Crop type filter (col 4)
+            var colIdx = 4;
+            var column = this.api().column(colIdx);
+            var select = $('#customFilter');
+            
+            if (column) {
+                var uniqueData = [];
+                column.nodes().each(function(cell) {
+                    var val = $(cell).text().trim();
+                    if (val && val !== '-' && uniqueData.indexOf(val) === -1) {
+                        uniqueData.push(val);
+                    }
+                });
+                
+                uniqueData.sort().forEach(function(val) {
+                    select.append('<option value="' + val.replace(/"/g, '&quot;') + '">' + val + '</option>');
+                });
+
+                select.on('change', function () {
+                    var val = $(this).val();
+                    column.search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + '$' : '', true, false).draw();
+                });
+            }
+
+            // Farmer filter (col 2)
+            $('#farmerFilter').on('change', function() {
+                var val = $(this).val();
+                if (reportDataTable) {
+                    reportDataTable.column(2).search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + '$' : '', true, false).draw();
+                }
+            });
+        }
+    });
+
+    $('#reportSearchInput').on('keyup', function() {
+        reportDataTable.search(this.value).draw();
+    });
+
+    $('#startDate, #endDate').on('change', function () {
+        reportDataTable.draw();
+    });
+});
+
+function toggleSearchBox() {
+  var group = document.getElementById('search_input_group');
+  var toggleBtn = document.getElementById('search_toggle_btn');
+  var input = document.getElementById('reportSearchInput');
+  if (!group) return;
+  if (group.classList.contains('expanded')) {
+    closeSearchBox();
+  } else {
+    group.classList.remove('d-none');
+    setTimeout(function () {
+      group.classList.add('expanded');
+      if (toggleBtn) toggleBtn.classList.add('d-none');
+      if (input) input.focus();
+    }, 10);
+  }
+}
+
+function closeSearchBox() {
+  var group = document.getElementById('search_input_group');
+  var toggleBtn = document.getElementById('search_toggle_btn');
+  var input = document.getElementById('reportSearchInput');
+  if (!group) return;
+  group.classList.remove('expanded');
+  if (input) {
+    input.value = '';
+    if (reportDataTable) reportDataTable.search('').draw();
+  }
+  if (toggleBtn) toggleBtn.classList.remove('d-none');
+  setTimeout(function () {
+    group.classList.add('d-none');
+  }, 250);
+}
+
+document.addEventListener('click', function (e) {
+  var wrapper = document.getElementById('search_collapse_wrapper');
+  var group = document.getElementById('search_input_group');
+  if (wrapper && group && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+    closeSearchBox();
+  }
+});
+
+function applyQuickDate(preset) {
+    var now = new Date();
+    var start = '', end = '';
+
+    if (preset === 'all') {
+        start = ''; end = '';
+    } else if (preset === 'today') {
+        start = now.toISOString().split('T')[0];
+        end = start;
+    } else if (preset === 'this_month') {
+        var firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        var lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        start = firstDay.toISOString().split('T')[0];
+        end = lastDay.toISOString().split('T')[0];
+    } else if (preset === 'last_month') {
+        var firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        var lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+        start = firstDay.toISOString().split('T')[0];
+        end = lastDay.toISOString().split('T')[0];
+    } else if (preset === 'this_year') {
+        var firstDay = new Date(now.getFullYear(), 0, 1);
+        var lastDay = new Date(now.getFullYear(), 11, 31);
+        start = firstDay.toISOString().split('T')[0];
+        end = lastDay.toISOString().split('T')[0];
+    }
+    $('#startDate').val(start);
+    $('#endDate').val(end);
+    if (reportDataTable) reportDataTable.draw();
+}
+
+function exportTableToExcel() {
+    if (reportDataTable) {
+        reportDataTable.button('.buttons-excel').trigger();
+    }
+}
+</script>
+{% endblock page_js %}
+
+{% block content %}
+<!-- Navigation Tabs -->
+<div class="mb-3">
+  <ul class="nav nav-pills gap-2 flex-wrap" role="tablist">
+    <li class="nav-item">
+      <a href="{% url 'superadmin_reports' %}" class="nav-link">
+        <i class="ri-dashboard-line me-1"></i> Overview
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'customer_report' %}" class="nav-link">
+        Customer
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'land_report' %}" class="nav-link active">
+        Land
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'expense_report' %}" class="nav-link">
+        Expense
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'vendor_report' %}" class="nav-link">
+        Vendor
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'salary_report' %}" class="nav-link">
+        Salary
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'attendance_report' %}" class="nav-link">
+        Attendance
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'advance_report' %}" class="nav-link">
+        Advance
+      </a>
+    </li>
+  </ul>
+</div>
+
+<!-- Title Header -->
+<div class="card mb-3 border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 p-3 border-bottom">
+        <div>
+            <h4 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="ri-landscape-line text-success"></i>
+                {% trans "Land Report" %}
+            </h4>
+        </div>
+        <button type="button" class="btn btn-primary d-flex align-items-center gap-2 px-4 shadow-sm" onclick="exportTableToExcel()">
+            <i class="ri-file-excel-2-line fs-5"></i>
+            {% trans "Export Excel" %}
+        </button>
+    </div>
+</div>
+
+<!-- Quick Statistics KPI Cards -->
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <span class="text-uppercase small fw-bold text-muted" style="font-size:11px; letter-spacing:0.8px;">Total Farm Plots</span>
+          <div class="fs-4 fw-bold text-dark mt-1">{{ total_farms|default:0 }}</div>
+        </div>
+        <div class="rounded-3 p-3 bg-success bg-opacity-10 text-success d-flex align-items-center justify-content-center" style="width:44px; height:44px;">
+          <i class="ri-landscape-line fs-4"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <span class="text-uppercase small fw-bold text-muted" style="font-size:11px; letter-spacing:0.8px;">Total Acreage</span>
+          <div class="fs-4 fw-bold text-success mt-1">{{ total_acres|default:0 }} Ac</div>
+        </div>
+        <div class="rounded-3 p-3 bg-success bg-opacity-10 text-success d-flex align-items-center justify-content-center" style="width:44px; height:44px;">
+          <i class="ri-plant-line fs-4"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <span class="text-uppercase small fw-bold text-muted" style="font-size:11px; letter-spacing:0.8px;">Drip Irrigation</span>
+          <div class="fs-4 fw-bold text-info mt-1">{{ drip_farms|default:0 }} Farms</div>
+        </div>
+        <div class="rounded-3 p-3 bg-info bg-opacity-10 text-info d-flex align-items-center justify-content-center" style="width:44px; height:44px;">
+          <i class="ri-drop-line fs-4"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <span class="text-uppercase small fw-bold text-muted" style="font-size:11px; letter-spacing:0.8px;">Avg Farm Size</span>
+          <div class="fs-4 fw-bold text-primary mt-1">{{ avg_farm_size|default:0 }} Ac</div>
+        </div>
+        <div class="rounded-3 p-3 bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center" style="width:44px; height:44px;">
+          <i class="ri-pie-chart-line fs-4"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters & Table Card -->
+<div class="card border-0 shadow-sm rounded-4">
+  <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+
+    <!-- Collapsible Search -->
+    <div class="d-flex align-items-center search-collapse-wrapper" id="search_collapse_wrapper">
+      <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="search_toggle_btn" onclick="toggleSearchBox()" style="width: 38px; height: 38px;">
+        <i class="ri-search-line"></i>
+      </button>
+      <div class="input-group search-input-group d-none" id="search_input_group">
+        <span class="input-group-text bg-white border-end-0">
+          <i class="ri-search-line text-muted"></i>
+        </span>
+        <input type="text"
+            id="reportSearchInput"
+            class="form-control border-start-0"
+            placeholder="Search farm lands...">
+        <button class="btn btn-outline-secondary border-start-0" type="button" id="search_close_btn" onclick="closeSearchBox()">
+          <i class="ri-close-line"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Farmer Filter Dropdown -->
+    <select id="farmerFilter" class="form-select form-select-sm w-auto">
+      <option value="">All Farmers</option>
+      {% for f in farmers %}
+      <option value="{{ f.user.first_name|default:f.user.username }}">{{ f.user.first_name|default:f.user.username }}</option>
+      {% endfor %}
+    </select>
+
+    <select id="customFilter" class="form-select form-select-sm w-auto">
+      <option value="">All Crop Types</option>
+    </select>
+
+    <!-- Right side filters -->
+    <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+      <div class="d-flex align-items-center gap-1 bg-light border rounded px-2 py-1">
+        <small class="text-muted fw-semibold me-1"><i class="ri-calendar-line"></i> Date:</small>
+        <input type="date" id="startDate" class="form-control form-control-sm border-0 bg-transparent" style="width: 125px;">
+        <span class="text-muted small">to</span>
+        <input type="date" id="endDate" class="form-control form-control-sm border-0 bg-transparent" style="width: 125px;">
+      </div>
+
+      <div class="dropdown">
+        <button class="btn btn-outline-secondary dropdown-toggle d-flex align-items-center gap-1" type="button" data-bs-toggle="dropdown" id="dateFilterBtn">
+          <i class="ri-filter-3-line"></i> Filter
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyQuickDate('all')">All Time</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyQuickDate('today')">Today</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyQuickDate('this_month')">This Month</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyQuickDate('last_month')">Last Month</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyQuickDate('this_year')">This Year</a></li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="table-responsive text-nowrap p-4">
+      <table class="table table-hover align-middle border-top report-table">
+          <thead class="table-light">
+              <tr>
+                  <th>#</th>
+                  <th>Land Name</th>
+                  <th>Farmer</th>
+                  <th>Total Area</th>
+                  <th>Crop Type</th>
+                  <th>District</th>
+                  <th>Health Status</th>
+                  <th>Created On</th>
+              </tr>
+          </thead>
+          <tbody class="fs-7 fw-medium text-black">
+              {% for item in records %}
+              <tr>
+                  <td>{{ forloop.counter }}</td>
+                  <td class="fw-semibold text-dark">{{ item.land_name }}</td>
+                  <td>
+                    {% if item.farmer %}
+                    <span class="badge bg-primary-subtle text-primary border">
+                      <i class="ri-user-line me-1"></i>{{ item.farmer.user.first_name|default:item.farmer.user.username }}
+                    </span>
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                  </td>
+                  <td class="fw-semibold text-success">{{ item.total_area }}</td>
+                  <td>{{ item.crop_type.name|default:"-" }}</td>
+                  <td>{{ item.district.name|default:"-" }}</td>
+                  <td><span class="badge bg-success-subtle text-success">{{ item.health_indicator|default:"Good" }}</span></td>
+                  <td class="text-muted">{{ item.created_at|date:"d M Y" }}</td>
+              </tr>
+              {% endfor %}
+          </tbody>
+      </table>
+  </div>
+</div>
+{% endblock %}

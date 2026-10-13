@@ -1,0 +1,909 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Outstanding{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
+<style>
+  .custom-btn {
+    transition: all 0.2s ease-in-out;
+  }
+  .active-selection {
+    background-color: #fce6c5 !important;
+    border-color: #f7a022 !important;
+    color: #000 !important;
+    font-weight: 600;
+  }
+  .nav-pills .nav-link.active,
+  .nav-pills .show > .nav-link {
+    background-color: #F69C55 !important;
+    color: #fff !important;
+    border-radius: 8px;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(246, 156, 85, 0.25);
+  }
+  .nav-pills .nav-link {
+    border-radius: 8px;
+    font-weight: 500;
+    color: #566a7f;
+    padding: 0.5rem 1.25rem;
+    transition: all 0.2s ease;
+  }
+  .nav-pills .nav-link:hover:not(.active) {
+    background-color: #f5f5f9;
+    color: #F69C55;
+  }
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+
+<script>
+$(document).ready(function () {
+
+    $('.datatable').each(function () {
+
+        // 🔥 prevent double init
+        if ($.fn.dataTable.isDataTable(this)) {
+            $(this).DataTable().destroy();
+        }
+
+        $(this).DataTable({
+            pageLength: $(this).data('page-length') || 5,
+            lengthMenu: [5, 10, 25, 50],
+            responsive: true
+        });
+
+    });
+
+});
+
+</script>
+
+<style>
+    /* container look */
+  .border.rounded {
+      background: #f8f9fa;
+      padding: 4px;
+  }
+
+  /* tab buttons */
+  .active-tab,
+  .btn[data-bs-toggle="tab"] {
+      border: none !important;
+      background: transparent;
+      color: #555;
+      font-weight: 500;
+      transition: all 0.25s ease;
+  }
+
+  /* active tab */
+  .active-tab,
+  .btn.active {
+      background: #0c9e6d !important;
+      color: #fff !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+
+  /* hover effect */
+  .btn[data-bs-toggle="tab"]:hover {
+      background: rgba(138, 212, 18, 0.15);
+      color: #000;
+  }
+
+  .nav-link:hover {
+  background-color: #f1f3ff;
+}
+
+.nav-link.active:hover {
+  background-color: #dddfdd;
+}
+
+.custom-btn {
+  border: 1px solid #0d0d16;
+  color: #000000;
+  background-color: #fff;
+}
+
+.custom-btn:hover {
+  background-color: #070611;
+  color: #fff;
+}
+
+.custom-btn.active {
+  background-color: #070611;
+  color: #fff;
+  border-color: #070611;
+}
+
+</style>
+
+{% endblock page_js %}
+
+{% block content %}
+<div class="mb-3">
+  <ul class="nav nav-pills gap-2" role="tablist">
+    <li class="nav-item">
+      <a href="{% url 'farmer-expenses' %}" class="nav-link">
+        Expense
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'farmer-vendor' %}" class="nav-link">
+        Vendor
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="{% url 'farmer-outstanding' %}" class="nav-link active">
+        Outstanding
+      </a>
+    </li>
+  </ul>
+</div>
+<!-- Section 1: Vendor & Operational Liabilities -->
+<div class="card mb-3">
+    <div class="card-body d-flex justify-content-between align-items-center">
+      <div class="d-flex flex-column">
+        <div>
+            <h4 class="mb-1">
+            <i class="ri-time-line me-2 text-warning"></i>
+                Outstanding
+            </h4>
+        </div>
+      </div>
+    </div>
+</div>
+
+<div class="card mb-4 border-0 shadow-sm">
+  <div class="card-body">
+    <div class="row g-4 mb-4">
+
+      <!-- Vendor Liabilities Summary -->
+      <div class="col-md-4">
+        <div class="bg-white border rounded shadow-sm p-4 h-100 position-relative overflow-hidden">
+          <div class="position-absolute top-0 end-0 p-3">
+              <i class="ri-spam-2-line {% if total_outstanding > 0 %}text-danger{% else %}text-success{% endif %} fs-1 opacity-25"></i>
+          </div>
+          <p class="text-muted fw-semibold mb-1">Total Outstanding Balance</p>
+          {% if total_outstanding > 0 %}
+          <h2 class="fw-bold mb-2 text-primary">₹{{ total_outstanding|floatformat:0 }}</h2>
+          <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="ri-error-warning-line me-1"></i>Needs action to avoid package suspension</span>
+          {% else %}
+          <h2 class="fw-bold mb-2 text-success">₹0</h2>
+          <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="ri-check-double-line me-1"></i>All clear</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Safeguard Protocol -->
+      <div class="col-md-8">
+        <div class="bg-white border rounded shadow-sm p-4 h-100">
+          <div class="d-flex flex-column h-100 justify-content-center">
+            <h6 class="text-dark fw-bold mb-2"><i class="ri-shield-check-line text-primary me-2"></i>Payment Counts</h6>
+            <div class="d-flex gap-4 flex-wrap mt-auto p-3 bg-light rounded">
+              <div class="d-flex flex-column">
+                <small class="text-muted text-uppercase fw-semibold" style="font-size: 11px;">Active Invoices</small>
+                <span class="fw-bold text-dark fs-5">{{ vendor_count }}</span>
+              </div>
+              <div class="vr"></div>
+              <div class="d-flex flex-column">
+                <small class="text-muted text-uppercase fw-semibold" style="font-size: 11px;">Overdue Accounts</small>
+                <span class="fw-bold text-danger fs-5">{{ overdue_count }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Vendor Pending Payment List -->
+    <h6 class="fw-bold text-dark mb-3">Unpaid Invoices Ledger ({{ vendor_outstandings|length }} Invoices)</h6>
+    <div class="bg-white rounded shadow-sm border p-0">
+        {% for invoice in vendor_outstandings %}
+        <div class="d-flex align-items-center justify-content-between p-3 border-bottom {% if invoice.status == 'Overdue' %}bg-danger-subtle{% endif %}">
+            <div class="d-flex align-items-center gap-3">
+                <div class="d-flex align-items-center justify-content-center rounded bg-secondary-subtle" style="width:48px;height:48px;">
+                    <i class="ri-file-list-3-line text-secondary fs-4"></i>
+                </div>
+                <div>
+                    <h6 class="fw-bold text-dark mb-1">{{ invoice.invoice_no }}</h6>
+                    <div class="d-flex gap-3 align-items-center">
+                        <span class="text-muted small"><i class="ri-calendar-event-line me-1"></i>Due: {{ invoice.due_date|date:"Y-m-d" }}</span>
+                        {% if invoice.status == 'Overdue' %}
+                        <span class="badge bg-danger">OVERDUE</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">{{ invoice.status }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-4">
+                <div class="text-end">
+                    <small class="text-muted d-block">Balance Due</small>
+                    <h5 class="fw-bold {% if invoice.status == 'Overdue' %}text-danger{% else %}text-dark{% endif %} mb-0">₹{{ invoice.balance_due|default:invoice.amount_total|floatformat:"0" }}</h5>
+                </div>
+                <div class="d-flex gap-2">
+                    {% if invoice.status != 'Paid' %}
+                    <button class="btn btn-warning btn-sm px-3 text-white" onclick="payOutstanding({{ invoice.id }})">
+                        <i class="ri-check-line me-1"></i> Settle / Pay
+                    </button>
+                    {% endif %}
+                    <button class="btn btn-outline-danger btn-sm px-3" onclick="deleteOutstanding({{ invoice.id }})">
+                        <i class="ri-delete-bin-line"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="p-5 text-center text-muted">
+            <i class="ri-check-line fs-1 text-success mb-2 d-block"></i>
+            <h6 class="fw-bold text-dark">No Pending Vendor Liabilities</h6>
+            <p class="mb-0">All your vendor invoices have been fully paid.</p>
+        </div>
+        {% endfor %}
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Add outstanding Modal -->
+<div class="modal fade" id="add_outstanding_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+
+      <!-- Header -->
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Publish Invoice or Setup Recurring Liability</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body">
+        <div class="row g-3">
+
+          <div class="col-lg-12 mb-0">
+            <label class="form-label">Payment Schema / Type</label>
+            <ul class="nav nav-tabs gap-4" role="tablist">
+              <li class="nav-item">
+                <button class="nav-link active border rounded"
+                        style="width: 250px;"
+                        data-bs-toggle="tab"
+                        data-bs-target="#bill"
+                        type="button"
+                        role="tab">
+                  <i class="ri-time-line"></i> One-time bill
+                </button>
+              </li>
+
+              <li class="nav-item">
+                <button class="nav-link border rounded text-primary"
+                        style="width: 250px;"
+                        data-bs-toggle="tab"
+                        data-bs-target="#recurring"
+                        type="button"
+                        role="tab">
+                  <i class="ri-recycle-line"></i> Recurring Liability
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <div class="col-lg-12 p-0">
+            <form id="addOutstandingForm">
+            <div class="tab-content mt-3">
+              <div class="tab-pane fade show active" id="bill">
+                  <div class="row g-3">
+                    <div class="col-md-12">
+                      <label class="form-label">Invoice Owed Title</label>
+                      <input type="text" name="invoice_no_bill" class="form-control" required
+                        data-error-msg="Invoice Title is required."
+                        placeholder="e.g. Composting Chemical Supplies" />
+                      <div class="invalid-feedback"></div>
+                    </div>
+
+                    <div class="col-md-6">
+                      <label class="form-label">Amount Due (₹ Base INR)</label>
+                      <input type="number" name="amount_total_bill" class="form-control" required
+                        data-error-msg="Amount Due is required."
+                        placeholder="150">
+                      <div class="invalid-feedback"></div>
+                    </div>
+
+                    <div class="col-md-6">
+                      <label for="startdate" class="form-label">Limit Due Date</label>
+                      <input type="date" name="due_date_bill" class="form-control" required
+                        data-error-msg="Due Date is required.">
+                      <div class="invalid-feedback"></div>
+                    </div>
+
+                    <div class="col-md-12">
+                      <label class="form-label">Status</label>
+                      <select name="status_bill" class="form-select">
+                        <option value="Unpaid">Unpaid</option>
+                        <option value="Overdue">Overdue</option>
+                      </select>
+                    </div>
+
+                  </div>
+              </div>
+
+              <div class="tab-pane fade" id="recurring">
+                <div class="row g-3">
+
+                  <div class="col-lg-12 border rounded p-3">
+                    <label class="form-label">Repeat Cycle Interval</label>
+                    <input type="hidden" name="repeat_cycle_recurring" id="repeat_cycle_recurring" value="Weekly">
+                    <div class="d-flex gap-6 mb-3">
+                      <button class="btn btn-sm border action custom-btn px-4 py-2 repeat-btn active-selection" type="button" style="width: 200px;" onclick="selectOption('repeat-btn', this, 'repeat_cycle_recurring', 'Weekly')">
+                        Weekly
+                      </button>
+                      <button class="btn btn-sm border custom-btn px-4 py-2 repeat-btn" type="button" style="width: 200px;" onclick="selectOption('repeat-btn', this, 'repeat_cycle_recurring', 'Monthly')">
+                        Monthly
+                      </button>
+                      <button class="btn btn-sm border custom-btn px-4 py-2 repeat-btn" type="button" style="width: 200px;" onclick="selectOption('repeat-btn', this, 'repeat_cycle_recurring', 'Yearly')">
+                        Yearly
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="col-md-12">
+                    <label class="form-label">Invoice Owed Title</label>
+                    <input type="text" name="invoice_no_recurring" class="form-control" required
+                      data-error-msg="Invoice Title is required."
+                      placeholder="e.g. Composting  Chemical Supplies" />
+                    <div class="invalid-feedback"></div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <label class="form-label">Liabilities Category</label>
+                    <select class="form-select" name="category_recurring">
+                      <option value="Subscription">Subscription</option>
+                      <option value="Equipment Lease">Equipment Lease</option>
+                      <option value="Worker Wages">Worker Wages</option>
+                      <option value="Vendor">Vendor</option>
+                    </select>
+                  </div>
+
+                  <div class="col-md-6">
+                    <label class="form-label">Amount Due (₹ Base INR)</label>
+                    <input type="number" name="amount_total_recurring" class="form-control" required
+                      data-error-msg="Amount Due is required."
+                      placeholder="150">
+                    <div class="invalid-feedback"></div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <label class="form-label">Limit Due Date</label>
+                    <input type="date" name="due_date_recurring" class="form-control" required
+                      data-error-msg="Due Date is required.">
+                    <div class="invalid-feedback"></div>
+                  </div>
+
+                  <div class="col-md-12 border rounded p-3">
+                    <div class="d-flex gap-3 mb-2">
+                      <i class="ri-notification-4-line text-warning"></i>
+                      <label class="fw-semibold text-warning">Outstanding Liability Reminders (4)</label>
+                    </div>
+                    <input type="hidden" name="reminder_type_recurring" id="reminder_type_recurring" value="On Due Date">
+                    <div class="d-flex flex-column">
+                      <div class="d-flex gap-6 mb-3">
+                        <button class="btn btn-sm border action custom-btn px-4 py-2 reminder-btn active-selection" type="button" style="width: 200px;" onclick="selectOption('reminder-btn', this, 'reminder_type_recurring', 'On Due Date')">
+                          On Due Date
+                        </button>
+                        <button class="btn btn-sm border custom-btn px-4 py-2 reminder-btn" type="button" style="width: 200px;" onclick="selectOption('reminder-btn', this, 'reminder_type_recurring', '1 Day Before')">
+                          1 Day Before
+                        </button>
+                        <button class="btn btn-sm border custom-btn px-4 py-2 reminder-btn" type="button" style="width: 200px;" onclick="selectOption('reminder-btn', this, 'reminder_type_recurring', '3 Days Before')">
+                          3 Days Before
+                        </button>
+                      </div>
+                      <div class="d-flex gap-3">
+                        <button
+                          type="button"
+                          class="btn btn-sm border custom-btn px-4 py-2 reminder-btn" style="width: 200px;" onclick="selectOption('reminder-btn', this, 'reminder_type_recurring', '1 Week Before')">
+                          1 Week Before
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-sm border custom-btn px-8 py-2 reminder-btn"
+                          style="width: 300px;"
+                          onclick="selectOption('reminder-btn', this, 'reminder_type_recurring', 'Custom Date'); toggleForm('expandForm2')">
+                          Custom Alarm Date..
+                        </button>
+                      </div>
+
+                      <div id="expandForm2" class="mt-3" style="display:none;">
+                        <div class="row g-2">
+                          <div class="col-lg-12">
+                            <label class="form-label">Choose Alarm Reminder Date</label>
+                            <input type="date" class="form-control">
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" onclick="submitOutstanding()">
+          <i class="ri-check-line me-1"></i>Publish Outstanding Liability
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+              const cookie = cookies[i].trim();
+              if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                  cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                  break;
+              }
+          }
+      }
+      return cookieValue;
+  }
+
+  function submitOutstanding() {
+      const form = document.getElementById('addOutstandingForm');
+      const formData = new FormData(form);
+
+      // Determine which tab is active to grab the right fields
+      const isRecurring = document.querySelector('#recurring').classList.contains('active');
+      const prefix = isRecurring ? '_recurring' : '_bill';
+
+      let invoice_no = formData.get('invoice_no' + prefix);
+      const amount_total = formData.get('amount_total' + prefix);
+      const due_date = formData.get('due_date' + prefix);
+      const status = isRecurring ? 'Unpaid' : formData.get('status' + prefix);
+
+      if (!invoice_no || !amount_total || !due_date) {
+          // Show inline errors on the active tab fields
+          const activePrefix = isRecurring ? '_recurring' : '_bill';
+          const invoiceEl = form.querySelector(`[name="invoice_no${activePrefix}"]`);
+          const amountEl  = form.querySelector(`[name="amount_total${activePrefix}"]`);
+          const dateEl    = form.querySelector(`[name="due_date${activePrefix}"]`);
+          if (invoiceEl && !invoice_no) window.AgriValidate.showError(invoiceEl, 'Invoice Title is required.');
+          if (amountEl  && !amount_total) window.AgriValidate.showError(amountEl, 'Amount Due is required.');
+          if (dateEl    && !due_date)    window.AgriValidate.showError(dateEl, 'Due Date is required.');
+          return;
+      }
+
+      if (isRecurring) {
+          let cycle = formData.get('repeat_cycle_recurring') || 'Monthly';
+          let category = formData.get('category_recurring') || 'Vendor';
+          invoice_no = `Vendor: ${invoice_no} [Recurring (${cycle})] | ${category}`;
+      } else {
+          if (!invoice_no.startsWith('Vendor:')) {
+              invoice_no = `Vendor: ${invoice_no}`;
+          }
+      }
+
+      const submitData = new FormData();
+      submitData.append('invoice_no', invoice_no);
+      submitData.append('amount_total', amount_total);
+      submitData.append('due_date', due_date);
+      submitData.append('status', status);
+
+      fetch("{% url 'add_outstanding' %}", {
+          method: 'POST',
+          body: submitData,
+          headers: {
+              'X-CSRFToken': getCookie('csrftoken'),
+              'X-Requested-With': 'XMLHttpRequest'
+          }
+      })
+      .then(response => response.json())
+      .then(data => {
+          if (data.success) {
+              window.location.reload();
+          } else {
+              alert("Error: " + data.error);
+          }
+      })
+      .catch(error => console.error('Error:', error));
+  }
+
+  function deleteOutstanding(id) {
+      if(confirm('Are you sure you want to remove this outstanding liability?')) {
+          const formData = new FormData();
+          formData.append('outstanding_id', id);
+
+          fetch("{% url 'delete_outstanding' %}", {
+              method: 'POST',
+              body: formData,
+              headers: {
+                  'X-CSRFToken': getCookie('csrftoken'),
+                  'X-Requested-With': 'XMLHttpRequest'
+              }
+          })
+          .then(response => response.json())
+          .then(data => {
+              if (data.success) {
+                  window.location.reload();
+              } else {
+                  alert("Error deleting: " + data.error);
+              }
+          });
+      }
+  }
+
+  function toggleForm(id) {
+    const form = document.getElementById(id);
+    if (form.style.display === "none" || form.style.display === "") {
+      form.style.display = "block";
+    } else {
+      form.style.display = "none";
+    }
+  }
+
+  function selectOption(groupClass, element, inputId, value) {
+      // Remove active class from all buttons in the group
+      const buttons = document.querySelectorAll('.' + groupClass);
+      buttons.forEach(btn => {
+          btn.classList.remove('active-selection');
+      });
+      // Add active class to clicked button
+      element.classList.add('active-selection');
+      // Set the hidden input value
+      document.getElementById(inputId).value = value;
+
+      // Handle the custom date field visibility
+      if (groupClass === 'reminder-btn' && value !== 'Custom Date') {
+          document.getElementById('expandForm2').style.display = 'none';
+      }
+  }
+</script>
+
+<!-- Log Outflow Modal -->
+<div class="modal fade" id="add_outflow_modal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <form id="addOutflowForm">
+        <input type="hidden" name="type" value="outflow">
+        <input type="hidden" name="status" value="Cost">
+        <input type="hidden" name="tags" value="Outflow">
+        <div class="modal-header">
+          <h5 class="modal-title fw-semibold">Log New Transaction (Expense)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Expense Type</label>
+              <select class="form-select" name="category" id="expense_type" onchange="toggleVendorFields()">
+                <option value="Vendor">Vendor Based</option>
+                <option value="Rental">Rental</option>
+                <option value="General">General</option>
+                <option value="Others">Others</option>
+              </select>
+            </div>
+            <div class="col-md-6" id="vendor_select_group">
+              <label class="form-label">Select Vendor</label>
+              <select name="vendor" id="vendor_select" class="form-select">
+                <option value="">-- No Vendor --</option>
+                {% for v in vendors %}
+                <option value="{{ v.vendor_name }}">{{ v.vendor_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label">Description</label>
+              <input type="text" name="description" class="form-control" placeholder="e.g. Tractor fuel or Urea bags">
+            </div>
+            <div class="col-md-4" id="actual_price_group">
+              <label class="form-label" id="amount_label">Actual Price (₹ Base INR)</label>
+              <input type="number" name="amount" id="outflow_amount" class="form-control" placeholder="e.g. 1500" oninput="calculateBalance()">
+            </div>
+            <div class="col-md-4" id="amount_paid_group">
+              <label class="form-label">Amount Paid Right Now</label>
+              <input type="number" id="outflow_paid" class="form-control" placeholder="e.g. 1000" oninput="calculateBalance()">
+            </div>
+            <div class="col-md-4" id="outstanding_balance_group">
+              <label class="form-label">Outstanding Balance Due</label>
+              <input type="number" name="balance_amount" id="outflow_balance" class="form-control" placeholder="0" readonly>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Payment Channel</label>
+              <input type="text" name="payment_method" class="form-control" placeholder="UPI / NetBanking / Cash">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Date</label>
+              <input type="date" name="close_date" class="form-control" id="outflow_date">
+            </div>
+            <div class="col-12" id="inventory_group">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Quantity</label>
+                  <input type="number" name="quantity" class="form-control" placeholder="1" value="1">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Unit</label>
+                  <input type="text" name="unit" class="form-control" placeholder="e.g. Bags, Kg, Liters" value="Units">
+                </div>
+                <div class="col-md-12">
+                  <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" name="add_to_inventory" id="add_to_inventory" value="true">
+                    <label class="form-check-label" for="add_to_inventory">
+                      Add to Inventory
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer d-flex justify-content-between">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary" onclick="submitOutflow()">
+            <i class="ri-check-line me-1"></i> Save Expense
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmation_modal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-header border-bottom-0 pb-0">
+        <h5 class="modal-title fw-semibold w-100 text-center" id="confirm_title">Confirm Action</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" style="position:absolute; right: 15px;"></button>
+      </div>
+      <div class="modal-body text-center pt-3 pb-4">
+        <div class="mb-3 mt-2">
+            <i id="confirm_icon" class="ri-question-line text-primary" style="font-size: 3.5rem;"></i>
+        </div>
+        <p id="confirm_message" class="mb-0 text-dark fs-6 px-2">Are you sure?</p>
+      </div>
+      <div class="modal-footer d-flex justify-content-center bg-light border-top-0 rounded-bottom">
+        <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary px-4" id="confirm_btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  if (document.getElementById('outflow_date')) {
+      document.getElementById('outflow_date').valueAsDate = new Date();
+  }
+
+  function toggleVendorFields() {
+      let type = document.getElementById('expense_type').value;
+      let vendorGroup = document.getElementById('vendor_select_group');
+      let paidGroup = document.getElementById('amount_paid_group');
+      let balanceGroup = document.getElementById('outstanding_balance_group');
+      let amountGroup = document.getElementById('actual_price_group');
+      let amountLabel = document.getElementById('amount_label');
+      let vendorSelect = document.getElementById('vendor_select');
+      let inventoryGroup = document.getElementById('inventory_group');
+
+      if (type === 'Vendor') {
+          vendorGroup.style.display = 'block';
+          paidGroup.style.display = 'block';
+          balanceGroup.style.display = 'block';
+          inventoryGroup.style.display = 'block';
+          amountGroup.classList.remove('col-md-12');
+          amountGroup.classList.add('col-md-4');
+          amountLabel.innerText = 'Actual Price (₹ Base INR)';
+      } else {
+          vendorGroup.style.display = 'none';
+          paidGroup.style.display = 'none';
+          balanceGroup.style.display = 'none';
+          inventoryGroup.style.display = 'none';
+          amountGroup.classList.remove('col-md-4');
+          amountGroup.classList.add('col-md-12');
+          amountLabel.innerText = 'Payment Amount (₹ Base INR)';
+          vendorSelect.value = ''; // clear vendor if not vendor based
+          document.getElementById('outflow_paid').value = '';
+          document.getElementById('outflow_balance').value = '0';
+          document.getElementById('add_to_inventory').checked = false;
+      }
+  }
+
+  // Run on load to set initial state
+  document.addEventListener('DOMContentLoaded', function() {
+      if(document.getElementById('expense_type')) {
+          toggleVendorFields();
+      }
+  });
+
+  function calculateBalance() {
+      if (document.getElementById('expense_type').value !== 'Vendor') {
+          document.getElementById('outflow_balance').value = 0;
+          return;
+      }
+      let amt = parseFloat(document.getElementById('outflow_amount').value) || 0;
+      let paid = parseFloat(document.getElementById('outflow_paid').value) || 0;
+      document.getElementById('outflow_balance').value = (amt - paid > 0) ? (amt - paid) : 0;
+  }
+
+  function submitOutflow() {
+      const form = document.getElementById('addOutflowForm');
+      if (!window.AgriValidate.validate(form)) return;
+
+      const formData = new FormData(form);
+
+      let amt = formData.get('amount');
+      if (!amt || parseFloat(amt) <= 0) {
+          window.AgriValidate.showError(form.querySelector('[name="amount"]'), 'Please enter a valid amount.');
+          return;
+      }
+
+      let cat = formData.get('category');
+      let bal = parseFloat(formData.get('balance_amount')) || 0;
+      let vendor = formData.get('vendor');
+
+      if (cat === 'Vendor' && bal > 0 && !vendor) {
+          window.AgriValidate.showError(form.querySelector('[name="vendor"]'), 'Please select a Vendor to log the outstanding balance.');
+          return;
+      }
+
+      let paid_amount = Math.abs(amt) - bal;
+      if (paid_amount < 0) paid_amount = 0;
+
+      formData.set('amount', -paid_amount);
+
+      fetch("{% url 'add_transaction' %}", {
+          method: 'POST',
+          body: formData,
+          headers: {
+              'X-CSRFToken': getCookie('csrftoken'),
+              'X-Requested-With': 'XMLHttpRequest'
+          }
+      })
+      .then(r => r.json())
+      .then(d => {
+          if(d.success) {
+              window.location.reload();
+          } else {
+              window.showAppToast('Error: ' + d.error, 'error');
+          }
+      });
+  }
+
+  // Generic Confirmation Logic
+  let currentConfirmAction = null;
+  let currentConfirmId = null;
+
+  function showConfirmModal(title, message, icon, btnText, btnClass, iconClass, action, id) {
+      document.getElementById('confirm_title').innerText = title;
+      document.getElementById('confirm_message').innerText = message;
+
+      let iconEl = document.getElementById('confirm_icon');
+      iconEl.className = icon;
+      iconEl.classList.add(iconClass);
+
+      let btnEl = document.getElementById('confirm_btn');
+      btnEl.innerText = btnText;
+      btnEl.className = 'btn ' + btnClass;
+
+      currentConfirmAction = action;
+      currentConfirmId = id;
+
+      let modal = new bootstrap.Modal(document.getElementById('confirmation_modal'));
+      modal.show();
+  }
+
+  document.getElementById('confirm_btn').addEventListener('click', function() {
+      if (currentConfirmAction === 'pay') {
+          processPayment(currentConfirmId);
+      } else if (currentConfirmAction === 'delete') {
+          processDelete(currentConfirmId);
+      }
+      bootstrap.Modal.getInstance(document.getElementById('confirmation_modal')).hide();
+  });
+
+  function payOutstanding(id) {
+      showConfirmModal(
+          'Confirm Payment',
+          'Are you sure you want to mark this outstanding balance as fully paid?',
+          'ri-secure-payment-line',
+          'Yes, Pay Now',
+          'btn-success',
+          'text-success',
+          'pay',
+          id
+      );
+  }
+
+  function processPayment(id) {
+      fetch("{% url 'pay_outstanding' %}", {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-CSRFToken': getCookie('csrftoken'),
+              'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: 'outstanding_id=' + id
+      })
+      .then(r => r.json())
+      .then(d => {
+          if(d.success) {
+              location.reload();
+          } else {
+              alert('Error: ' + d.error);
+          }
+      });
+  }
+
+  function deleteOutstanding(id) {
+      showConfirmModal(
+          'Remove Liability',
+          'Are you sure you want to completely remove this outstanding liability?',
+          'ri-delete-bin-line',
+          'Yes, Remove',
+          'btn-danger',
+          'text-danger',
+          'delete',
+          id
+      );
+  }
+
+  function processDelete(id) {
+      fetch("{% url 'delete_outstanding' %}", {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-CSRFToken': getCookie('csrftoken'),
+              'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: 'outstanding_id=' + id
+      })
+      .then(r => r.json())
+      .then(d => {
+          if(d.success) {
+              location.reload();
+          } else {
+              alert('Error: ' + d.error);
+          }
+      });
+  }
+</script>
+
+{% endblock %}

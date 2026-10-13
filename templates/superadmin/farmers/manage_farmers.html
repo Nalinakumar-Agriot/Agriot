@@ -1,0 +1,790 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Farmer Management{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<style>
+.search-collapse-wrapper {
+  position: relative;
+}
+.search-input-group {
+  width: 0;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.25s ease, opacity 0.2s ease;
+  white-space: nowrap;
+}
+.search-input-group.expanded {
+  max-width: 420px;
+  width: 420px;
+  opacity: 1;
+  margin-left: 8px;
+}
+@media (max-width: 576px) {
+  .search-input-group.expanded {
+    max-width: 220px;
+    width: 220px;
+  }
+}
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+function toggleSearchBox() {
+  var group = document.getElementById('search_input_group');
+  var isExpanded = group.classList.contains('expanded');
+
+  if (isExpanded) {
+    closeSearchBox();
+  } else {
+    group.classList.remove('d-none');
+    setTimeout(function () {
+      group.classList.add('expanded');
+      document.getElementById('farmerSearch').focus();
+    }, 10);
+  }
+}
+
+function closeSearchBox() {
+  var group = document.getElementById('search_input_group');
+  var input = document.getElementById('farmerSearch');
+  group.classList.remove('expanded');
+  if (input) {
+    input.value = '';
+    var table = $('.datatable').DataTable();
+    if (table) table.search('').draw();
+  }
+  setTimeout(function () {
+    group.classList.add('d-none');
+  }, 250);
+}
+
+document.addEventListener('click', function (e) {
+  var wrapper = document.getElementById('search_collapse_wrapper');
+  var group = document.getElementById('search_input_group');
+  if (wrapper && group && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+    closeSearchBox();
+  }
+});
+
+$(document).ready(function () {
+    var table;
+    $('.datatable').each(function () {
+        if ($.fn.dataTable.isDataTable(this)) {
+            $(this).DataTable().destroy();
+        }
+
+        table = $(this).DataTable({
+            pageLength: $(this).data('page-length') || 10,
+            lengthMenu: [5, 10, 25, 50],
+            responsive: true,
+            dom: 't<"bottom d-flex align-items-center justify-content-between mt-3"ip>'
+        });
+    });
+
+    $('#farmerSearch').on('keyup', function() {
+        if (table) table.search(this.value).draw();
+    });
+
+    $('#statusFilter').on('change', function() {
+        var val = $(this).val();
+        if (table) {
+            if (val) {
+                table.column(4).search('^' + val + '$', true, false).draw();
+            } else {
+                table.column(4).search('').draw();
+            }
+        }
+    });
+
+    $('#regionFilter').on('change', function() {
+        var val = $(this).val();
+        if (table) table.column(0).search(val || '').draw();
+    });
+
+    $('.sort-filter').on('click', function (e) {
+        e.preventDefault();
+        var sortCol = $(this).data('sort');
+        $('#sortDropdownBtn span').html('<i class="ri-filter-3-line me-1"></i> ' + $(this).text());
+        if (table) {
+            if (sortCol === 'name') {
+                table.order([0, 'asc']).draw();
+            } else if (sortCol === 'status') {
+                table.order([4, 'asc']).draw();
+            }
+        }
+    });
+
+    // Reset Add Farmer Form on Modal Close
+    $('#add_farmer_modal').on('hidden.bs.modal', function () {
+        $(this).find('form')[0].reset();
+        $(this).find('.select2').val('').trigger('change');
+        $(this).find('select[name="status"]').val('Active');
+    });
+});
+
+let selectedRow = null;
+
+$(document).on('click', '.delete-btn', function () {
+    let farmerName = $(this).data('name');
+    $('#deleteFarmerName').text(farmerName);
+    selectedRow = $(this).closest('tr');
+});
+
+$('#confirmDeleteBtn').on('click', function () {
+    if (selectedRow) {
+        selectedRow.remove();
+    }
+    $('#delete_farmer_modal').modal('hide');
+});
+
+$('select[name="state"]').on('change', function() {
+    var stateId = $(this).val();
+    var districtSelect = $(this).closest('form').find('select[name="district"]');
+    districtSelect.empty().append('<option value="">Select District</option>');
+
+    if (stateId) {
+        $.ajax({
+            url: '{% url "ajax_get_cities" %}',
+            data: { 'state_id': stateId },
+            success: function(data) {
+                $.each(data, function(index, city) {
+                    districtSelect.append('<option value="' + city.id + '">' + city.name + '</option>');
+                });
+            }
+        });
+    }
+});
+</script>
+{% endblock page_js %}
+
+{% block content %}
+
+<!-- Page Header -->
+<div class="card mb-3 border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex justify-content-between align-items-center p-3 border-bottom">
+        <div>
+            <h4 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="ri-group-line text-primary"></i>
+                {% trans "Farmers" %}
+            </h4>
+        </div>
+        <a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#add_farmer_modal">
+            <i class="ri-add-line"></i> Add Farmer
+        </a>
+    </div>
+</div>
+
+<!-- Main Table Card -->
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+        <!-- Collapsible Search -->
+        <div class="d-flex align-items-center search-collapse-wrapper" id="search_collapse_wrapper">
+          <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="search_toggle_btn" onclick="toggleSearchBox()" style="width: 38px; height: 38px;">
+            <i class="ri-search-line"></i>
+          </button>
+          <div class="input-group search-input-group d-none" id="search_input_group">
+            <span class="input-group-text bg-white border-end-0">
+              <i class="ri-search-line text-muted"></i>
+            </span>
+            <input type="text"
+                id="farmerSearch"
+                class="form-control border-start-0"
+                placeholder="Search farmers, crops, or phones...">
+            <button class="btn btn-outline-secondary border-start-0" type="button" id="search_close_btn" onclick="closeSearchBox()">
+              <i class="ri-close-line"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Dropdowns -->
+        <select class="form-select form-select-sm w-auto" id="regionFilter">
+            <option value="">All Regions</option>
+            {% for dist in unique_districts %}
+            <option value="{{ dist }}">{{ dist }}</option>
+            {% endfor %}
+        </select>
+
+        <select class="form-select form-select-sm w-auto" id="statusFilter">
+            <option value="">All Statuses</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+        </select>
+
+        <!-- Sort dropdown (Right aligned) -->
+        <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+          <div class="dropdown" style="width: 180px;">
+            <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100 d-flex align-items-center justify-content-between" type="button" data-bs-toggle="dropdown" id="sortDropdownBtn">
+              <span><i class="ri-filter-3-line me-1"></i> Sort By</span>
+            </button>
+            <ul class="dropdown-menu w-100">
+              <li><a class="dropdown-item sort-filter" data-sort="name" href="#">Sort By Name</a></li>
+              <li><a class="dropdown-item sort-filter" data-sort="status" href="#">Sort By Status</a></li>
+            </ul>
+          </div>
+        </div>
+    </div>
+
+    <div class="table-responsive text-nowrap p-3">
+        <table class="table table-hover align-middle border-top datatable" data-page-length="10">
+                <thead class="table-gray-200 ">
+                    <tr class="fs-8 fw-medium">
+                        <th>Farmer Name</th>
+                        <th>Total Crops</th>
+                        <th>Usage Vs Land Limit</th>
+                        <th>Earning Amount</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="fs-7 fw-medium text-black">
+                    {% for farmer in farmers %}
+                    <tr>
+                        <td>
+                            <div class="d-flex flex-column">
+                                <label class="fw-semibold text-black">{{ farmer.user.first_name }}</label>
+                                <div class="d-flex align-items-center justify-content-start gap-2 fs-8">
+                                    <small class="text-dark fw-normal"><i class="ri-map-pin-line me-1"></i>{{ farmer.district.name|default:"N/A" }} </small>
+                                    <small class="bg-secondary badge badge-dot"></small>
+                                    <small>{{ farmer.mobile_number }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge bg-primary-subtle text-primary rounded-3 fs-8" {% if farmer.crop_list_str %}title="{{ farmer.crop_list_str }}"{% endif %}>
+                                {{ farmer.total_crops }} Crop{% if farmer.total_crops != 1 %}s{% endif %}
+                            </span>
+                            <span class="d-none">{{ farmer.crop_list_str }}</span>
+                        </td>
+                        <td>
+                            <label class="fs-8 fw-normal">
+
+                                <span class="{% if farmer.current_land_usage > farmer.package_land_limit %}text-danger{% else %}text-success{% endif %}">
+                                    {{ farmer.current_land_usage }}
+                                </span>  / <span class="text-success">{{ farmer.package_land_limit }} </span> Acres
+                            </label>
+                        </td>
+                        <td><span class="badge bg-success-subtle text-success rounded-3 fs-8">₹ {{ farmer.total_earning }}</span></td>
+                        <td>
+                            {% if farmer.status == 'Active' %}
+                            <span class="badge bg-label-success text-success rounded-3">Active</span>
+                            {% else %}
+                            <span class="badge bg-label-danger text-danger rounded-3">{{ farmer.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <button
+                                class="btn btn-sm btn-outline-primary view-profile-btn"
+                                data-bs-toggle="offcanvas"
+                                data-bs-target="#farmerProfileDrawer_{{ farmer.id }}"
+                                >
+                                <i class="ri-eye-line me-1"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#edit_farmer_modal_{{ farmer.id }}"><i class="ri-pencil-line"></i></button>
+                            <button class="btn btn-sm btn-outline-danger delete-btn"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#delete_farmer_modal_{{ farmer.id }}">
+                                <i class="ri-delete-bin-7-line"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+<!-- Add Farmer Modal -->
+<div class="modal fade" id="add_farmer_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <form method="POST" action="{% url 'manage_farmer' %}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create">
+      <!-- Header -->
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Register New Farmer</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body">
+        <div class="row g-3">
+          <!-- Full Name -->
+          <div class="col-12">
+            <label class="form-label">Full Name</label>
+            <input type="text" name="full_name" class="form-control" placeholder="Ramakrishnan" required>
+          </div>
+
+          <!-- Phone -->
+          <div class="col-md-6">
+            <label class="form-label">Phone Number</label>
+            <input type="text" name="phone" class="form-control" placeholder="+91 9876543210" required>
+          </div>
+
+          <!-- Mail Id -->
+          <div class="col-md-6">
+            <label class="form-label">Mail Id</label>
+            <input type="email" name="email" class="form-control" placeholder="mail@agriot.com">
+          </div>
+
+          <!-- State -->
+          <div class="col-md-6">
+            <label class="form-label">State</label>
+            <select class="form-select select2" name="state" id="add_farmer_state">
+              <option value="">Select State</option>
+              {% for state in states %}
+              <option value="{{ state.id }}">{{ state.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- District -->
+          <div class="col-md-6">
+            <label class="form-label">District</label>
+            <select class="form-select select2" name="district" id="add_farmer_district">
+              <option value="">Select District</option>
+            </select>
+          </div>
+
+          <!-- Pincode -->
+          <div class="col-md-6">
+            <label class="form-label">Pincode</label>
+            <input type="text" name="pincode" class="form-control" placeholder="Enter Pincode">
+          </div>
+
+          <!-- Status -->
+          <div class="col-md-6">
+            <label class="form-label">State Registry Status</label>
+            <select class="form-select" name="status">
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="ri-check-line me-1"></i> Save Farmer</button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<!-- Update Farmer Modal -->
+{% for farmer in farmers %}
+<div class="modal fade" id="edit_farmer_modal_{{ farmer.id }}" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <form method="POST" action="{% url 'manage_farmer' %}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="update">
+      <input type="hidden" name="farmer_id" value="{{ farmer.id }}">
+      <!-- Header -->
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Update Farmer</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body">
+        <div class="row g-3">
+          <!-- Full Name -->
+          <div class="col-12">
+            <label class="form-label">Full Name</label>
+            <input type="text" name="full_name" class="form-control" value="{{ farmer.user.first_name }}" required>
+          </div>
+
+          <!-- Phone -->
+          <div class="col-md-6">
+            <label class="form-label">Phone Number</label>
+            <input type="text" name="phone" class="form-control" value="{{ farmer.mobile_number }}" required>
+          </div>
+
+          <!-- Mail Id -->
+          <div class="col-md-6">
+            <label class="form-label">Mail Id</label>
+            <input type="email" name="email" class="form-control" value="{{ farmer.user.email }}">
+          </div>
+
+          <!-- State -->
+          <div class="col-md-6">
+            <label class="form-label">State</label>
+            <select class="form-select select2" name="state" id="update_farmer_state_{{ farmer.id }}">
+              <option value="">Select State</option>
+              {% for state in states %}
+              <option value="{{ state.id }}" {% if farmer.state_id == state.id %}selected{% endif %}>{{ state.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- District -->
+          <div class="col-md-6">
+            <label class="form-label">District</label>
+            <select class="form-select select2" name="district" id="update_farmer_district_{{ farmer.id }}">
+              <option value="">Select District</option>
+              {% for city in farmer.state.cities.all %}
+              <option value="{{ city.id }}" {% if farmer.district_id == city.id %}selected{% endif %}>{{ city.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Pincode -->
+          <div class="col-md-6">
+            <label class="form-label">Pincode</label>
+            <input type="text" name="pincode" class="form-control" value="{{ farmer.pincode|default:'' }}">
+          </div>
+
+          <!-- Status -->
+          <div class="col-md-6">
+            <label class="form-label">State Registry Status</label>
+            <select class="form-select" name="status">
+              <option value="Active" {% if farmer.status == 'Active' %}selected{% endif %}>Active</option>
+              <option value="Inactive" {% if farmer.status == 'Inactive' %}selected{% endif %}>Inactive</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="ri-check-line me-1"></i> Update Farmer</button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Delete Farmer Modal -->
+{% for farmer in farmers %}
+<div class="modal fade" id="delete_farmer_modal_{{ farmer.id }}" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <form method="POST" action="{% url 'manage_farmer' %}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="delete">
+      <input type="hidden" name="farmer_id" value="{{ farmer.id }}">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger">Confirm Delete</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body text-center">
+        <p class="mb-0">
+          Are you sure you want to delete
+          <strong>{{ farmer.user.first_name }}</strong>?
+        </p>
+      </div>
+
+      <div class="modal-footer justify-content-center">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger">Yes, Delete</button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Farmer Profile Drawer -->
+{% for farmer in farmers %}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="farmerProfileDrawer_{{ farmer.id }}" style="width: 700px;">
+  <div class="offcanvas-header border-bottom">
+    <h5 class="offcanvas-title fw-semibold">Farmer Profile</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body">
+    <div class="d-flex align-items-center gap-3 mb-3">
+      <div class="avatar bg-primary text-white rounded-circle d-flex align-items-center justify-content-center"
+           style="width:50px;height:50px;font-weight:600;" id="profileInitials_{{ farmer.id }}">
+        {{ farmer.user.first_name|make_list|first|upper }}
+      </div>
+      <div>
+        <div class="d-flex align-items-center justify-content-start gap-2">
+            <h5 class="mb-0" id="profileName_{{ farmer.id }}">{{ farmer.user.first_name }} {{ farmer.user.last_name|default:"" }}</h5>
+            {% if farmer.status == 'Active' %}
+            <span class="badge bg-label-success text-success rounded-3">Active</span>
+            {% else %}
+            <span class="badge bg-label-danger text-danger rounded-3">{{ farmer.status }}</span>
+            {% endif %}
+        </div>
+        <div class="d-flex align-items-center justify-content-start gap-2">
+            <small class="text-muted">
+                <i class="ri-phone-line me-1"></i>
+                <span id="profilePhone_{{ farmer.id }}">{{ farmer.mobile_number }}</span>
+            </small>
+            <small>|</small>
+            <small class="text-muted">
+                <i class="ri-map-pin-line me-1"></i>
+                <span id="profileRegion_{{ farmer.id }}">{{ farmer.district.name|default:"N/A" }}</span>
+            </small>
+        </div>
+        <small class="text-muted">
+            <i class="ri-calendar-line me-1"></i>
+            <span id="profileDate_{{ farmer.id }}">{{ farmer.created_at|date:"d-M-Y"|default:farmer.user.date_joined|date:"d-M-Y" }}</span>
+        </small>
+      </div>
+    </div>
+    <hr>
+    <div class="d-flex align-items-center justify-content-between gap-3">
+        <div class="d-flex flex-column align-items-center gap-1">
+            <label class="text-muted small">Land Holdings</label>
+            <label class="fw-semibold fs-5" id="profileLand_{{ farmer.id }}">
+                <span class="text-success">{{ farmer.package_land_limit }}</span> /
+                <span class="{% if farmer.current_land_usage > farmer.package_land_limit %}text-danger{% else %}text-success{% endif %}">
+                    {{ farmer.current_land_usage }}
+                </span> Acres
+            </label>
+        </div>
+        <div class="vr mx-3"></div>
+        <div class="d-flex flex-column align-items-center gap-1">
+            <label class="text-muted small">Total Crops</label>
+            <span class="badge bg-primary-subtle text-primary rounded-3 fs-6" {% if farmer.crop_list_str %}title="{{ farmer.crop_list_str }}"{% endif %}>{{ farmer.total_crops }} Crop{% if farmer.total_crops != 1 %}s{% endif %}</span>
+        </div>
+        <div class="vr mx-3"></div>
+        <div class="d-flex flex-column align-items-center gap-1">
+            <label class="text-muted small">Total Earnings</label>
+            <label class="fw-semibold fs-5 text-success" id="profileEarning_{{ farmer.id }}">₹ {{ farmer.total_earning }}</label>
+        </div>
+    </div>
+    <hr>
+    <!-- Tabs -->
+    <ul class="nav nav-tabs custom-tabs border-bottom mb-3" id="farmerTabs_{{ farmer.id }}" role="tablist" style="overflow-x:auto; flex-wrap: nowrap; white-space: nowrap; padding-bottom: 5px;">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#farms_{{ farmer.id }}">
+                <i class="ri-plant-line me-1"></i> Farms & Fields
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#financials_{{ farmer.id }}">
+                <i class="ri-money-dollar-circle-line me-1"></i> Financials
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#consumption_{{ farmer.id }}">
+            <i class="ri-drop-line me-1"></i> Consumption
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#staff_{{ farmer.id }}">
+            <i class="ri-team-line me-1"></i> Staff & Team
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#bills_{{ farmer.id }}">
+            <i class="ri-file-list-line me-1"></i> Bills Due
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#subscription_{{ farmer.id }}">
+            <i class="ri-bank-card-line me-1"></i> Subscription
+            </button>
+        </li>
+    </ul>
+    <div class="tab-content p-2">
+        <div class="tab-pane fade show active" id="farms_{{ farmer.id }}">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h6 class="fw-semibold mb-0">Fields & Crops Inventory</h6>
+                    <small class="text-muted">Scanned fields cultivating {{ farmer.primary_crop|default:"crops" }}.</small>
+                </div>
+                <span class="badge bg-light text-dark border">{{ farmer.farms.count }} Registered</span>
+            </div>
+
+            {% for farm in farmer.farms.all %}
+            <div class="card border rounded-3 mb-3" style="box-shadow: none;">
+                <div class="card-body">
+                    <div class="d-flex flex-column">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="badge bg-light text-dark mb-1 fs-8">FLD-{{ forloop.counter }}</span>
+                            {% if farm.health_indicator == 'Excellent' %}
+                            <span class="badge bg-success-subtle text-success fw-medium fs-8">EXCELLENT</span>
+                            {% elif farm.health_indicator == 'Good' %}
+                            <span class="badge bg-primary-subtle text-primary fw-medium fs-8">GOOD</span>
+                            {% else %}
+                            <span class="badge bg-warning-subtle text-warning fw-medium fs-8">{{ farm.health_indicator|upper|default:"NEEDS ATTENTION" }}</span>
+                            {% endif %}
+                        </div>
+                        <h6 class="fw-semibold mb-1">{{ farm.land_name }}</h6>
+                        <div class="d-flex align-items-center justify-content-start gap-2">
+                            <div class="d-flex align-items-center justify-content-start gap-2">
+                                <small class="text-muted">
+                                    Crop:
+                                </small>
+                                <span class="text-success">{{ farm.crop_type.name|default:"Unknown" }}</span>
+                            </div>
+                            <span class="badge badge-dot rounded-pill bg-secondary p-0 w-1"></span>
+                            <div class="d-flex align-items-center justify-content-start gap-2">
+                                <small class="text-muted">
+                                   Land Size:
+                                </small>
+                                <span class="text-dark">{{ farm.total_area|default:"0 Acres" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rounded-3 p-3 mt-3 d-flex justify-content-between text-center" style="background-color: #f0f0f0;">
+                        <div class="d-flex flex-column">
+                            <small class="text-muted">Soil pH</small>
+                            <label class="fw-semibold">{{ farm.soil_ph|default:"6.5" }}</label>
+                        </div>
+                        <div class="d-flex flex-column">
+                            <small class="text-muted">Nitrogen</small>
+                            <div class="text-primary fw-semibold">Optimal</div>
+                        </div>
+                        <div class="d-flex flex-column">
+                            <small class="text-muted">Last Watered</small>
+                            <div class="fw-semibold">1h ago</div>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <small class="text-muted">
+                            <span class="badge bg-secondary rounded-circle me-1" style="width:6px;height:6px;"></span>
+                            Irrigation Valve Closed
+                        </small>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center py-4">
+                <i class="ri-plant-line fs-1 text-muted"></i>
+                <p class="text-muted mt-2">No fields registered yet.</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- OTHER TABS -->
+        <div class="tab-pane fade" id="financials_{{ farmer.id }}">
+            <h6 class="fw-semibold mb-3">Recent Transactions</h6>
+            {% for txn in farmer.ledger_transactions.all|slice:":5" %}
+            <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+                <div>
+                    <span class="d-block fw-semibold" style="font-size:13px;">{{ txn.description }}</span>
+                    <small class="text-muted">{{ txn.close_date|date:"d M Y" }}</small>
+                </div>
+                <div class="text-end">
+                    <span class="d-block {% if txn.amount < 0 %}text-danger{% else %}text-success{% endif %} fw-semibold">₹{{ txn.amount }}</span>
+                    <span class="badge bg-light text-dark" style="font-size:10px;">{{ txn.status }}</span>
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-muted small">No recent financial data available.</p>
+            {% endfor %}
+        </div>
+
+        <div class="tab-pane fade" id="consumption_{{ farmer.id }}">
+            <h6 class="fw-semibold mb-3">Inventory & Consumption</h6>
+            {% for item in farmer.inventories.all %}
+            <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+                <div>
+                    <span class="d-block fw-semibold" style="font-size:13px;">{{ item.item_name }}</span>
+                    <small class="text-muted">Category: {{ item.category }}</small>
+                </div>
+                <div class="text-end">
+                    <span class="fw-bold">{{ item.quantity }} {{ item.unit }}</span>
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-muted small">No inventory recorded.</p>
+            {% endfor %}
+        </div>
+
+        <div class="tab-pane fade" id="staff_{{ farmer.id }}">
+            <h6 class="fw-semibold mb-3">Staff Directory</h6>
+            {% for staff in farmer.staffs.all %}
+            <div class="d-flex align-items-center gap-3 border-bottom pb-2 mb-2">
+                <div class="avatar bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center" style="width:35px;height:35px;">
+                    {{ staff.name|make_list|first|upper }}
+                </div>
+                <div>
+                    <span class="d-block fw-semibold" style="font-size:13px;">{{ staff.name }}</span>
+                    <small class="text-muted">{{ staff.role }} | {{ staff.mobile_number }}</small>
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-muted small">No staff assigned.</p>
+            {% endfor %}
+        </div>
+
+        <div class="tab-pane fade" id="bills_{{ farmer.id }}">
+            <h6 class="fw-semibold mb-3">Outstanding Bills</h6>
+            {% for bill in farmer.outstandings.all %}
+            <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+                <div>
+                    <span class="d-block fw-semibold" style="font-size:13px;">{{ bill.invoice_no }}</span>
+                    <small class="text-muted">Due: {{ bill.due_date|date:"d M Y" }}</small>
+                </div>
+                <div class="text-end">
+                    <span class="d-block text-danger fw-semibold">₹{{ bill.amount_total }}</span>
+                    <span class="badge bg-warning-subtle text-warning" style="font-size:10px;">{{ bill.status }}</span>
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-muted small">No outstanding bills.</p>
+            {% endfor %}
+        </div>
+
+        <div class="tab-pane fade" id="subscription_{{ farmer.id }}">
+            <h6 class="fw-semibold mb-3">Subscription History</h6>
+            {% for sub in farmer.subscriptions.all %}
+            <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+                <div>
+                    <span class="d-block fw-semibold" style="font-size:13px;">{{ sub.package.name|default:"Custom Package" }}</span>
+                    <small class="text-muted">
+                        {{ sub.start_date|date:"d M Y" }} to {{ sub.end_date|date:"d M Y" }}
+                    </small>
+                </div>
+                <div class="text-end">
+                    <span class="d-block fw-semibold text-primary">₹{{ sub.monthly_amount }}</span>
+                    {% if sub.subscription_status == 'active' %}
+                    <span class="badge bg-success-subtle text-success" style="font-size:10px;">Active</span>
+                    {% else %}
+                    <span class="badge bg-secondary-subtle text-secondary" style="font-size:10px;">{{ sub.subscription_status|title }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-muted small">No active subscriptions found.</p>
+            {% endfor %}
+        </div>
+
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+
+
+{% endblock %}

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shared Document - {{ document.title }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css">
+    <style>
+        body {
+            background-color: #f4f6f9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .share-card {
+            max-width: 650px;
+            margin: 60px auto;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+            border: none;
+            overflow: hidden;
+        }
+        .share-header {
+            background: linear-gradient(135deg, #2e7d32, #4caf50);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .file-icon {
+            font-size: 3.5rem;
+            color: #2e7d32;
+        }
+        .preview-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .preview-img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card share-card">
+        <div class="share-header">
+            <i class="ri-file-shield-2-line display-4 mb-2"></i>
+            <h3 class="fw-bold mb-1">Shared Document</h3>
+            <p class="mb-0 text-white-50">AgriOT Secure Document Hub</p>
+        </div>
+        <div class="card-body p-4 text-center">
+            {% if error %}
+                <div class="alert alert-danger my-4">
+                    <i class="ri-error-warning-line me-2"></i>{{ error }}
+                </div>
+            {% else %}
+                <div class="mb-3">
+                    {% if '.pdf' in document.file.name|lower %}
+                        <i class="ri-file-pdf-2-line file-icon text-danger"></i>
+                    {% elif '.jpg' in document.file.name|lower or '.png' in document.file.name|lower or '.jpeg' in document.file.name|lower or '.webp' in document.file.name|lower %}
+                        <i class="ri-file-image-line file-icon text-primary"></i>
+                    {% elif '.doc' in document.file.name|lower or '.docx' in document.file.name|lower %}
+                        <i class="ri-file-word-2-line file-icon text-info"></i>
+                    {% elif '.xls' in document.file.name|lower or '.xlsx' in document.file.name|lower %}
+                        <i class="ri-file-excel-2-line file-icon text-success"></i>
+                    {% else %}
+                        <i class="ri-file-text-line file-icon text-secondary"></i>
+                    {% endif %}
+                </div>
+
+                <h4 class="fw-bold text-dark mb-1">{{ document.title }}</h4>
+                <div class="mb-3">
+                    <span class="badge bg-success-subtle text-success fs-7 px-3 py-2 rounded-pill mb-2">
+                        <i class="ri-folder-line me-1"></i>{{ document.category }}
+                    </span>
+                </div>
+
+                {% if document.description %}
+                <p class="text-muted fs-6 mb-4">{{ document.description }}</p>
+                {% endif %}
+
+                <div class="row g-2 justify-content-center text-muted mb-4 fs-7">
+                    <div class="col-auto">
+                        <i class="ri-hard-drive-line me-1"></i>
+                        {% if document.file_size_bytes %}
+                            {{ document.file_size_bytes|filesizeformat }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                    <div class="col-auto">•</div>
+                    <div class="col-auto">
+                        <i class="ri-calendar-event-line me-1"></i>Uploaded: {{ document.created_at|date:"M d, Y" }}
+                    </div>
+                </div>
+
+                <!-- Preview if image -->
+                {% if '.jpg' in document.file.name|lower or '.png' in document.file.name|lower or '.jpeg' in document.file.name|lower or '.webp' in document.file.name|lower %}
+                <div class="preview-container p-2 mb-4">
+                    <img src="{{ document.file.url }}" alt="{{ document.title }}" class="preview-img">
+                </div>
+                {% endif %}
+
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="{{ document.file.url }}" download class="btn btn-success px-4 py-2 fw-semibold">
+                        <i class="ri-download-2-line me-1"></i> Download File
+                    </a>
+                    <button type="button" class="btn btn-outline-secondary px-4 py-2" onclick="copyCurrentUrl()">
+                        <i class="ri-share-forward-line me-1"></i> Copy Share Link
+                    </button>
+                </div>
+                <div id="copyToast" class="text-success fs-7 mt-2" style="display:none;">
+                    <i class="ri-checkbox-circle-line me-1"></i> Link copied to clipboard!
+                </div>
+            {% endif %}
+        </div>
+        <div class="card-footer bg-light text-center text-muted fs-8 py-3">
+            © 2026 AgriOT Document Hub. All rights reserved.
+        </div>
+    </div>
+</div>
+
+<script>
+function copyCurrentUrl() {
+    navigator.clipboard.writeText(window.location.href).then(function() {
+        var toast = document.getElementById('copyToast');
+        toast.style.display = 'block';
+        setTimeout(function() {
+            toast.style.display = 'none';
+        }, 3000);
+    });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,269 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Designation Settings{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+$(document).ready(function () {
+    $('.datatable').each(function () {
+        if ($.fn.dataTable.isDataTable(this)) { $(this).DataTable().destroy(); }
+        let table = $(this).DataTable({
+            pageLength: 10,
+            lengthMenu: [5, 10, 25, 50],
+            responsive: true,
+            language: {
+                emptyTable: '<div class="text-center text-muted py-4"><i class="ri-scales-line d-block mb-2" style="font-size:2.5rem;opacity:0.35"></i>No Designations found. Add your first one!</div>'
+            },
+            dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'>>"
+               + "<'row'<'col-sm-12'tr>>"
+               + "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end'p>>"
+        });
+        $('.custom-search').on('keyup', function () { table.search(this.value).draw(); });
+    });
+
+    $(document).on('click', '.edit-btn', function () {
+        $('#edit_id').val($(this).data('id'));
+        $('#edit_name').val($(this).data('name'));
+        $('#edit_description').val($(this).data('desc'));
+        var isActive = $(this).data('active') == 'True' || $(this).data('active') === true;
+        $('#edit_is_active').prop('checked', isActive);
+    });
+
+    $(document).on('click', '.delete-btn', function () {
+        $('#delete_id').val($(this).data('id'));
+        $('#deleteItemName').text($(this).data('name'));
+    });
+});
+</script>
+{% endblock page_js %}
+
+{% block content %}
+
+<div class="card mb-2">
+    <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+            <h4 class="mb-1">
+                <i class="ri-scales-line me-2 text-success"></i>
+                Designation
+            </h4>
+            <p class="text-muted small mb-0">Manage employee designations.</p>
+        </div>
+        <a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#add_designation_modal">
+            <i class="ri-add-line"></i> Add Designation
+        </a>
+    </div>
+</div>
+
+{% if messages %}
+<script>
+    $(document).ready(function() {
+        {% for msg in messages %}
+            var tag = "{{ msg.tags }}";
+            var type = "success";
+            if (tag.includes("error") || tag.includes("danger")) {
+                type = "error";
+            } else if (tag.includes("warning")) {
+                type = "warning";
+            } else if (tag.includes("info")) {
+                type = "info";
+            }
+            window.showAppToast("{{ msg }}", type, 3000);
+        {% endfor %}
+    });
+</script>
+{% endif %}
+
+<div class="card mb-2">
+    <div class="card-body d-flex gap-2 flex-wrap p-2">
+        <div class="input-group w-75">
+            <span class="input-group-text bg-white"><i class="ri-search-line"></i></span>
+            <input type="text" class="form-control custom-search" placeholder="Search by Designation...">
+        </div>
+    </div>
+</div>
+
+<div class="card p-2">
+    <div class="card-body py-0 px-0">
+        <table class="table align-middle datatable" data-page-length="10">
+            <thead class="table-light">
+                <tr class="fs-8 fw-medium">
+                    <th>#</th>
+                    <th>Designation Name</th>
+                    <th>Description</th>
+                    <th>Status</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for eu in designations %}
+                <tr>
+                    <td class="text-muted small">{{ forloop.counter }}</td>
+                    <td>
+                        <span class="fw-semibold">
+                            <i class="ri-scales-line me-1 text-success"></i>{{ eu.name }}
+                        </span>
+                    </td>
+                    <td><span class="text-muted">{{ eu.description|default:"—" }}</span></td>
+                    <td>
+                        <form method="POST" action="{% url 'designation_settings' %}" style="display:inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="edit">
+                            <input type="hidden" name="id" value="{{ eu.id }}">
+                            <input type="hidden" name="name" value="{{ eu.name }}">
+                            <input type="hidden" name="description" value="{{ eu.description|default_if_none:'' }}">
+                            <label class="switch switch-square">
+                                <input type="checkbox" class="switch-input" name="is_active"
+                                    {% if eu.is_active %}checked{% endif %} onchange="this.form.submit()" />
+                                <span class="switch-toggle-slider">
+                                    <span class="switch-on"><i class="icon-base ri ri-check-line"></i></span>
+                                    <span class="switch-off"><i class="icon-base ri ri-close-line"></i></span>
+                                </span>
+                            </label>
+                        </form>
+                    </td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-secondary edit-btn"
+                                data-id="{{ eu.id }}"
+                                data-name="{{ eu.name }}"
+                                data-desc="{{ eu.description|default_if_none:'' }}"
+                                data-active="{{ eu.is_active }}"
+                                data-bs-toggle="modal" data-bs-target="#edit_designation_modal">
+                            <i class="ri-pencil-line"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-btn"
+                                data-id="{{ eu.id }}"
+                                data-name="{{ eu.name }}"
+                                data-bs-toggle="modal" data-bs-target="#delete_designation_modal">
+                            <i class="ri-delete-bin-7-line"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Modal -->
+<div class="modal fade" id="add_designation_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <form method="POST" action="{% url 'designation_settings' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add">
+        <div class="modal-header">
+          <h5 class="modal-title fw-semibold"><i class="ri-scales-line me-2 text-success"></i>Add Designation</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-12">
+              <label class="form-label fw-semibold">Designation Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" placeholder="e.g. Manager, Supervisor" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Description</label>
+              <textarea name="description" class="form-control" rows="2" placeholder="Optional description..."></textarea>
+            </div>
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="is_active" id="add_eu_is_active" checked>
+                <label class="form-check-label" for="add_eu_is_active">Active</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer d-flex justify-content-between">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="ri-check-line me-1"></i>Add Designation</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="edit_designation_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <form method="POST" action="{% url 'designation_settings' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="edit">
+        <input type="hidden" name="id" id="edit_id">
+        <div class="modal-header">
+          <h5 class="modal-title fw-semibold"><i class="ri-pencil-line me-2 text-primary"></i>Edit Designation</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-12">
+              <label class="form-label fw-semibold">Designation Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" id="edit_name" class="form-control" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Description</label>
+              <textarea name="description" id="edit_description" class="form-control" rows="2"></textarea>
+            </div>
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="is_active" id="edit_is_active">
+                <label class="form-check-label" for="edit_is_active">Active</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer d-flex justify-content-between">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="ri-check-line me-1"></i>Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="delete_designation_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <form method="POST" action="{% url 'designation_settings' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="id" id="delete_id">
+        <div class="modal-header border-0">
+          <h5 class="modal-title text-danger fw-bold"><i class="ri-error-warning-line me-2"></i>Confirm Delete</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center py-3">
+          <p class="mb-1">Delete Designation:</p>
+          <strong id="deleteItemName" class="text-danger"></strong>
+          <p class="text-muted small mt-2 mb-0">This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer justify-content-center border-0">
+          <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger px-4"><i class="ri-delete-bin-7-line me-1"></i>Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock content %}

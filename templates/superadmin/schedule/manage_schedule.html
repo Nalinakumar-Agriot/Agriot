@@ -1,0 +1,1203 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+
+{% block title %}Schedule & Guidelines Management{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<style>
+.bg-gray-100 { background-color: #F8FAFC; }
+.hover-shadow-sm:hover { box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s ease; cursor: pointer; }
+
+/* tab buttons */
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link {
+  background-color: #F69C55 !important;
+  color: #fff !important;
+  border-radius: 8px;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(246, 156, 85, 0.25);
+}
+.nav-pills .nav-link {
+  border-radius: 8px;
+  font-weight: 500;
+  color: #566a7f !important;
+  padding: 0.5rem 1.25rem;
+  transition: all 0.2s ease;
+  background: transparent;
+}
+.nav-pills .nav-link:hover:not(.active) {
+  background-color: #f5f5f9;
+  color: #F69C55 !important;
+}
+
+/* Collapsible search */
+.search-collapse-wrapper {
+  position: relative;
+}
+.search-input-group {
+  width: 0;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.25s ease, opacity 0.2s ease;
+  white-space: nowrap;
+}
+.search-input-group.expanded {
+  max-width: 420px;
+  width: 420px;
+  opacity: 1;
+  margin-left: 8px;
+}
+@media (max-width: 576px) {
+  .search-input-group.expanded {
+    max-width: 220px;
+    width: 220px;
+  }
+}
+.clamp-3 {
+  font-size: 0.75rem;
+  line-height: 1.625;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.quick-item-row {
+  transition: all 0.15s ease-in-out;
+  border: 1px solid #e9ecef;
+  background: #ffffff;
+}
+.quick-item-row:hover {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.04);
+}
+.delete-item-btn {
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+.delete-item-btn:hover {
+  color: #ef4444 !important;
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+}
+
+/* Stacked modals & Quick Add z-index */
+.modal[id^="quick_add_"] {
+  z-index: 10700 !important;
+}
+.modal[id^="quick_add_"] .modal-dialog {
+  z-index: 10701 !important;
+}
+</style>
+{% endblock page_css %}
+
+{% block content %}
+
+<!-- Tabs Header -->
+<div class="mb-4 d-flex justify-content-start">
+    <ul class="nav nav-pills gap-2 flex-wrap" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active d-flex align-items-center gap-2"
+                    data-bs-toggle="tab"
+                    data-bs-target="#scheduleTab"
+                    type="button"
+                    role="tab">
+                <i class="ri-calendar-event-line fs-5"></i> Schedule
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link d-flex align-items-center gap-2"
+                    data-bs-toggle="tab"
+                    data-bs-target="#guidelinesTab"
+                    type="button"
+                    role="tab">
+                <i class="ri-file-list-3-line fs-5"></i> Guidelines
+            </button>
+        </li>
+    </ul>
+</div>
+
+<div class="tab-content text-muted p-0 border-0 bg-transparent">
+    <!-- ========================================== -->
+    <!-- TAB 1: SCHEDULE -->
+    <!-- ========================================== -->
+    <div class="tab-pane fade show active" id="scheduleTab" role="tabpanel">
+
+        <!-- ── Page Header ── -->
+        <div class="card mb-3 border-0 shadow-sm rounded-4">
+          <div class="card-body d-flex justify-content-between align-items-center p-3 border-bottom">
+              <div>
+                  <h4 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                    <i class="ri-calendar-2-line text-primary"></i>
+                    {% trans "Scheduler" %}
+                  </h4>
+              </div>
+              <button class="btn btn-primary d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#add_blueprint_modal">
+                 <i class="ri-add-line"></i> Add Scheduler
+              </button>
+          </div>
+        </div>
+
+        <div class="card mb-2">
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-12">
+                <div class="row g-3">
+                  <div class="col-lg-4">
+                    <div class="bg-white p-3 rounded-4 border h-100">
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small text-muted fw-bold text-uppercase">Crop Schedulers</span>
+                        <span class="badge bg-gray-100 text-dark border">{{ blueprints|length }} Total</span>
+                      </div>
+                      <div style="max-height:500px; overflow-y:auto;">
+                        {% for bp in blueprints %}
+                        <a href="?blueprint_id={{ bp.id }}#scheduleTab" class="text-decoration-none">
+                        <div class="p-3 mb-2 border rounded-3 d-flex justify-content-between align-items-center {% if selected_blueprint.id == bp.id %}bg-primary bg-opacity-10 border-primary{% else %}hover-shadow-sm bg-gray-100{% endif %}">
+                          <div>
+                            <div class="fw-bold {% if selected_blueprint.id == bp.id %}text-primary{% else %}text-dark{% endif %}">{{ bp.crop_name }}</div>
+                            <small class="text-muted">{{ bp.cultivation_season }} • ~{{ bp.yield_cycle_days }} days</small>
+                          </div>
+                          <span class="badge {% if selected_blueprint.id == bp.id %}bg-primary-subtle text-primary{% else %}bg-gray-100 text-dark border{% endif %}">{{ bp.stages.count }} steps</span>
+                        </div>
+                        </a>
+                        {% endfor %}
+                      </div>
+                      <button class="btn btn-outline-primary w-100 mt-3" data-bs-toggle="modal" data-bs-target="#add_blueprint_modal">
+                         <i class="ri-add-line"></i> Add Scheduler
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="col-lg-8">
+                    {% if selected_blueprint %}
+                    <div class="bg-white rounded-4 border h-100">
+                      <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                        <div>
+                          <h6 class="fw-bold mb-0">Scheduler: {{ selected_blueprint.crop_name }}</h6>
+                          <div class="d-flex justify-content-start gap-2 align-items-center mt-1">
+                            <small class="badge bg-primary-subtle text-primary rounded-md" style="font-size: 11px;">{{ selected_blueprint.cultivation_season }} Crop</small>
+                            <small class="badge bg-light badge-dot rounded-md" style="font-size: 11px;"></small>
+                            <small class="text-muted">{{ selected_blueprint.yield_cycle_days }} Days lifecycle</small>
+                          </div>
+                        </div>
+                        <div>
+                           <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#delete_blueprint_modal" data-id="{{ selected_blueprint.id }}">
+                              <i class="ri-delete-bin-line"></i> Delete Scheduler
+                           </button>
+                        </div>
+                      </div>
+                      <div class="p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                           <span class="text-muted fw-bold small text-uppercase">Steps</span>
+                           <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#add_stage_modal" data-bpid="{{ selected_blueprint.id }}">
+                              <i class="ri-add-line"></i> Add Step
+                           </button>
+                        </div>
+                        <div class="border-start ps-3" style="max-height: 400px; overflow-y: auto;">
+                          {% for stage in stages %}
+                          <div class="mb-3 rounded bg-gray-100 p-2 border position-relative">
+                            <div class="d-flex align-items-center justify-content-between gap-5">
+                              <div class="d-flex align-items-center justify-content-start gap-1">
+                                <span class="badge bg-primary-subtle text-primary border" style="font-size:11px;">Day {{ stage.day_offset }}</span>
+                                <div class="fw-semibold mt-1">{{ stage.milestone_title }}</div>
+                                <span class="badge bg-info-subtle text-info border" style="font-size:11px;">{{ stage.activity_type }}</span>
+                                <span class="badge {% if stage.priority_level == 'High' %}bg-danger-subtle text-danger border-danger{% elif stage.priority_level == 'Medium' %}bg-warning-subtle text-warning border-warning{% else %}bg-success-subtle text-success border-success{% endif %} border" style="font-size:11px;">{{ stage.priority_level }}</span>
+                              </div>
+                              <div class="d-flex gap-2">
+                                 <button class="btn btn-sm btn-light border edit-stage-btn" 
+                                    data-bs-toggle="modal" data-bs-target="#edit_stage_modal"
+                                    data-id="{{ stage.id }}"
+                                    data-title="{{ stage.milestone_title }}"
+                                    data-type="{{ stage.activity_type }}"
+                                    data-offset="{{ stage.day_offset }}"
+                                    data-priority="{{ stage.priority_level }}">
+                                    <i class="ri-edit-line text-primary"></i>
+                                 </button>
+                                 <button class="btn btn-sm btn-light border text-danger" 
+                                    data-bs-toggle="modal" data-bs-target="#delete_stage_modal" 
+                                    data-id="{{ stage.id }}" 
+                                    data-bpid="{{ selected_blueprint.id }}">
+                                    <i class="ri-delete-bin-line"></i>
+                                 </button>
+                              </div>
+                            </div>
+                            <small class="text-muted">Planting Date + {{ stage.day_offset }} days</small>
+                          </div>
+                          {% empty %}
+                          <div class="text-center text-muted p-3">No steps added to this scheduler yet.</div>
+                          {% endfor %}
+                        </div>
+                      </div>
+                    </div>
+                    {% else %}
+                    <div class="bg-white rounded-4 border h-100 d-flex justify-content-center align-items-center text-muted p-5">
+                        <p>Select or create a scheduler to view details.</p>
+                    </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: GUIDELINES -->
+    <!-- ========================================== -->
+    <div class="tab-pane fade" id="guidelinesTab" role="tabpanel">
+
+        <!-- Header Card -->
+        <div class="card mb-3 border-0 shadow-sm rounded-4">
+            <div class="card-body d-flex justify-content-between align-items-center p-3 border-bottom">
+                <div>
+                    <h4 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                    <i class="ri-book-open-line text-primary"></i>
+                       {% trans "Guidelines & Manuals Management" %}
+                    </h4>
+                </div>
+                <div class="d-flex align-items-center justify-content-end gap-2">
+                  <button class="btn btn-primary d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#add_manual_guide">
+                    <i class="ri-add-line"></i> Add Manual
+                  </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Toolbar Card -->
+        <div class="card border-0 shadow-sm rounded-4 mb-3">
+            <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+                <!-- Collapsible Search -->
+                <div class="d-flex align-items-center search-collapse-wrapper" id="guide_search_collapse_wrapper">
+                  <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="guide_search_toggle_btn" onclick="toggleGuideSearchBox()" style="width: 38px; height: 38px;">
+                    <i class="ri-search-line"></i>
+                  </button>
+                  <div class="input-group search-input-group d-none" id="guide_search_input_group">
+                    <span class="input-group-text bg-white border-end-0">
+                      <i class="ri-search-line text-muted"></i>
+                    </span>
+                    <input type="text"
+                        id="guideSearchInput"
+                        class="form-control border-start-0"
+                        placeholder="Search by title, tags, or content...">
+                    <button class="btn btn-outline-secondary border-start-0" type="button" id="guide_search_close_btn" onclick="closeGuideSearchBox()">
+                      <i class="ri-close-line"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <select id="categoryFilter" class="form-select form-select-sm w-auto">
+                    <option value="">All Categories</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.name }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <!-- Guidelines Cards Grid -->
+        <div class="row g-3" id="guidelinesList">
+            {% for g in guidelines %}
+            <div class="col-lg-6 guideline-item" data-category="{{ g.farming_section.name|default:'Uncategorized' }}" data-search="{{ g.title|lower }} {{ g.search_tags|lower }} {{ g.detailed_content|lower }}">
+                <div class="card" style="border: 1px solid #696969;">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between gap-5 mb-2">
+                            <span class="badge fw-bold px-1 py-1 rounded text-uppercase" style="background: #F0FDF4;border: 1px solid #D0FAE5;color: #008236;font-size: 9px;">{{ g.farming_section.name|default:"Uncategorized" }}</span>
+                            <span style="color: #99a1af;font-size: 12px;">{{ g.read_time|default:"-" }}</span>
+                        </div>
+                        <label class="fw-semibold text-black" style="font-size: 14px;">{{ g.title }}</label>
+                        <p class="text-muted mt-2 clamp-3">
+                            {{ g.detailed_content }}
+                        </p>
+                        <div class="d-flex align-items-center justify-content-between gap-5 mb-2 border-top py-2">
+                            <span style="color: #99a1af;font-size: 12px;">By : {{ g.author_name|default:"-" }}</span>
+                            <div class="d-flex align-items-center justify-content-end gap-2">
+                                {% if g.document_file %}
+                                <a href="{{ g.document_file.url }}" target="_blank" class="btn btn-sm btn-gray-100 border text-primary" download>
+                                    <i class="ri-download-2-line"></i>
+                                </a>
+                                {% endif %}
+                                <button class="btn btn-sm btn-gray-100 border" data-bs-toggle="modal" data-bs-target="#edit_manual_guide_{{ g.id }}">
+                                    <i class="ri-pencil-line"></i>
+                                </button>
+                                <button class="btn btn-sm btn-gray-100 border text-danger" onclick="document.getElementById('delete_guideline_id').value='{{ g.id }}'" data-bs-toggle="modal" data-bs-target="#delete_manual_guide">
+                                    <i class="ri-delete-bin-7-line"></i>
+                                </button>
+                                <span class="fw-bold cursor-pointer" data-bs-toggle="modal" data-bs-target="#view_full_guide_{{ g.id }}" style="color: #008236;font-size: 11px;">View full <i class="ri-arrow-right-double-line" style="color: #008236;"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12 text-center py-5 text-muted">
+                No guidelines found. Click 'Add Manual' to add one.
+            </div>
+            {% endfor %}
+        </div>
+
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODALS: SCHEDULE TAB -->
+<!-- ========================================== -->
+
+<!-- Add Blueprint Modal -->
+<div class="modal fade" id="add_blueprint_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form action="{% url 'add_crop_blueprint' %}" method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title">New Crop</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Crop Name <span class="text-danger">*</span></label>
+            <select name="crop_name" class="form-select" required>
+                <option value="" disabled selected>Select a Crop</option>
+                {% for crop in crops %}
+                <option value="{{ crop.name }}">{{ crop.name }}</option>
+                {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Cultivation Season <span class="text-danger">*</span></label>
+            <select name="cultivation_season" class="form-select" required>
+                <option value="Summer">Summer</option>
+                <option value="Winter">Winter</option>
+                <option value="Monsoon">Monsoon</option>
+                <option value="Year-round">Year-round</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Yield Cycle Days <span class="text-danger">*</span></label>
+            <input type="number" name="yield_cycle_days" class="form-control" required placeholder="e.g. 120">
+          </div>
+          <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label mb-0">Upload Steps (Excel / CSV)</label>
+              <a href="javascript:void(0);" onclick="downloadSampleStagesExcel()" class="small text-primary text-decoration-none fw-semibold">
+                <i class="ri-download-2-line"></i> Sample Template
+              </a>
+            </div>
+            <input type="file" name="stages_file" class="form-control" accept=".xlsx,.xls,.csv" id="stagesFileInput">
+            <div class="form-text text-muted" style="font-size: 11px;">
+              Supported formats: <code>.xlsx</code>, <code>.xls</code>, <code>.csv</code>. Columns: <em>Title</em>, <em>Activity Type</em>, <em>Day Offset</em>, <em>Priority Level</em>.
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Scheduler</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Add Stage Modal -->
+<div class="modal fade" id="add_stage_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form action="{% url 'add_blueprint_stage' %}" method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="blueprint_id" id="add_stage_bp_id">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Step</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Title</label>
+            <input type="text" name="milestone_title" class="form-control" required placeholder="e.g. Soil Preparation">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Activity Type</label>
+            <input type="text" name="activity_type" class="form-control" required placeholder="e.g. Sowing">
+          </div>
+          <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Day Offset</label>
+                <input type="number" name="day_offset" class="form-control" required placeholder="e.g. 0">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Priority Level</label>
+                <select name="priority_level" class="form-select" required>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                </select>
+              </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add Step</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Stage Modal -->
+<div class="modal fade" id="edit_stage_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form action="{% url 'edit_blueprint_stage' %}" method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="stage_id" id="edit_stage_id">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Step</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Title</label>
+            <input type="text" name="milestone_title" id="edit_milestone_title" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Activity Type</label>
+            <input type="text" name="activity_type" id="edit_activity_type" class="form-control" required>
+          </div>
+          <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Day Offset</label>
+                <input type="number" name="day_offset" id="edit_day_offset" class="form-control" required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Priority Level</label>
+                <select name="priority_level" id="edit_priority_level" class="form-select" required>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                </select>
+              </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Blueprint Modal -->
+<div class="modal fade" id="delete_blueprint_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <form action="{% url 'delete_crop_blueprint' %}" method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="blueprint_id" id="delete_bp_id">
+        <div class="modal-header">
+          <h5 class="modal-title text-danger">Confirm Delete</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center">
+          <p class="mb-0">Are you sure you want to delete this Scheduler?</p>
+        </div>
+        <div class="modal-footer justify-content-center">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">Yes, Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Milestone Stage Modal -->
+<div class="modal fade" id="delete_stage_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <form action="{% url 'delete_blueprint_stage' %}" method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="stage_id" id="delete_stage_id">
+        <input type="hidden" name="blueprint_id" id="delete_stage_bp_id">
+        <div class="modal-header">
+          <h5 class="modal-title text-danger">Confirm Delete</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center">
+          <p class="mb-0">Are you sure you want to delete this Step?</p>
+        </div>
+        <div class="modal-footer justify-content-center">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">Yes, Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODALS: GUIDELINES TAB -->
+<!-- ========================================== -->
+
+{% for g in guidelines %}
+<!-- Full Guideline Modal -->
+<div class="modal fade" id="view_full_guide_{{ g.id }}" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <div class="modal-header border-bottom pb-2">
+        <div class="d-flex flex-column">
+            <label>
+                <span class="badge fw-bold px-1 py-1 rounded text-uppercase" style="background: #F0FDF4;border: 1px solid #D0FAE5;color: #008236;font-size: 9px;">{{ g.farming_section.name|default:"Uncategorized" }}</span>
+            </label>
+            <h5 class="modal-title fw-semibold">{{ g.title }}</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12 border-bottom d-flex align-items-center justify-content-start gap-3 py-2">
+            <span class="fw-semibold" style="color: #696969;font-size: 12px;">Author : {{ g.author_name|default:"-" }}</span>
+            <span class="fw-bold text-black">|</span>
+            <span class="fw-semibold" style="color: #696969;font-size: 12px;">{{ g.read_time|default:"-" }}</span>
+            <span class="fw-bold text-black">|</span>
+            <div class="d-flex align-items-center justify-content-start gap-2">
+                {% if g.search_tags %}
+                {% for tag in g.search_tags.split %}
+                <span class="badge bg-gray-100 rounded-3 fw-semibold" style="color: #353535;font-size: 12px;">#{{ tag }}</span>
+                {% endfor %}
+                {% endif %}
+            </div>
+          </div>
+          <div class="col-12">
+            <p class="text-muted mt-2 clamp-3">
+                {{ g.detailed_content }}
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer d-flex justify-content-between">
+        {% if g.document_file %}
+        <a href="{{ g.document_file.url }}" target="_blank" class="btn btn-secondary" download>
+          <i class="ri-download-2-line me-1"></i> Download Document
+        </a>
+        {% else %}
+        <div></div>
+        {% endif %}
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+          <i class="ri-check-line me-1"></i> Done Reading
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Add Manual Guide Modal -->
+<div class="modal fade" id="add_manual_guide" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Create Guideline Manual</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form action="{% url 'manage_schedule' %}" method="POST" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_guideline">
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Guideline Title</label>
+            <input type="text" name="title" class="form-control" placeholder="Eg: Optimizing Soil Moisture for High-Yield Deccan Tomatoes" required>
+          </div>
+          <div class="col-md-6">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label mb-0">Farming Section <span class="text-danger">*</span></label>
+              <a href="javascript:void(0);" onclick="openQuickAddCategoryModal('add_guideline_category_select')" class="small text-primary text-decoration-none fw-semibold">
+                <i class="ri-add-line"></i> Quick Add
+              </a>
+            </div>
+            <select name="category_id" id="add_guideline_category_select" class="form-select guideline-category-select" required>
+              <option value="">Select Category</option>
+              {% for cat in categories %}
+              <option value="{{ cat.id }}">{{ cat.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Author Name/Entity</label>
+            <input type="text" name="author" class="form-control" placeholder="Dr.Rajeshwar Rao">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Read Time Metric</label>
+            <input type="text" name="read_time" class="form-control" placeholder="5 Min read">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Search Tags (comma separated)</label>
+            <input type="text" name="tags" class="form-control">
+          </div>
+          <div class="col-md-7">
+            <label class="form-label">Detailed Content</label>
+            <textarea class="form-control" name="content" rows="5" required></textarea>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Upload Document</label>
+            <input type="file" name="document_file" class="form-control" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="ri-check-line me-1"></i> Confirm Publication
+        </button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% for g in guidelines %}
+<!-- Edit Manual Guide Modal -->
+<div class="modal fade" id="edit_manual_guide_{{ g.id }}" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Edit Guideline Manual</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form action="{% url 'manage_schedule' %}" method="POST" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="edit_guideline">
+      <input type="hidden" name="guideline_id" value="{{ g.id }}">
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Guideline Title</label>
+            <input type="text" name="title" class="form-control" value="{{ g.title }}" placeholder="Eg: Optimizing Soil Moisture for High-Yield Deccan Tomatoes" required>
+          </div>
+          <div class="col-md-6">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label mb-0">Farming Section <span class="text-danger">*</span></label>
+              <a href="javascript:void(0);" onclick="openQuickAddCategoryModal('edit_guideline_category_select_{{ g.id }}')" class="small text-primary text-decoration-none fw-semibold">
+                <i class="ri-add-line"></i> Quick Add
+              </a>
+            </div>
+            <select name="category_id" id="edit_guideline_category_select_{{ g.id }}" class="form-select guideline-category-select" required>
+              <option value="">Select Category</option>
+              {% for cat in categories %}
+              <option value="{{ cat.id }}" {% if g.farming_section_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Author Name/Entity</label>
+            <input type="text" name="author" class="form-control" value="{{ g.author_name|default:'' }}" placeholder="Dr.Rajeshwar Rao">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Read Time Metric</label>
+            <input type="text" name="read_time" class="form-control" value="{{ g.read_time|default:'' }}" placeholder="5 Min read">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Search Tags (comma separated)</label>
+            <input type="text" name="tags" class="form-control" value="{{ g.search_tags|default:'' }}">
+          </div>
+          <div class="col-md-7">
+            <label class="form-label">Detailed Content</label>
+            <textarea class="form-control" name="content" rows="5" required>{{ g.detailed_content|default:'' }}</textarea>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Upload Document</label>
+            <input type="file" name="document_file" class="form-control" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+            {% if g.document_file %}
+              <small class="text-muted d-block mt-1">Current file: <a href="{{ g.document_file.url }}" target="_blank">View Document</a></small>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="ri-check-line me-1"></i> Update Publication
+        </button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Delete Manual Guide Modal -->
+<div class="modal fade" id="delete_manual_guide" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <form action="{% url 'manage_schedule' %}" method="POST">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="delete_guideline">
+      <input type="hidden" name="guideline_id" id="delete_guideline_id">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger">Confirm Delete</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body text-center">
+        <p class="mb-0">
+          Are you sure you want to delete this Manual Guide?
+        </p>
+      </div>
+
+      <div class="modal-footer justify-content-center">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-danger">
+          Yes, Delete
+        </button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Add Guideline Category (Farming Section) Modal -->
+<div class="modal fade" id="quick_add_category_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header border-bottom py-3 px-3.5 bg-white">
+        <div class="d-flex align-items-center gap-2">
+          <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+            <i class="ri-price-tag-3-line fs-5"></i>
+          </div>
+          <div>
+            <h6 class="modal-title fw-bold text-dark mb-0">Quick Add Farming Section</h6>
+            <span class="text-muted" style="font-size: 11px;">Manage guideline categories</span>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body py-3.5 px-3.5 bg-white">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold text-secondary mb-1">Category Name <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0 text-muted ps-3">
+              <i class="ri-folder-add-line"></i>
+            </span>
+            <input type="text" id="quick_category_input" class="form-control bg-light border-start-0" placeholder="e.g. Organic Farming, Harvesting" onkeydown="if(event.key==='Enter'){event.preventDefault(); submitQuickCategoryModal();}">
+            <button type="button" id="quick_category_submit_btn" class="btn btn-primary px-3 fw-semibold d-flex align-items-center gap-1" onclick="submitQuickCategoryModal()">
+              <i class="ri-add-line"></i> Add
+            </button>
+          </div>
+        </div>
+        <div class="border-top pt-3 mt-3">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="fw-bold text-muted text-uppercase" style="font-size: 11px; letter-spacing: 0.6px;">Existing Categories</span>
+            <span class="badge bg-primary-subtle text-primary border-0 rounded-pill px-2.5 py-1" id="quick_category_count_badge" style="font-size: 11px;">{{ categories|length }} Total</span>
+          </div>
+          <div class="overflow-auto rounded-3 p-2" id="quick_category_list" style="max-height: 180px; min-height: 60px; background-color: #f8fafc; border: 1px solid #f1f5f9;">
+            {% for cat in categories %}
+            <div class="d-flex justify-content-between align-items-center py-2 px-3 rounded-3 mb-1.5 quick-item-row" id="quick_cat_row_{{ cat.id }}" data-cat-id="{{ cat.id }}" data-cat-name="{{ cat.name }}">
+              <div class="d-flex align-items-center gap-2 text-truncate me-2">
+                <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-warning-subtle text-warning flex-shrink-0" style="width: 22px; height: 22px; font-size: 11px;">
+                  <i class="ri-bookmark-3-fill"></i>
+                </span>
+                <span class="small fw-semibold text-dark text-truncate">{{ cat.name }}</span>
+              </div>
+              <button type="button" class="btn btn-sm p-0 d-flex align-items-center justify-content-center delete-item-btn"
+                      style="width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;"
+                      onclick="deleteQuickCategory('{{ cat.id }}', '{{ cat.name }}')"
+                      title="Delete {{ cat.name }}">
+                <i class="ri-delete-bin-line" style="font-size: 14px;"></i>
+              </button>
+            </div>
+            {% empty %}
+            <div class="text-center py-3 text-muted" id="quick_category_empty">
+              <i class="ri-inbox-line fs-4 d-block mb-1 opacity-50"></i>
+              <span class="small">No categories found</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2.5 px-3.5 bg-light d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-secondary px-3" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+// Tab persistence & active tab hash routing
+document.addEventListener('DOMContentLoaded', function() {
+    let activeTab = localStorage.getItem('scheduleActiveTab');
+    let hash = window.location.hash;
+    if (hash && (hash === '#scheduleTab' || hash === '#guidelinesTab')) {
+        activeTab = hash;
+    }
+    if (activeTab) {
+        let tabEl = document.querySelector(`button[data-bs-target="${activeTab}"]`);
+        if (tabEl) {
+            document.querySelectorAll('[data-bs-toggle="tab"]').forEach(b => {
+                b.classList.remove('active', 'active-tab');
+            });
+            document.querySelectorAll('.tab-pane').forEach(p => {
+                p.classList.remove('show', 'active');
+            });
+            tabEl.classList.add('active', 'active-tab');
+            let pane = document.querySelector(activeTab);
+            if (pane) pane.classList.add('show', 'active');
+        }
+    }
+
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(btn => {
+        btn.addEventListener('click', function () {
+            let target = this.getAttribute('data-bs-target');
+            localStorage.setItem('scheduleActiveTab', target);
+            window.location.hash = target;
+        });
+    });
+});
+
+// Schedule Modals
+$(document).ready(function() {
+    $('.edit-stage-btn').on('click', function() {
+        var btn = $(this);
+        $('#edit_stage_id').val(btn.data('id'));
+        $('#edit_milestone_title').val(btn.data('title'));
+        $('#edit_activity_type').val(btn.data('type'));
+        $('#edit_day_offset').val(btn.data('offset'));
+        $('#edit_priority_level').val(btn.data('priority'));
+    });
+    
+    $('#delete_blueprint_modal').on('show.bs.modal', function(e) {
+        var btn = $(e.relatedTarget);
+        $('#delete_bp_id').val(btn.data('id'));
+    });
+
+    $('#add_stage_modal').on('show.bs.modal', function(e) {
+        var btn = $(e.relatedTarget);
+        $('#add_stage_bp_id').val(btn.data('bpid'));
+    });
+    
+    $('#delete_stage_modal').on('show.bs.modal', function(e) {
+        var btn = $(e.relatedTarget);
+        $('#delete_stage_id').val(btn.data('id'));
+        $('#delete_stage_bp_id').val(btn.data('bpid'));
+    });
+
+    $('#quick_add_category_modal').on('hidden.bs.modal', function () {
+        if ($('.modal.show').length > 0) {
+            $('body').addClass('modal-open');
+        }
+    });
+});
+
+// Guidelines Search & Filter
+function toggleGuideSearchBox() {
+  var group = document.getElementById('guide_search_input_group');
+  var isExpanded = group && group.classList.contains('expanded');
+
+  if (isExpanded) {
+    closeGuideSearchBox();
+  } else if (group) {
+    group.classList.remove('d-none');
+    setTimeout(function () {
+      group.classList.add('expanded');
+      var input = document.getElementById('guideSearchInput');
+      if (input) input.focus();
+    }, 10);
+  }
+}
+
+function closeGuideSearchBox() {
+  var group = document.getElementById('guide_search_input_group');
+  var input = document.getElementById('guideSearchInput');
+  if (group) group.classList.remove('expanded');
+  if (input) {
+    input.value = '';
+    filterGuidelines();
+  }
+  setTimeout(function () {
+    if (group) group.classList.add('d-none');
+  }, 250);
+}
+
+document.addEventListener('click', function (e) {
+  var wrapper = document.getElementById('guide_search_collapse_wrapper');
+  var group = document.getElementById('guide_search_input_group');
+  if (wrapper && group && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+    closeGuideSearchBox();
+  }
+});
+
+function filterGuidelines() {
+    let searchTerm = ($('#guideSearchInput').val() || '').toLowerCase();
+    let selectedCategory = $('#categoryFilter').val();
+
+    $('.guideline-item').each(function() {
+        let itemSearchText = $(this).data('search') || '';
+        let itemCategory = $(this).data('category');
+
+        let matchesSearch = itemSearchText.indexOf(searchTerm) > -1;
+        let matchesCategory = selectedCategory === "" || itemCategory === selectedCategory;
+
+        if (matchesSearch && matchesCategory) {
+            $(this).show();
+        } else {
+            $(this).hide();
+        }
+    });
+}
+
+$(document).ready(function() {
+    $('#guideSearchInput').on('keyup', filterGuidelines);
+    $('#categoryFilter').on('change', filterGuidelines);
+});
+
+function downloadSampleStagesExcel() {
+    const csvContent = "Title,Activity Type,Day Offset,Priority Level\n" +
+                       "Soil Preparation,Soil Work,0,High\n" +
+                       "Seed Sowing,Sowing,5,High\n" +
+                       "First Irrigation,Irrigation,10,Medium\n" +
+                       "Fertilizer Application,Fertilizer,25,Medium\n" +
+                       "Pest Control Inspection,Pest Control,40,Low\n" +
+                       "Harvesting,Harvest,90,High\n";
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "crop_stages_sample.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// ------------------------------------
+// QUICK ADD GUIDELINE CATEGORY (AJAX)
+// ------------------------------------
+var activeQuickAddSelectId = null;
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function openQuickAddCategoryModal(targetSelectId) {
+    activeQuickAddSelectId = targetSelectId || 'add_guideline_category_select';
+    var quickModalEl = document.getElementById('quick_add_category_modal');
+    if (!quickModalEl) return;
+    
+    var input = document.getElementById('quick_category_input');
+    if (input) input.value = '';
+    
+    var modalInstance = bootstrap.Modal.getOrCreateInstance(quickModalEl);
+    modalInstance.show();
+    
+    setTimeout(function() {
+        if (input) input.focus();
+    }, 300);
+}
+
+function submitQuickCategoryModal() {
+    var input = document.getElementById('quick_category_input');
+    var name = (input ? input.value : '').trim();
+    if (!name) {
+        alert('Please enter a category name');
+        if (input) input.focus();
+        return;
+    }
+
+    var submitBtn = document.getElementById('quick_category_submit_btn');
+    if (submitBtn) submitBtn.disabled = true;
+
+    var formData = new FormData();
+    formData.append('name', name);
+
+    fetch("{% url 'ajax_quick_add_guideline_category' %}", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (submitBtn) submitBtn.disabled = false;
+        if (data.success) {
+            if (input) input.value = '';
+            
+            // Add option to all category selects & categoryFilter
+            var allSelects = document.querySelectorAll('.guideline-category-select');
+            allSelects.forEach(function(sel) {
+                var exists = false;
+                for (var i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value == data.id || sel.options[i].text.toLowerCase() === data.name.toLowerCase()) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    var opt = document.createElement('option');
+                    opt.value = data.id;
+                    opt.text = data.name;
+                    sel.appendChild(opt);
+                }
+            });
+            
+            // Also add to categoryFilter in top bar if present
+            var catFilter = document.getElementById('categoryFilter');
+            if (catFilter) {
+                var filterExists = false;
+                for (var j = 0; j < catFilter.options.length; j++) {
+                    if (catFilter.options[j].value == data.id || catFilter.options[j].text.toLowerCase() === data.name.toLowerCase()) {
+                        filterExists = true;
+                        break;
+                    }
+                }
+                if (!filterExists) {
+                    var filterOpt = document.createElement('option');
+                    filterOpt.value = data.id;
+                    filterOpt.text = data.name;
+                    catFilter.appendChild(filterOpt);
+                }
+            }
+
+            // Set value in target select
+            if (activeQuickAddSelectId) {
+                var targetSel = document.getElementById(activeQuickAddSelectId);
+                if (targetSel) targetSel.value = data.id;
+            }
+
+            // Add row to modal list
+            var list = document.getElementById('quick_category_list');
+            var empty = document.getElementById('quick_category_empty');
+            if (empty) empty.remove();
+            
+            if (list && !document.getElementById('quick_cat_row_' + data.id)) {
+                var row = document.createElement('div');
+                row.className = 'd-flex justify-content-between align-items-center py-2 px-3 rounded-3 mb-1.5 quick-item-row';
+                row.id = 'quick_cat_row_' + data.id;
+                row.setAttribute('data-cat-id', data.id);
+                row.setAttribute('data-cat-name', data.name);
+                row.innerHTML = `
+                    <div class="d-flex align-items-center gap-2 text-truncate me-2">
+                        <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-warning-subtle text-warning flex-shrink-0" style="width: 22px; height: 22px; font-size: 11px;">
+                            <i class="ri-bookmark-3-fill"></i>
+                        </span>
+                        <span class="small fw-semibold text-dark text-truncate">${data.name}</span>
+                    </div>
+                    <button type="button" class="btn btn-sm p-0 d-flex align-items-center justify-content-center delete-item-btn"
+                            style="width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;"
+                            onclick="deleteQuickCategory('${data.id}', '${data.name}')"
+                            title="Delete ${data.name}">
+                        <i class="ri-delete-bin-line" style="font-size: 14px;"></i>
+                    </button>
+                `;
+                list.prepend(row);
+                
+                var countBadge = document.getElementById('quick_category_count_badge');
+                if (countBadge) {
+                    var count = list.querySelectorAll('[data-cat-id]').length;
+                    countBadge.innerText = count + ' Total';
+                }
+            }
+
+            // Close quick add modal
+            var quickModalEl = document.getElementById('quick_add_category_modal');
+            if (quickModalEl) {
+                var modalInstance = bootstrap.Modal.getInstance(quickModalEl);
+                if (modalInstance) modalInstance.hide();
+            }
+        } else {
+            alert(data.error || 'Failed to add category.');
+        }
+    })
+    .catch(err => {
+        if (submitBtn) submitBtn.disabled = false;
+        console.error(err);
+        alert('An error occurred. Please try again.');
+    });
+}
+
+function deleteQuickCategory(id, name) {
+    if (!confirm(`Are you sure you want to delete category "${name}"?`)) return;
+    
+    var formData = new FormData();
+    formData.append('item_id', id);
+    formData.append('name', name);
+
+    fetch("{% url 'ajax_quick_delete_guideline_category' %}", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            var row = document.getElementById('quick_cat_row_' + id);
+            if (row) row.remove();
+            
+            // Remove from selects
+            document.querySelectorAll('.guideline-category-select option[value="' + id + '"]').forEach(opt => opt.remove());
+            var filterOpt = document.querySelector('#categoryFilter option[value="' + id + '"]');
+            if (filterOpt) filterOpt.remove();
+            
+            var list = document.getElementById('quick_category_list');
+            if (list) {
+                var remaining = list.querySelectorAll('[data-cat-id]').length;
+                var countBadge = document.getElementById('quick_category_count_badge');
+                if (countBadge) countBadge.innerText = remaining + ' Total';
+                if (remaining === 0) {
+                    list.innerHTML = '<div class="text-center text-muted py-2 small" id="quick_category_empty">No categories found.</div>';
+                }
+            }
+        } else {
+            alert(data.error || 'Failed to delete category.');
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('An error occurred while deleting.');
+    });
+}
+</script>
+{% endblock %}

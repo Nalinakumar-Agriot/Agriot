@@ -1,0 +1,3391 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+{% block title %}farmer consumption{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
+<style>
+  .swal2-container { z-index: 20000 !important; }
+  .modal[id^="quick_add_"] {
+      z-index: 10700 !important;
+      background-color: rgba(15, 23, 42, 0.45) !important;
+      backdrop-filter: blur(2px);
+  }
+  .modal[id^="quick_add_"] .modal-dialog {
+      z-index: 10701 !important;
+  }
+  .border.rounded {
+      background: #f8f9fa;
+      padding: 4px;
+  }
+  .card-stats:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+      transition: all 0.25s ease;
+  }
+  .category-badge {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 8px;
+      border-radius: 12px;
+  }
+  .nav-pills .nav-link.active,
+  .nav-pills .show > .nav-link {
+    background-color: #F69C55 !important;
+    color: #fff !important;
+    border-radius: 8px;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(246, 156, 85, 0.25);
+  }
+  .nav-pills .nav-link {
+    border-radius: 8px;
+    font-weight: 500;
+    color: #566a7f;
+    padding: 0.5rem 1.25rem;
+    transition: all 0.2s ease;
+  }
+  .nav-pills .nav-link:hover:not(.active) {
+    background-color: #f5f5f9;
+    color: #F69C55;
+  }
+  .search-collapse-wrapper {
+    position: relative;
+  }
+  .search-input-group {
+    width: 0;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-width 0.25s ease, opacity 0.2s ease;
+    white-space: nowrap;
+  }
+  .search-input-group.expanded {
+    max-width: 420px;
+    width: 420px;
+    opacity: 1;
+    margin-left: 8px;
+  }
+  @media (max-width: 576px) {
+    .search-input-group.expanded {
+      max-width: 220px;
+      width: 220px;
+    }
+  }
+  /* Compact table rows */
+  #tableWarehouse td, #tableVehicle td {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+  #tableWarehouse thead th, #tableVehicle thead th {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+  /* Sleek Modern Rental Toggle Switch */
+  .rental-switch-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .rental-ios-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    flex-shrink: 0;
+    margin: 0 !important;
+    cursor: pointer;
+  }
+  .rental-ios-switch input {
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    position: absolute !important;
+    margin: 0 !important;
+  }
+  .rental-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #cbd5e1;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 20px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+  .rental-slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #ffffff;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  }
+  .rental-ios-switch input:checked + .rental-slider {
+    background-color: #10b981;
+  }
+  .rental-ios-switch input:checked + .rental-slider:before {
+    transform: translateX(16px);
+  }
+  .rental-ios-switch:hover .rental-slider {
+    filter: brightness(0.96);
+  }
+  .rental-status-pill {
+    transition: all 0.2s ease;
+  }
+  .rental-status-pill:hover {
+    filter: brightness(0.96);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  }
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+
+<script>
+$(document).ready(function () {
+    // Initialize DataTables
+    var dtWarehouse = $('#tableWarehouse').DataTable({
+        destroy: true,
+        pageLength: 10,
+        lengthMenu: [5, 10, 25, 50],
+        responsive: true,
+        dom: 't<"bottom d-flex align-items-center justify-content-between mt-3"ip>',
+    });
+
+    var dtVehicle = $('#tableVehicle').DataTable({
+        destroy: true,
+        pageLength: 10,
+        lengthMenu: [5, 10, 25, 50],
+        responsive: true,
+        dom: 't<"bottom d-flex align-items-center justify-content-between mt-3"ip>',
+    });
+
+    // Custom Search - Warehouse
+    $('#searchWarehouse').on('keyup', function() {
+        dtWarehouse.search(this.value).draw();
+    });
+
+    // Custom Search - Vehicle
+    $('#searchVehicle').on('keyup', function() {
+        dtVehicle.search(this.value).draw();
+    });
+
+    // Populate whLabelFilter dynamically based on names present in column 0
+    function populateLabelFilter() {
+        var labels = [];
+        dtWarehouse.column(0).nodes().each(function(node) {
+            var labelText = $(node).find('label').first().text().trim();
+            if (labelText && labels.indexOf(labelText) === -1) {
+                labels.push(labelText);
+            }
+        });
+        labels.sort();
+        var $select = $('#whLabelFilter');
+        $select.html('<option value="all">All Items</option>');
+        labels.forEach(function(lbl) {
+            $select.append(`<option value="${lbl}">${lbl}</option>`);
+        });
+    }
+    populateLabelFilter();
+
+    // Filter by Label - Warehouse
+    $('#whLabelFilter').on('change', function() {
+        var val = $(this).val();
+        if(val === 'all') {
+            dtWarehouse.column(0).search('').draw();
+        } else {
+            dtWarehouse.column(0).search(val).draw();
+        }
+    });
+
+    // Filter by Category - Warehouse
+    $('#whCategoryFilter').on('change', function() {
+        var val = $(this).val();
+        if(val === 'all') val = '';
+        dtWarehouse.column(1).search(val).draw();
+    });
+
+    // Filter by Level (Status) - Warehouse (Column index 7)
+    $('#whLevelFilter').on('change', function() {
+        var val = $(this).val();
+        if(val === 'all') val = '';
+        dtWarehouse.column(7).search(val).draw();
+    });
+
+    // Custom Filters logic for Price and Qty
+    $.fn.dataTable.ext.search.push(
+        function(settings, data, dataIndex) {
+            if (settings.nTable.id !== 'tableWarehouse') {
+                return true;
+            }
+
+            // Qty Filter
+            var qtyVal = $('#whQtyFilter').val();
+            if (qtyVal && qtyVal !== 'all') {
+                // Depot Qty Balance is at column index 2
+                var qtyText = data[2] || '';
+                var qtyNum = parseFloat(qtyText.replace(/[^\d.]/g, '')) || 0;
+
+                if (qtyVal === 'zero' && qtyNum !== 0) return false;
+                if (qtyVal === '1-10' && (qtyNum < 1 || qtyNum > 10)) return false;
+                if (qtyVal === '11-50' && (qtyNum < 11 || qtyNum > 50)) return false;
+                if (qtyVal === '51-100' && (qtyNum < 51 || qtyNum > 100)) return false;
+                if (qtyVal === 'gt100' && qtyNum <= 100) return false;
+            }
+
+            // Price Filter
+            var priceVal = $('#whPriceFilter').val();
+            if (priceVal && priceVal !== 'all') {
+                // Unit Price is at column index 3
+                var priceText = data[3] || '';
+                var priceNum = parseFloat(priceText.replace(/[^\d.]/g, '')) || 0;
+
+                if (priceVal === 'under50' && priceNum >= 50) return false;
+                if (priceVal === '50-200' && (priceNum < 50 || priceNum > 200)) return false;
+                if (priceVal === '200-1000' && (priceNum < 200 || priceNum > 1000)) return false;
+                if (priceVal === 'gt1000' && priceNum <= 1000) return false;
+            }
+
+            return true;
+        }
+    );
+
+    // Redraw table when Qty or Price filters change
+    $('#whQtyFilter, #whPriceFilter').on('change', function() {
+        dtWarehouse.draw();
+    });
+
+    // Populate vhLabelFilter dynamically based on names present in column 0
+    function populateVehicleLabelFilter() {
+        var labels = [];
+        dtVehicle.column(0).nodes().each(function(node) {
+            var labelText = $(node).find('label').first().text().trim();
+            if (labelText && labels.indexOf(labelText) === -1) {
+                labels.push(labelText);
+            }
+        });
+        labels.sort();
+        var $select = $('#vhLabelFilter');
+        $select.html('<option value="all">All Items</option>');
+        labels.forEach(function(lbl) {
+            $select.append(`<option value="${lbl}">${lbl}</option>`);
+        });
+    }
+    populateVehicleLabelFilter();
+
+    // Filter by Label - Vehicle
+    $('#vhLabelFilter').on('change', function() {
+        var val = $(this).val();
+        if(val === 'all') {
+            dtVehicle.column(0).search('').draw();
+        } else {
+            dtVehicle.column(0).search(val).draw();
+        }
+    });
+
+    // Filter by Category - Vehicle
+    $('#vhCategoryFilter').on('change', function() {
+        var val = $(this).val();
+        if(val === 'all') val = '';
+        dtVehicle.column(1).search(val).draw();
+    });
+
+    // Filter by Status - Vehicle (Column index 4)
+    $('#vhStatusFilter').on('change', function() {
+        var val = $(this).val();
+        if(val === 'all') val = '';
+        dtVehicle.column(4).search(val).draw();
+    });
+
+    // Custom Filters logic for tableVehicle (Price and Qty)
+    $.fn.dataTable.ext.search.push(
+        function(settings, data, dataIndex) {
+            if (settings.nTable.id !== 'tableVehicle') {
+                return true;
+            }
+
+            // Qty Filter (Column index 6)
+            var qtyVal = $('#vhQtyFilter').val();
+            if (qtyVal && qtyVal !== 'all') {
+                var qtyText = data[6] || '';
+                var qtyNum = parseFloat(qtyText.replace(/[^\d.]/g, '')) || 0;
+
+                if (qtyVal === '1-5' && (qtyNum < 1 || qtyNum > 5)) return false;
+                if (qtyVal === '6-10' && (qtyNum < 6 || qtyNum > 10)) return false;
+                if (qtyVal === 'gt10' && qtyNum <= 10) return false;
+            }
+
+            // Price Filter (Actions column index 7)
+            var priceVal = $('#vhPriceFilter').val();
+            if (priceVal && priceVal !== 'all') {
+                var actionNode = settings.aoData[dataIndex].anCells[7];
+                var editBtn = $(actionNode).find('.edit-inventory-btn');
+                var priceNum = parseFloat(editBtn.attr('data-price') || 0);
+
+                if (priceVal === 'under1000' && priceNum >= 1000) return false;
+                if (priceVal === '1000-10000' && (priceNum < 1000 || priceNum > 10000)) return false;
+                if (priceVal === '10000-100000' && (priceNum < 10000 || priceNum > 100000)) return false;
+                if (priceVal === 'gt100000' && priceNum <= 100000) return false;
+            }
+
+            return true;
+        }
+    );
+
+    // Redraw table when Qty or Price filters change
+    $('#vhQtyFilter, #vhPriceFilter').on('change', function() {
+        dtVehicle.draw();
+    });
+    
+    // Restore tab
+    let activeTab = localStorage.getItem('inventory_active_tab');
+    if(activeTab) {
+        let tabEl = document.querySelector(`button[data-bs-target="${activeTab}"]`);
+        if(tabEl) {
+            let tab = new bootstrap.Tab(tabEl);
+            tab.show();
+        }
+    }
+
+    // Save tab and adjust DataTables
+    $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
+        let target = $(e.target).attr('data-bs-target');
+        if(target === '#warehouse_stock' || target === '#vehicle') {
+             localStorage.setItem('inventory_active_tab', target);
+        }
+        $($.fn.dataTable.tables(true)).DataTable().columns.adjust();
+        populateLabelFilter();
+        populateVehicleLabelFilter();
+    });
+});
+
+// Search collapse triggers for Warehouse
+function toggleWhSearchBox() {
+  var group = document.getElementById('wh_search_input_group');
+  var isExpanded = group.classList.contains('expanded');
+  if (isExpanded) {
+    closeWhSearchBox();
+  } else {
+    group.classList.remove('d-none');
+    setTimeout(function () {
+      group.classList.add('expanded');
+      document.getElementById('searchWarehouse').focus();
+    }, 10);
+  }
+}
+
+function closeWhSearchBox() {
+  var group = document.getElementById('wh_search_input_group');
+  var input = document.getElementById('searchWarehouse');
+  group.classList.remove('expanded');
+  input.value = '';
+  $(input).trigger('keyup');
+  setTimeout(function () {
+    group.classList.add('d-none');
+  }, 250);
+}
+
+// Search collapse triggers for Vehicles
+function toggleVhSearchBox() {
+  var group = document.getElementById('vh_search_input_group');
+  var isExpanded = group.classList.contains('expanded');
+  if (isExpanded) {
+    closeVhSearchBox();
+  } else {
+    group.classList.remove('d-none');
+    setTimeout(function () {
+      group.classList.add('expanded');
+      document.getElementById('searchVehicle').focus();
+    }, 10);
+  }
+}
+
+function closeVhSearchBox() {
+  var group = document.getElementById('vh_search_input_group');
+  var input = document.getElementById('searchVehicle');
+  group.classList.remove('expanded');
+  input.value = '';
+  $(input).trigger('keyup');
+  setTimeout(function () {
+    group.classList.add('d-none');
+  }, 250);
+}
+
+document.addEventListener('click', function (e) {
+  var whWrapper = document.getElementById('wh_search_collapse_wrapper');
+  var whGroup = document.getElementById('wh_search_input_group');
+  if (whWrapper && whGroup && !whWrapper.contains(e.target) && whGroup.classList.contains('expanded')) {
+    closeWhSearchBox();
+  }
+
+  var vhWrapper = document.getElementById('vh_search_collapse_wrapper');
+  var vhGroup = document.getElementById('vh_search_input_group');
+  if (vhWrapper && vhGroup && !vhWrapper.contains(e.target) && vhGroup.classList.contains('expanded')) {
+    closeVhSearchBox();
+  }
+});
+
+// ── Add Stock Log Modal JS ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    var logModal = document.getElementById('add_stock_log_modal');
+    if (logModal) {
+        logModal.addEventListener('show.bs.modal', function() {
+            // Pre-fill today's date
+            var today = new Date().toISOString().split('T')[0];
+            var dateInput = document.getElementById('log_date_input');
+            if (dateInput) dateInput.value = today;
+            // Reset stock preview
+            var preview = document.getElementById('log_stock_preview');
+            if (preview) preview.classList.add('d-none');
+        });
+    }
+
+    var logItemSelect = document.getElementById('log_item_select');
+    if (logItemSelect) {
+        logItemSelect.addEventListener('change', function() {
+            var opt = this.options[this.selectedIndex];
+            var qty = opt.getAttribute('data-qty');
+            var unit = opt.getAttribute('data-unit') || 'Units';
+            var preview = document.getElementById('log_stock_preview');
+            var currentQty = document.getElementById('log_current_qty');
+            var unitDisplay = document.getElementById('log_unit_display');
+            if (qty !== null && this.value !== '') {
+                if (currentQty) currentQty.textContent = qty + ' ' + unit;
+                if (unitDisplay) unitDisplay.textContent = unit;
+                if (preview) preview.classList.remove('d-none');
+            } else {
+                if (preview) preview.classList.add('d-none');
+                if (unitDisplay) unitDisplay.textContent = 'Units';
+            }
+            checkStockLimit();
+        });
+    }
+
+    var addStockLogForm = document.getElementById('addStockLogForm');
+    if (addStockLogForm) {
+        addStockLogForm.addEventListener('submit', function(e) {
+            var action = document.getElementById('log_action_hidden').value;
+            var itemSelect = document.getElementById('log_item_select');
+            var opt = itemSelect.options[itemSelect.selectedIndex];
+            if (!opt || itemSelect.value === '') return;
+            
+            var currentStock = parseFloat(opt.getAttribute('data-qty')) || 0;
+            var enteredQty = parseFloat(document.getElementById('log_qty_input').value) || 0;
+            
+            if (action === 'remove') {
+                if (currentStock <= 0) {
+                    alert("Cannot record outflow: This item is currently out of stock.");
+                    e.preventDefault();
+                    return false;
+                }
+                if (enteredQty > currentStock) {
+                    alert("Cannot record outflow: Quantity exceeds current stock.");
+                    e.preventDefault();
+                    return false;
+                }
+            }
+        });
+    }
+});
+
+function setLogAction(action) {
+    var hidden = document.getElementById('log_action_hidden');
+    if (hidden) hidden.value = action;
+    // Re-check limit whenever action switches
+    setTimeout(checkStockLimit, 0);
+}
+
+function checkStockLimit() {
+    var qtyInput = document.getElementById('log_qty_input');
+    var warning = document.getElementById('log_limit_warning');
+    var msg = document.getElementById('log_limit_msg');
+    var itemSelect = document.getElementById('log_item_select');
+    var actionHidden = document.getElementById('log_action_hidden');
+    if (!qtyInput || !warning || !itemSelect) return;
+
+    var action = actionHidden ? actionHidden.value : 'remove';
+    var enteredQty = parseFloat(qtyInput.value) || 0;
+    var opt = itemSelect.options[itemSelect.selectedIndex];
+    
+    if (!opt || itemSelect.value === '') {
+        warning.classList.add('d-none');
+        return;
+    }
+    
+    var currentStock = parseFloat(opt.getAttribute('data-qty')) || 0;
+    var unit = opt.getAttribute('data-unit') || 'Units';
+
+    if (action === 'remove') {
+        if (currentStock <= 0) {
+            msg.textContent = '⚠ Out of stock! Cannot deduct from this item.';
+            warning.classList.remove('d-none');
+            qtyInput.classList.add('is-invalid');
+            qtyInput.style.borderColor = '#dc3545';
+        } else if (enteredQty > currentStock) {
+            msg.textContent = '⚠ Exceeds current stock! Only ' + currentStock + ' ' + unit + ' available.';
+            warning.classList.remove('d-none');
+            qtyInput.classList.add('is-invalid');
+            qtyInput.style.borderColor = '#ffc107';
+        } else {
+            warning.classList.add('d-none');
+            qtyInput.classList.remove('is-invalid');
+            qtyInput.style.borderColor = '';
+        }
+    } else {
+        warning.classList.add('d-none');
+        qtyInput.classList.remove('is-invalid');
+        qtyInput.style.borderColor = '';
+    }
+}
+// ── Stock Log Offcanvas ────────────────────────────────────────────────
+function openStockLogOffcanvas(itemId, itemName) {
+    var nameEl = document.getElementById('log_offcanvas_item_name');
+    var body = document.getElementById('stockLogOffcanvasBody');
+    if (nameEl) nameEl.textContent = itemName;
+    if (body) body.innerHTML = '<div class="text-center text-muted py-5"><i class="ri-loader-4-line fs-2 d-block mb-2"></i>Loading...</div>';
+
+    var offcanvas = new bootstrap.Offcanvas(document.getElementById('stockLogOffcanvas'));
+    offcanvas.show();
+
+    fetch('/farmer/inventory/stock_log/' + itemId + '/logs/')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.logs || data.logs.length === 0) {
+                body.innerHTML = '<div class="text-center text-muted py-5">'
+                    + '<i class="ri-inbox-line fs-1 d-block mb-2 text-muted"></i>'
+                    + '<p class="mb-0">No log entries yet.</p>'
+                    + '<small>Use "Add Log" to record stock movements.</small></div>';
+                return;
+            }
+            var html = '<div class="mb-3 p-3 rounded-3" style="background:#f8faff; border:1px solid #e5e9f5;">'
+                + '<div class="d-flex align-items-center gap-2">'
+                + '<i class="ri-archive-drawer-line text-success fs-5"></i>'
+                + '<div><div class="fw-bold text-dark">' + data.item_name + '</div>'
+                + '<small class="text-muted">Current Stock: <strong class="text-success">' + data.current_qty + ' ' + data.unit + '</strong></small></div>'
+                + '</div></div>';
+
+            html += '<div class="d-flex flex-column gap-2">';
+            data.logs.forEach(function(log) {
+                var isIn = log.action === 'add';
+                var color = isIn ? '#16a34a' : '#dc2626';
+                var bg = isIn ? '#f0fdf4' : '#fff5f5';
+                var border = isIn ? '#86efac' : '#fca5a5';
+                var icon = isIn ? 'ri-arrow-down-circle-fill' : 'ri-arrow-up-circle-fill';
+                var label = isIn ? 'IN' : 'OUT';
+                html += '<div class="rounded-3 p-3" style="background:' + bg + '; border:1px solid ' + border + ';">'
+                    + '<div class="d-flex align-items-start gap-3">'
+                    + '<i class="' + icon + ' mt-1" style="font-size:20px; color:' + color + ';"></i>'
+                    + '<div class="flex-grow-1">'
+                    + '<div class="d-flex justify-content-between align-items-center mb-1">'
+                    + '<span class="badge fw-bold px-2" style="background:' + color + '; font-size:11px;">' + label + '</span>'
+                    + '<small class="text-muted">' + log.log_date + '</small>'
+                    + '</div>'
+                    + '<div class="fw-bold" style="color:' + color + '; font-size:16px;">'
+                    + (isIn ? '+' : '−') + log.quantity + ' ' + log.unit
+                    + '</div>'
+                    + '<div class="small text-muted mt-1">'
+                    + log.qty_before + ' → <strong>' + log.qty_after + '</strong> ' + log.unit
+                    + '</div>'
+                    + (log.notes ? '<div class="small text-secondary mt-1"><i class="ri-sticky-note-line me-1"></i>' + log.notes + '</div>' : '')
+                    + '</div></div></div>';
+            });
+            html += '</div>';
+            body.innerHTML = html;
+        })
+        .catch(function() {
+            body.innerHTML = '<div class="text-center text-danger py-5">Failed to load logs.</div>';
+        });
+}
+</script>
+{% endblock page_js %}
+
+{% block content %}
+<div class="mb-3">
+  <ul class="nav nav-pills gap-2" role="tablist">
+    <li class="nav-item" role="tab">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#warehouse_stock" type="button" role="tab">
+        <i class="ri-home-6-line me-2"></i>
+        Warehouse Stock ({{ warehouse.count }})
+      </button>
+    </li>
+    <li class="nav-item" role="tab">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#vehicle" type="button" role="tab">
+        <i class="ri-truck-line me-2"></i>
+        Machinery / Tools ({{ vehicles.count }})
+      </button>
+    </li>
+  </ul>
+</div>
+
+<!-- Title Header -->
+<div class="card mb-3 border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+        <div>
+            <h4 class="mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="ri-pulse-line text-primary"></i>
+                {% trans "Warehouse " %}
+            </h4>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <a href="{% url 'inventory_out_logs' %}" class="btn btn-outline-primary d-flex align-items-center gap-2 px-3 shadow-sm">
+                <i class="ri-pie-chart-2-line fs-5"></i>
+                Out / In
+            </a>
+            <button type="button" class="btn btn-outline-secondary d-flex align-items-center gap-2 px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#add_stock_log_modal">
+                <i class="ri-file-list-3-line fs-5"></i>
+                Add Log
+            </button>
+            <button type="button" class="btn btn-primary d-flex align-items-center gap-2 px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#add_consumption_modal">
+                <i class="ri-add-line fs-5"></i>
+                {% trans "Add Inventory" %}
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="tab-content p-0">
+    <!-- Warehouse Stock Pane -->
+    <div class="tab-pane fade show active" id="warehouse_stock">
+        <!-- Stats Cards for Warehouse -->
+        <div class="row g-3 mb-4">
+          <!-- Stock SKUs -->
+          <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="avatar avatar-md flex-shrink-0" style="background:rgba(13,110,253,0.10); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+                  <i class="ri-box-3-line fs-3" style="color:#0d6efd;"></i>
+                </div>
+                <div>
+                  <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Stock SKUs</small>
+                  <div class="fw-bold fs-5 text-dark mb-0">{{ warehouse.count }} Records</div>
+                  <small class="text-muted" style="font-size:11px;">registered items</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Low Stock Items -->
+          <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="avatar avatar-md flex-shrink-0" style="background:rgba(246,156,85,0.12); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+                  <i class="ri-alert-line fs-3" style="color:#f69c55;"></i>
+                </div>
+                <div>
+                  <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Low Stock Items</small>
+                  <div class="fw-bold fs-5 text-warning mb-0">{{ low_stock_items }} Items</div>
+                  <small class="text-muted" style="font-size:11px;">needs attention</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Total Inventory Value -->
+          <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="avatar avatar-md flex-shrink-0" style="background:rgba(16,185,129,0.12); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+                  <i class="ri-money-rupee-circle-line fs-3" style="color:#10b981;"></i>
+                </div>
+                <div>
+                  <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Total Value</small>
+                  <div class="fw-bold fs-5 mb-0" style="color:#10b981;">₹{{ total_inventory_value|floatformat:0 }}</div>
+                  <small class="text-muted" style="font-size:11px;">inventory worth</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Barn Locations -->
+          <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="avatar avatar-md flex-shrink-0" style="background:rgba(25,135,84,0.10); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+                  <i class="ri-map-pin-line fs-3" style="color:#198754;"></i>
+                </div>
+                <div>
+                  <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Barn Locations</small>
+                  <div class="fw-bold fs-5 text-dark mb-0">{{ barn_locations }} Safe Zones</div>
+                  <small class="text-muted" style="font-size:11px;">active warehouses</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filters & Table for Warehouse -->
+        <div class="card border-0 shadow-sm rounded-4">
+          <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+            <!-- Collapsible Search -->
+            <div class="d-flex align-items-center search-collapse-wrapper" id="wh_search_collapse_wrapper">
+              <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="wh_search_toggle_btn" onclick="toggleWhSearchBox()">
+                <i class="ri-search-line"></i>
+              </button>
+              <div class="input-group search-input-group d-none" id="wh_search_input_group">
+                <span class="input-group-text bg-white border-end-0">
+                  <i class="ri-search-line text-muted"></i>
+                </span>
+                <input type="text"
+                    id="searchWarehouse"
+                    class="form-control border-start-0"
+                    placeholder="Search Stock item name, silo description...">
+                <button class="btn btn-outline-secondary border-start-0" type="button" id="wh_search_close_btn" onclick="closeWhSearchBox()">
+                  <i class="ri-close-line"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Right filters -->
+            <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+              <!-- Label Filter -->
+              <select id="whLabelFilter" class="form-select w-auto">
+                <option value="all">All Items</option>
+              </select>
+
+              <!-- Category Filter -->
+              <select id="whCategoryFilter" class="form-select w-auto">
+                <option value="all">All Categories</option>
+                <option value="Seeds">Seeds</option>
+                <option value="Fertilizer">Fertilizer</option>
+                <option value="Pesticide">Pesticide</option>
+                <option value="Fuel">Fuel</option>
+              </select>
+
+              <!-- Qty Filter -->
+              <select id="whQtyFilter" class="form-select w-auto">
+                <option value="all">All Quantities</option>
+                <option value="zero">0 (Out of stock)</option>
+                <option value="1-10">1 - 10</option>
+                <option value="11-50">11 - 50</option>
+                <option value="51-100">51 - 100</option>
+                <option value="gt100">Over 100</option>
+              </select>
+
+              <!-- Price Filter -->
+              <select id="whPriceFilter" class="form-select w-auto">
+                <option value="all">All Prices</option>
+                <option value="under50">Under ₹50</option>
+                <option value="50-200">₹50 - ₹200</option>
+                <option value="200-1000">₹200 - ₹1000</option>
+                <option value="gt1000">Over ₹1000</option>
+              </select>
+
+              <!-- Status Filter -->
+              <select id="whLevelFilter" class="form-select w-auto">
+                <option value="all">All Statuses</option>
+                <option value="In stock">In stock</option>
+                <option value="Low stock">Low stock</option>
+                <option value="Out of stock">Out of stock</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-responsive text-nowrap p-0">
+            <table class="table table-hover align-middle border-top" id="tableWarehouse">
+              <thead class="table-light">
+                  <tr>
+                      <th>Primary Supply / Label</th>
+                      <th>Category</th>
+                      <th>Depot Qty Balance</th>
+                      <th>Unit Price (&#8377;)</th>
+                      <th>Total Price (&#8377;)</th>
+                      <th>Safety Stock Limit</th>
+                      <th>Shed Location</th>
+                      <th>Status</th>
+                      <th class="text-end">Actions</th>
+                  </tr>
+              </thead>
+              <tbody>
+              {% for item in warehouse %}
+              <tr>
+                  <td>
+                  <div class="d-flex gap-3">
+                      <div class="d-flex align-items-center">
+                      <i class="ri-box-3-line border rounded p-2 bg-primary-subtle text-primary fs-5" style="border-radius:8px !important;"></i>
+                      </div>
+                      <div class="d-flex flex-column">
+                      <label class="text-dark fw-semibold fs-6 mb-0">{{ item.item_name }}</label>
+                      <small class="text-muted" style="font-size: 0.7rem;">ID Reference: inv-{{ item.id }}</small>
+                      </div>
+                  </div>
+                  </td>
+                  <td>
+                  <span class="badge bg-primary-subtle text-primary border rounded-pill px-2 py-1">{{ item.category }}</span>
+                  </td>
+                  <td>
+                  <label class="text-dark fw-semibold mb-0">{{ item.quantity }} {{ item.unit }}</label>
+                  </td>
+                  <td>
+                  {% if item.unit_price %}
+                    <span class="fw-bold text-success">&#8377;{{ item.unit_price }}</span>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                  </td>
+                  <td>
+                  {% if item.total_price %}
+                    <span class="fw-bold" style="color:#6366f1;">&#8377;{{ item.total_price|floatformat:2 }}</span>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                  </td>
+                  <td>
+                  <label class="text-muted mb-0">{{ item.safety_stock }} {{ item.unit }}</label>
+                  </td>
+                  <td>
+                  <label class="text-dark mb-0">📍 {{ item.location }}</label>
+                  </td>
+                  <td>
+                    {% if item.quantity == 0 %}
+                      <span class="badge bg-danger-subtle text-danger border rounded">Out of Stock</span>
+                    {% elif item.quantity <= item.safety_stock %}
+                      <span class="badge bg-warning-subtle text-warning border rounded">Low Stock</span>
+                    {% else %}
+                      <span class="badge bg-success-subtle text-success border rounded">In Stock</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    <div class="d-flex align-items-center justify-content-end gap-1">
+                      <button type="button" class="btn btn-sm btn-icon btn-outline-info"
+                        data-id="{{ item.id }}"
+                        data-name="{{ item.item_name }}"
+                        data-category="{{ item.category }}"
+                        data-quantity="{{ item.quantity }}"
+                        data-unit="{{ item.unit }}"
+                        data-safety="{{ item.safety_stock }}"
+                        data-location="{{ item.location }}"
+                        data-status="{{ item.status }}"
+                        data-price="{{ item.unit_price|default:0 }}"
+                        data-totalprice="{{ item.total_price|floatformat:2|default:'' }}"
+                        title="View Details"
+                        onclick="window.openViewWarehouseModal(this)">
+                        <i class="ri-eye-line"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-icon btn-outline-secondary edit-inventory-btn"
+                        data-id="{{ item.id }}"
+                        data-name="{{ item.item_name }}"
+                        data-category="{{ item.category }}"
+                        data-quantity="{{ item.quantity }}"
+                        data-unit="{{ item.unit }}"
+                        data-safety="{{ item.safety_stock }}"
+                        data-location="{{ item.location }}"
+                        data-status="{{ item.status }}"
+                        data-plate="{{ item.license_plate|default:'' }}"
+                        data-servicedate="{{ item.last_service_date|date:'Y-m-d'|default:'' }}"
+                        data-nextservicedate="{{ item.next_service_date|date:'Y-m-d'|default:'' }}"
+                        data-fueltype="{{ item.fuel_type|default:'' }}"
+                        data-insurancefile="{% if item.insurance_file %}{{ item.insurance_file.url }}{% endif %}"
+                        data-insuranceexpiry="{{ item.insurance_expiry|date:'Y-m-d'|default:'' }}"
+                        data-rcfile="{% if item.rc_file %}{{ item.rc_file.url }}{% endif %}"
+                        data-rcexpiry="{{ item.rc_expiry|date:'Y-m-d'|default:'' }}"
+                        data-pollutionfile="{% if item.pollution_file %}{{ item.pollution_file.url }}{% endif %}"
+                        data-pollutionexpiry="{{ item.pollution_expiry|date:'Y-m-d'|default:'' }}"
+                        data-price="{{ item.unit_price|default:0 }}"
+                        data-rental="{{ item.rental_available }}"
+                        data-rentalprice="{{ item.rental_price|default:0 }}"
+                        data-rentalunit="{{ item.rental_unit|default:'Per Day' }}"
+                        data-description="{{ item.description|default:'' }}"
+                        title="Edit Item">
+                        <i class="ri-pencil-line"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-icon btn-outline-danger delete-inventory-btn"
+                        data-id="{{ item.id }}"
+                        data-name="{{ item.item_name }}"
+                        title="Delete Item">
+                        <i class="ri-delete-bin-7-line"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-icon btn-outline-info view-stock-log-btn"
+                        data-id="{{ item.id }}"
+                        data-name="{{ item.item_name }}"
+                        title="View Stock Log"
+                        onclick="openStockLogOffcanvas({{ item.id }}, '{{ item.item_name|escapejs }}')">
+                        <i class="ri-history-line"></i>
+                      </button>
+                    </div>
+                  </td>
+              </tr>
+              {% empty %}
+              <tr>
+                  <td colspan="9" class="text-center text-muted py-5">
+                    No warehouse inventory registered yet.
+                  </td>
+              </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+    </div>
+
+    <!-- Vehicles & Tools Pane -->
+    <div class="tab-pane fade" id="vehicle">
+        <!-- Stats Cards for Vehicles -->
+        <div class="row g-3 mb-4">
+          <!-- Fleet Count -->
+          <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="avatar avatar-md flex-shrink-0" style="background:rgba(13,110,253,0.10); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+                  <i class="ri-truck-line fs-3" style="color:#0d6efd;"></i>
+                </div>
+                <div>
+                  <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Fleet Count</small>
+                  <div class="fw-bold fs-5 text-dark mb-0">{{ total_vehicles }} Vehicles</div>
+                  <small class="text-muted" style="font-size:11px;">registered fleet</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Operational -->
+          <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="avatar avatar-md flex-shrink-0" style="background:rgba(25,135,84,0.10); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+                  <i class="ri-checkbox-circle-line fs-3" style="color:#198754;"></i>
+                </div>
+                <div>
+                  <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Operational</small>
+                  <div class="fw-bold fs-5 text-success mb-0">{{ operational_count }} Units</div>
+                  <small class="text-muted" style="font-size:11px;">running active</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- In Maintenance -->
+          <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="avatar avatar-md flex-shrink-0" style="background:rgba(246,156,85,0.12); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+                  <i class="ri-tools-line fs-3" style="color:#f69c55;"></i>
+                </div>
+                <div>
+                  <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">In Maintenance</small>
+                  <div class="fw-bold fs-5 text-warning mb-0">{{ maintenance_count }} Units</div>
+                  <small class="text-muted" style="font-size:11px;">under service</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tools Registered -->
+          <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="avatar avatar-md flex-shrink-0" style="background:rgba(102,16,242,0.1); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+                  <i class="ri-hammer-line fs-3" style="color:#6610f2;"></i>
+                </div>
+                <div>
+                  <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Tools Registered</small>
+                  <div class="fw-bold fs-5 text-dark mb-0">{{ total_tools }} Tools</div>
+                  <small class="text-muted" style="font-size:11px;">equipment & implements</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filters & Table for Vehicles & Tools -->
+        <div class="card border-0 shadow-sm rounded-4">
+          <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+            <!-- Collapsible Search -->
+            <div class="d-flex align-items-center search-collapse-wrapper" id="vh_search_collapse_wrapper">
+              <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="vh_search_toggle_btn" onclick="toggleVhSearchBox()">
+                <i class="ri-search-line"></i>
+              </button>
+              <div class="input-group search-input-group d-none" id="vh_search_input_group">
+                <span class="input-group-text bg-white border-end-0">
+                  <i class="ri-search-line text-muted"></i>
+                </span>
+                <input type="text"
+                    id="searchVehicle"
+                    class="form-control border-start-0"
+                    placeholder="Search registered vehicles, license plate or tools...">
+                <button class="btn btn-outline-secondary border-start-0" type="button" id="vh_search_close_btn" onclick="closeVhSearchBox()">
+                  <i class="ri-close-line"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Right filters -->
+            <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+              <!-- Label Filter -->
+              <select id="vhLabelFilter" class="form-select w-auto">
+                <option value="all">All Items</option>
+              </select>
+
+              <!-- Category Filter -->
+              <select id="vhCategoryFilter" class="form-select w-auto">
+                <option value="all">All Categories</option>
+                <option value="Vehicles & Fleet">Vehicles & Fleet</option>
+                <option value="Tool & Implements">Tool & Implements</option>
+              </select>
+
+              <!-- Qty Filter -->
+              <select id="vhQtyFilter" class="form-select w-auto">
+                <option value="all">All Quantities</option>
+                <option value="1-5">1 - 5</option>
+                <option value="6-10">6 - 10</option>
+                <option value="gt10">Over 10</option>
+              </select>
+
+              <!-- Price Filter -->
+              <select id="vhPriceFilter" class="form-select w-auto">
+                <option value="all">All Prices</option>
+                <option value="under1000">Under ₹1,000</option>
+                <option value="1000-10000">₹1,000 - ₹10,000</option>
+                <option value="10000-100000">₹10,000 - ₹100,000</option>
+                <option value="gt100000">Over ₹100,000</option>
+              </select>
+
+              <!-- Status Filter -->
+              <select id="vhStatusFilter" class="form-select w-auto">
+                <option value="all">All Statuses</option>
+                <option value="Operational">Operational</option>
+                <option value="Maintenance">Maintenance</option>
+                <option value="Idle">Idle</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-responsive text-nowrap p-4">
+            <table class="table table-hover align-middle border-top" id="tableVehicle">
+              <thead class="table-light">
+                  <tr>
+                      <th>Machine or Tool Record</th>
+                      <th>Category</th>
+                      <th>License Plate</th>
+                      <th>Rental Availability</th>
+                      <th>Operational Status</th>
+                      <th>Last Inspected Service</th>
+                      <th>Qty</th>
+                      <th class="text-end">Actions</th>
+                  </tr>
+              </thead>
+              <tbody>
+              {% for item in vehicles %}
+              <tr>
+                  <td>
+                  <div class="d-flex gap-3">
+                      <div class="d-flex align-items-center">
+                      {% if 'Tool' in item.category %}
+                        <i class="ri-tools-line border rounded p-2 bg-warning-subtle text-warning fs-5" style="border-radius:8px !important;"></i>
+                      {% else %}
+                        <i class="ri-truck-line border rounded p-2 bg-info-subtle text-info fs-5" style="border-radius:8px !important;"></i>
+                      {% endif %}
+                      </div>
+                      <div class="d-flex flex-column">
+                      <label class="text-dark fw-semibold fs-6 mb-0">{{ item.item_name }}</label>
+                      <small class="text-muted" style="font-size: 0.7rem;">Storage Bay: {{ item.location }}</small>
+                      </div>
+                  </div>
+                  </td>
+                  <td>
+                  <span class="badge bg-warning-subtle text-warning border rounded-pill px-2 py-1">{{ item.category }}</span>
+                  </td>
+                  <td>
+                  <label class="text-muted border rounded px-2 py-0.5 small mb-0">🎫 {{ item.license_plate|default:"— N/A For Tools" }}</label>
+                  </td>
+
+                  <!-- Column 4: Rental Availability -->
+                  <td class="align-middle">
+                    <div class="d-inline-flex align-items-center gap-2">
+                      <label class="rental-ios-switch" for="rental_toggle_{{ item.id }}" title="Toggle Rental Availability">
+                        <input type="checkbox"
+                               id="rental_toggle_{{ item.id }}"
+                               data-id="{{ item.id }}"
+                               {% if item.rental_available %}checked{% endif %}
+                               onchange="toggleFarmerRentalSwitch({{ item.id }}, this.checked)">
+                        <span class="rental-slider"></span>
+                      </label>
+                      <span id="rental_switch_label_{{ item.id }}">
+                        {% if item.rental_available %}
+                          <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1 d-inline-flex align-items-center gap-1" style="font-size: 11px; font-weight: 600;">
+                            <i class="ri-checkbox-circle-fill"></i> Rental ON
+                          </span>
+                        {% else %}
+                          <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-2.5 py-1 d-inline-flex align-items-center gap-1" style="font-size: 11px; font-weight: 500;">
+                            <i class="ri-close-circle-line"></i> Rental OFF
+                          </span>
+                        {% endif %}
+                      </span>
+                    </div>
+                  </td>
+
+                  <!-- Column 5: Operational Status -->
+                  <td class="align-middle">
+                    <div class="dropdown">
+                      <button class="btn btn-xs rounded-pill px-3 py-1.5 d-inline-flex align-items-center justify-content-between gap-2 shadow-none border fw-semibold rental-status-pill"
+                              type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                              id="rental_status_btn_{{ item.id }}"
+                              style="font-size: 11.5px; min-width: 125px;
+                              {% if item.status == 'Available' or item.status == 'Operational' %}background:#ecfdf5; color:#059669; border-color:#a7f3d0;
+                              {% elif item.status == 'Booked' or item.status == 'Rented' %}background:#fffbeb; color:#d97706; border-color:#fde68a;
+                              {% elif item.status == 'Maintenance' or item.status == 'Needs Repair' or item.status == 'Low Stock' %}background:#fef2f2; color:#dc2626; border-color:#fecaca;
+                              {% else %}background:#f8fafc; color:#475569; border-color:#e2e8f0;{% endif %}">
+                        <span class="d-inline-flex align-items-center gap-1.5" id="rental_status_text_{{ item.id }}">
+                          <span class="status-dot rounded-circle" style="width: 7px; height: 7px; display: inline-block;
+                            {% if item.status == 'Available' or item.status == 'Operational' %}background:#059669;
+                            {% elif item.status == 'Booked' or item.status == 'Rented' %}background:#d97706;
+                            {% elif item.status == 'Maintenance' or item.status == 'Needs Repair' or item.status == 'Low Stock' %}background:#dc2626;
+                            {% else %}background:#475569;{% endif %}"></span>
+                          {{ item.status|default:"Available" }}
+                        </span>
+                        <i class="ri-arrow-down-s-line fs-6 text-muted"></i>
+                      </button>
+                      <ul class="dropdown-menu shadow border-0 py-1.5 rounded-3" style="min-width: 145px; font-size: 12px; z-index: 1050;">
+                        <li>
+                          <button class="dropdown-item py-1.5 px-3 d-flex align-items-center gap-2" type="button"
+                                  onclick="updateFarmerRentalStatus({{ item.id }}, 'Available')">
+                            <span class="rounded-circle bg-success" style="width: 7px; height: 7px;"></span>
+                            <span class="fw-medium text-success">Available</span>
+                          </button>
+                        </li>
+                        <li>
+                          <button class="dropdown-item py-1.5 px-3 d-flex align-items-center gap-2" type="button"
+                                  onclick="updateFarmerRentalStatus({{ item.id }}, 'Booked')">
+                            <span class="rounded-circle bg-warning" style="width: 7px; height: 7px;"></span>
+                            <span class="fw-medium text-warning">Booked</span>
+                          </button>
+                        </li>
+                        <li>
+                          <button class="dropdown-item py-1.5 px-3 d-flex align-items-center gap-2" type="button"
+                                  onclick="updateFarmerRentalStatus({{ item.id }}, 'Maintenance')">
+                            <span class="rounded-circle bg-danger" style="width: 7px; height: 7px;"></span>
+                            <span class="fw-medium text-danger">Maintenance</span>
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                  </td>
+                  <td>
+                  <div class="d-flex align-items-center gap-1">
+                      <i class="ri-calendar-line text-muted"></i>
+                      <label class="text-muted mb-0 small">{{ item.last_service_date|default:"No schedules logged" }}</label>
+                  </div>
+                  </td>
+                  <td>
+                  <label class="text-dark fw-semibold mb-0">{{ item.quantity }}</label>
+                  </td>
+                  <td class="text-end">
+                    <div class="d-flex align-items-center justify-content-end gap-1">
+                      <button type="button" class="btn btn-sm btn-icon btn-outline-info view-inventory-btn"
+                        data-id="{{ item.id }}"
+                        data-name="{{ item.item_name }}"
+                        data-category="{{ item.category }}"
+                        data-quantity="{{ item.quantity }}"
+                        data-unit="{{ item.unit }}"
+                        data-location="{{ item.location }}"
+                        data-status="{{ item.status }}"
+                        data-plate="{{ item.license_plate|default:'' }}"
+                        data-purchasedate="{{ item.purchase_date|date:'Y-m-d'|default:'' }}"
+                        data-servicedate="{{ item.last_service_date|date:'Y-m-d'|default:'' }}"
+                        data-nextservicedate="{{ item.next_service_date|date:'Y-m-d'|default:'' }}"
+                        data-fueltype="{{ item.fuel_type|default:'' }}"
+                        data-insuranceexpiry="{{ item.insurance_expiry|date:'Y-m-d'|default:'' }}"
+                        data-rcexpiry="{{ item.rc_expiry|date:'Y-m-d'|default:'' }}"
+                        data-pollutionexpiry="{{ item.pollution_expiry|date:'Y-m-d'|default:'' }}"
+                        data-price="{{ item.unit_price|default:0 }}"
+                        data-rental="{{ item.rental_available }}"
+                        data-rentalprice="{{ item.rental_price|default:0 }}"
+                        data-rentalunit="{{ item.rental_unit|default:'Per Day' }}"
+                        data-description="{{ item.description|default:'' }}"
+                        title="View Details"
+                        onclick="window.openViewInventoryModal(this)">
+                        <i class="ri-eye-line"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-icon btn-outline-secondary edit-inventory-btn"
+                        data-id="{{ item.id }}"
+                        data-name="{{ item.item_name }}"
+                        data-category="{{ item.category }}"
+                        data-quantity="{{ item.quantity }}"
+                        data-unit="{{ item.unit }}"
+                        data-safety="{{ item.safety_stock }}"
+                        data-location="{{ item.location }}"
+                        data-status="{{ item.status }}"
+                        data-plate="{{ item.license_plate|default:'' }}"
+                        data-purchasedate="{{ item.purchase_date|date:'Y-m-d'|default:'' }}"
+                        data-servicedate="{{ item.last_service_date|date:'Y-m-d'|default:'' }}"
+                        data-nextservicedate="{{ item.next_service_date|date:'Y-m-d'|default:'' }}"
+                        data-fueltype="{{ item.fuel_type|default:'' }}"
+                        data-insurancefile="{% if item.insurance_file %}{{ item.insurance_file.url }}{% endif %}"
+                        data-insuranceexpiry="{{ item.insurance_expiry|date:'Y-m-d'|default:'' }}"
+                        data-rcfile="{% if item.rc_file %}{{ item.rc_file.url }}{% endif %}"
+                        data-rcexpiry="{{ item.rc_expiry|date:'Y-m-d'|default:'' }}"
+                        data-pollutionfile="{% if item.pollution_file %}{{ item.pollution_file.url }}{% endif %}"
+                        data-pollutionexpiry="{{ item.pollution_expiry|date:'Y-m-d'|default:'' }}"
+                        data-price="{{ item.unit_price|default:0 }}"
+                        data-rental="{{ item.rental_available }}"
+                        data-rentalprice="{{ item.rental_price|default:0 }}"
+                        data-rentalunit="{{ item.rental_unit|default:'Per Day' }}"
+                        data-description="{{ item.description|default:'' }}"
+                        title="Edit Item">
+                        <i class="ri-pencil-line"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-icon btn-outline-danger delete-inventory-btn"
+                        data-id="{{ item.id }}"
+                        data-name="{{ item.item_name }}"
+                        title="Delete Item">
+                        <i class="ri-delete-bin-7-line"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-icon btn-outline-info view-stock-log-btn"
+                        data-id="{{ item.id }}"
+                        data-name="{{ item.item_name }}"
+                        title="View Stock Log"
+                        onclick="openStockLogOffcanvas({{ item.id }}, '{{ item.item_name|escapejs }}')">
+                        <i class="ri-history-line"></i>
+                      </button>
+                    </div>
+                  </td>
+              </tr>
+              {% empty %}
+              <tr>
+                  <td colspan="8" class="text-center text-muted py-5">
+                    No fleet or vehicles registered yet.
+                  </td>
+              </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+    </div>
+</<!-- Add Inventory Modal -->
+<div class="modal fade" id="add_consumption_modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow">
+
+      <!-- Header -->
+      <div class="modal-header bg-light border-bottom-0">
+        <h5 class="modal-title fw-bold text-dark"><i class="ri-add-box-line me-2 text-primary"></i>Add Inventory</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body p-4">
+        <form method="POST" action="{% url 'add_inventory' %}" id="addInventoryForm" enctype="multipart/form-data">
+          {% csrf_token %}
+          <input type="hidden" name="category" id="add_category_hidden" value="Seeds">
+          
+          <div class="row g-3">
+            <!-- 1. Inventory Category Selector -->
+            <div class="col-md-6">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0">Inventory Category</label>
+                <a href="javascript:void(0)" class="fw-semibold small text-decoration-none" style="color: #f69c55 !important;" onclick="window.openQuickCategoryModal()">+ Quick Add</a>
+              </div>
+              <select id="add_inv_category_selector" class="form-select" onchange="toggleFormFields('add')">
+                {% for cat in dropdown_categories %}
+                <option value="{% if cat.name == 'Warehouse Stock' %}Warehouse{% else %}{{ cat.name }}{% endif %}" {% if forloop.first %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- 2. Inventory Type (Warehouse only) -->
+            <div class="col-md-6 add-warehouse-only">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0">Inventory Type</label>
+                <a href="javascript:void(0)" class="fw-semibold small text-decoration-none" style="color: #f69c55 !important;" onclick="window.openQuickInventoryTypeModal()">+ Quick Add</a>
+              </div>
+              <select id="add_wh_type_select" class="form-select" onchange="$('#add_category_hidden').val(this.value)">
+                {% for it in inventory_types %}
+                <option value="{{ it.name }}" {% if it.name == 'Fertilizer' %}selected{% endif %}>{{ it.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- 3. Name -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" id="add_name_label">Name</label>
+              <input type="text" name="item_name" id="add_name_input" class="form-control" placeholder="e.g. Urea 46% N" required>
+            </div>
+
+            <!-- 4. Unit Dropdown (Warehouse only) -->
+            <div class="col-md-6 add-warehouse-only">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0">Unit</label>
+                <a href="javascript:void(0)" class="fw-semibold small text-decoration-none" style="color: #f69c55 !important;" onclick="window.openQuickUnitModal()">+ Quick Add</a>
+              </div>
+              <select name="unit" id="add_unit_select" class="form-select">
+                <option value="Units">Units</option>
+                {% for u in units %}
+                <option value="{{ u.name }}">{{ u.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- 5. Qty (Warehouse only) -->
+            <div class="col-md-6 add-warehouse-only">
+              <label class="form-label fw-semibold">Qty</label>
+              <input type="number" name="quantity" id="add_qty_input" class="form-control qty-input-calc add-calc" value="1" min="0" oninput="window.calculateTotalPrice('add')" onchange="window.calculateTotalPrice('add')">
+            </div>
+
+            <!-- 6. Safety Stock (Warehouse only) -->
+            <div class="col-md-6 add-warehouse-only">
+              <label class="form-label fw-semibold">Safety Stock</label>
+              <input type="number" name="safety_stock" id="add_safety_stock_input" class="form-control" value="5" min="0">
+            </div>
+
+            <!-- 7. Unit Price (Warehouse only) -->
+            <div class="col-md-6 add-warehouse-only">
+              <label class="form-label fw-semibold" id="add_price_label">Unit Price (₹)</label>
+              <input type="number" step="0.01" name="unit_price" id="add_price_input" class="form-control price-input-calc add-calc" value="0" min="0" oninput="window.calculateTotalPrice('add')" onchange="window.calculateTotalPrice('add')">
+            </div>
+
+            <!-- 8. Total Price (Warehouse only - calculated) -->
+            <div class="col-md-6 add-warehouse-only">
+              <label class="form-label fw-semibold">Total Price</label>
+              <input type="text" id="add_total_price_display" class="form-control bg-light" value="₹0.00" readonly>
+            </div>
+
+            <!-- Number Plate (Machinery only) -->
+            <div class="col-md-6 add-machinery-only d-none">
+              <label class="form-label fw-semibold">Number Plate</label>
+              <input type="text" name="license_plate" id="add_license_plate" class="form-control" placeholder="e.g. HR-26-CH-9130">
+            </div>
+
+            <!-- Fuel Type (Machinery only) -->
+            <div class="col-md-6 add-machinery-only d-none">
+              <label class="form-label fw-semibold">Fuel Type</label>
+              <select name="fuel_type" id="add_fuel_type" class="form-select">
+                <option value="" selected>-- Select Fuel Type --</option>
+                <option value="Diesel">Diesel</option>
+                <option value="Petrol">Petrol</option>
+                <option value="CNG">CNG</option>
+                <option value="Electric">Electric</option>
+              </select>
+            </div>
+
+            <!-- Last Service Date (Machinery & Tools only) -->
+            <div class="col-md-6 add-machinery-tools-only d-none">
+              <label class="form-label fw-semibold">Last Service Date</label>
+              <input type="date" name="last_service_date" id="add_last_service_date" class="form-control">
+            </div>
+
+            <!-- Date of Purchase (Machinery & Tools) -->
+            <div class="col-md-6 add-machinery-tools-only d-none">
+              <label class="form-label fw-semibold">Date of Purchase</label>
+              <input type="date" name="purchase_date" id="add_tools_purchase_date" class="form-control">
+            </div>
+
+            <!-- Tool Price (Tools only) -->
+            <div class="col-md-6 add-tools-only d-none">
+              <label class="form-label fw-semibold">Tool Price (₹)</label>
+              <input type="number" step="0.01" name="unit_price" id="add_tools_price" class="form-control" placeholder="0.00">
+            </div>
+
+            <!-- Next Service Date (Machinery only) -->
+            <div class="col-md-6 add-machinery-only d-none">
+              <label class="form-label fw-semibold">Next Service Date</label>
+              <input type="date" name="next_service_date" id="add_next_service_date" class="form-control">
+            </div>
+
+            <!-- Insurance Details (Machinery only) -->
+            <div class="col-md-6 add-machinery-only d-none">
+              <label class="form-label fw-semibold">Insurance Document (Upload)</label>
+              <input type="file" name="insurance_file" id="add_insurance_file" class="form-control">
+            </div>
+            <div class="col-md-6 add-machinery-only d-none">
+              <label class="form-label fw-semibold">Insurance Expiry Date</label>
+              <input type="date" name="insurance_expiry" id="add_insurance_expiry" class="form-control">
+            </div>
+
+            <!-- RC Details (Machinery only) -->
+            <div class="col-md-6 add-machinery-only d-none">
+              <label class="form-label fw-semibold">RC Document (Upload)</label>
+              <input type="file" name="rc_file" id="add_rc_file" class="form-control">
+            </div>
+            <div class="col-md-6 add-machinery-only d-none">
+              <label class="form-label fw-semibold">RC Expiry Date</label>
+              <input type="date" name="rc_expiry" id="add_rc_expiry" class="form-control">
+            </div>
+
+            <!-- Pollution Certificate Details (Machinery only) -->
+            <div class="col-md-6 add-machinery-only d-none">
+              <label class="form-label fw-semibold">Pollution Document (Upload)</label>
+              <input type="file" name="pollution_file" id="add_pollution_file" class="form-control">
+            </div>
+            <div class="col-md-6 add-machinery-only d-none">
+              <label class="form-label fw-semibold">Pollution Expiry Date</label>
+              <input type="date" name="pollution_expiry" id="add_pollution_expiry" class="form-control">
+            </div>
+
+            <!-- Machine Price (Machinery only) -->
+            <div class="col-md-6 add-machinery-only d-none">
+              <label class="form-label fw-semibold">Machine Price (₹)</label>
+              <input type="number" step="0.01" name="unit_price" id="add_machinery_price" class="form-control" placeholder="0.00">
+            </div>
+
+            <!-- Description (Tools only) -->
+            <div class="col-12 add-tools-only d-none">
+              <label class="form-label fw-semibold">Description</label>
+              <textarea name="description" id="add_description" class="form-control" rows="2" placeholder="Enter tool description or notes..."></textarea>
+            </div>
+
+            <!-- Storage Location (All categories) -->
+            <div class="col-md-6">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0" id="add_location_label">Storage Location</label>
+                <a href="javascript:void(0)" class="fw-semibold small text-decoration-none" style="color: #f69c55 !important;" onclick="window.openQuickLocationModal()">+ Quick Add</a>
+              </div>
+              <select name="location" id="add_location_select" class="form-select">
+                {% for loc in locations %}
+                <option value="{{ loc }}" {% if loc == 'Main Warehouse' %}selected{% endif %}>{{ loc }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Status Dropdown (Machinery & Tools only) -->
+            <div class="col-md-6 add-machinery-tools-only d-none">
+              <label class="form-label fw-semibold">Status</label>
+              <select name="status" id="add_status_select" class="form-select">
+                <option value="Available" selected>Available</option>
+                <option value="Booked">Booked</option>
+                <option value="Maintenance">Maintenance</option>
+                <option value="Operational">Operational</option>
+                <option value="Idle">Idle</option>
+                <option value="Needs Repair">Needs Repair</option>
+              </select>
+            </div>
+
+            <!-- Available for Rental (Machinery & Tools only) -->
+            <div class="col-md-12 add-machinery-tools-only d-none mt-2">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="rental_available" id="add_rental_available" onchange="toggleAddRentalPrice('add')" style="cursor: pointer;">
+                <label class="form-check-label fw-semibold text-dark" for="add_rental_available">Available for Rental / Rent out</label>
+              </div>
+            </div>
+
+            <!-- Rental Pricing Fields (Toggled by rental check) -->
+            <div class="col-md-6 add-rental-fields-add d-none">
+              <label class="form-label fw-semibold">Rental Price (₹)</label>
+              <input type="number" step="0.01" name="rental_price" id="add_rental_price" class="form-control" placeholder="0.00">
+            </div>
+            <div class="col-md-6 add-rental-fields-add d-none">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0">Rental Unit</label>
+                <a href="javascript:void(0)" class="fw-semibold small text-decoration-none" style="color: #f69c55 !important;" onclick="window.openQuickUnitModal()">+ Quick Add</a>
+              </div>
+              <select name="rental_unit" id="add_rental_unit" class="form-select">
+                <option value="Per Day" selected>Per Day</option>
+                <option value="Per Hour">Per Hour</option>
+                <option value="Per Acre">Per Acre</option>
+                <option value="Per Trip">Per Trip</option>
+                <option value="Per Month">Per Month</option>
+                {% for u in units %}
+                <option value="{{ u.name }}">{{ u.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-12 mt-4 pt-3 border-top text-end">
+              <button type="button" class="btn btn-light border me-2" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-primary"><i class="ri-check-line me-1"></i>Save Item</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- View Inventory Detail Modal -->
+<div class="modal fade" id="view_inventory_modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow-lg">
+
+      <!-- Header -->
+      <div class="modal-header border-bottom-0 pb-0" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+        <div class="d-flex align-items-center gap-3">
+          <div class="rounded-3 d-flex align-items-center justify-content-center" id="view_modal_icon_wrap" style="width:48px;height:48px;background:rgba(99,102,241,0.12);">
+            <i class="ri-eye-line fs-4" style="color:#6366f1;"></i>
+          </div>
+          <div>
+            <h5 class="modal-title fw-bold text-dark mb-0" id="view_modal_item_name">Item Details</h5>
+            <small class="text-muted" id="view_modal_item_category">Category</small>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body p-4">
+
+        <!-- Status Badge Row -->
+        <div class="d-flex align-items-center gap-2 mb-4">
+          <span class="badge rounded-pill px-3 py-2 fs-6" id="view_modal_status_badge">—</span>
+          <span class="text-muted small" id="view_modal_location_text"><i class="ri-map-pin-line me-1"></i>—</span>
+        </div>
+
+        <!-- Info Grid -->
+        <div class="row g-3" id="view_modal_body">
+          <!-- Dynamically filled by JS -->
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div class="modal-footer border-top-0 pt-0">
+        <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-warning text-white" id="view_modal_edit_btn">
+          <i class="ri-pencil-line me-1"></i>Edit
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Edit Inventory Modal -->
+<div class="modal fade" id="edit_inventory_modal" tabindex="-1" aria-hidden="true" style="z-index: 10600 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow">
+
+      <!-- Header -->
+      <div class="modal-header bg-light border-bottom-0">
+        <h5 class="modal-title fw-bold text-dark"><i class="ri-edit-box-line me-2 text-warning"></i>Edit Inventory Record</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body p-4">
+        <form method="POST" action="{% url 'update_inventory' %}" id="editInventoryForm" enctype="multipart/form-data">
+          {% csrf_token %}
+          <input type="hidden" name="item_id" id="edit_item_id" class="edit_item_id_input">
+          <input type="hidden" name="category" id="edit_category_hidden" value="Seeds">
+          
+          <div class="row g-3">
+            <!-- 1. Inventory Category Selector -->
+            <div class="col-md-6">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0">Inventory Category</label>
+                <a href="javascript:void(0)" class="fw-semibold small text-decoration-none" style="color: #f69c55 !important;" onclick="window.openQuickCategoryModal()">+ Quick Add</a>
+              </div>
+              <select id="edit_inv_category_selector" class="form-select" onchange="toggleFormFields('edit')">
+                {% for cat in dropdown_categories %}
+                <option value="{% if cat.name == 'Warehouse Stock' %}Warehouse{% else %}{{ cat.name }}{% endif %}">{{ cat.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- 2. Inventory Type (Warehouse only) -->
+            <div class="col-md-6 edit-inventory-type-wrap edit-warehouse-only">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0">Inventory Type</label>
+                <a href="javascript:void(0)" class="fw-semibold small text-decoration-none" style="color: #f69c55 !important;" onclick="window.openQuickInventoryTypeModal()">+ Quick Add</a>
+              </div>
+              <select id="edit_wh_type_select" class="form-select" onchange="$('#edit_category_hidden').val(this.value)">
+                {% for it in inventory_types %}
+                <option value="{{ it.name }}">{{ it.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- 3. Name -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" id="edit_name_label">Name</label>
+              <input type="text" name="item_name" id="edit_name_input" class="form-control" required>
+            </div>
+
+            <!-- 4. Unit Dropdown (Warehouse only) -->
+            <div class="col-md-6 edit-warehouse-only">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0">Unit</label>
+                <a href="javascript:void(0)" class="fw-semibold small text-decoration-none" style="color: #f69c55 !important;" onclick="window.openQuickUnitModal()">+ Quick Add</a>
+              </div>
+              <select name="unit" id="edit_unit_select" class="form-select">
+                <option value="Units">Units</option>
+                {% for u in units %}
+                <option value="{{ u.name }}">{{ u.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- 5. Qty (Warehouse only) -->
+            <div class="col-md-6 edit-warehouse-only">
+              <label class="form-label fw-semibold">Qty</label>
+              <input type="number" name="quantity" id="edit_qty_input" class="form-control qty-input-calc edit-calc" min="0" oninput="window.calculateTotalPrice('edit')" onchange="window.calculateTotalPrice('edit')">
+            </div>
+
+            <!-- 6. Safety Stock (Warehouse only) -->
+            <div class="col-md-6 edit-warehouse-only">
+              <label class="form-label fw-semibold">Safety Stock</label>
+              <input type="number" name="safety_stock" id="edit_safety_stock_input" class="form-control" min="0">
+            </div>
+
+            <!-- 7. Unit Price (Warehouse only) -->
+            <div class="col-md-6 edit-warehouse-only">
+              <label class="form-label fw-semibold" id="edit_price_label">Unit Price (₹)</label>
+              <input type="number" step="0.01" name="unit_price" id="edit_price_input" class="form-control price-input-calc edit-calc" min="0" oninput="window.calculateTotalPrice('edit')" onchange="window.calculateTotalPrice('edit')">
+            </div>
+
+            <!-- 8. Total Price (Warehouse only - calculated) -->
+            <div class="col-md-6 edit-warehouse-only">
+              <label class="form-label fw-semibold">Total Price</label>
+              <input type="text" id="edit_total_price_display" class="form-control bg-light" value="₹0.00" readonly>
+            </div>
+
+            <!-- Number Plate (Machinery only) -->
+            <div class="col-md-6 edit-machinery-only d-none">
+              <label class="form-label fw-semibold">Number Plate</label>
+              <input type="text" name="license_plate" id="edit_license_plate" class="form-control" placeholder="e.g. HR-26-CH-9130">
+            </div>
+
+            <!-- Fuel Type (Machinery only) -->
+            <div class="col-md-6 edit-machinery-only d-none">
+              <label class="form-label fw-semibold">Fuel Type</label>
+              <select name="fuel_type" id="edit_fuel_type" class="form-select">
+                <option value="" selected>-- Select Fuel Type --</option>
+                <option value="Diesel">Diesel</option>
+                <option value="Petrol">Petrol</option>
+                <option value="CNG">CNG</option>
+                <option value="Electric">Electric</option>
+              </select>
+            </div>
+
+            <!-- Last Service Date (Machinery & Tools only) -->
+            <div class="col-md-6 edit-machinery-tools-only d-none">
+              <label class="form-label fw-semibold">Last Service Date</label>
+              <input type="date" name="last_service_date" id="edit_last_service_date" class="form-control">
+            </div>
+
+            <!-- Date of Purchase (Machinery & Tools) -->
+            <div class="col-md-6 edit-machinery-tools-only d-none">
+              <label class="form-label fw-semibold">Date of Purchase</label>
+              <input type="date" name="purchase_date" id="edit_tools_purchase_date" class="form-control">
+            </div>
+
+            <!-- Tool Price (Tools only) -->
+            <div class="col-md-6 edit-tools-only d-none">
+              <label class="form-label fw-semibold">Tool Price (₹)</label>
+              <input type="number" step="0.01" name="unit_price" id="edit_tools_price" class="form-control" placeholder="0.00">
+            </div>
+
+            <!-- Next Service Date (Machinery only) -->
+            <div class="col-md-6 edit-machinery-only d-none">
+              <label class="form-label fw-semibold">Next Service Date</label>
+              <input type="date" name="next_service_date" id="edit_next_service_date" class="form-control">
+            </div>
+
+            <!-- Insurance Details (Machinery only) -->
+            <div class="col-md-6 edit-machinery-only d-none">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0">Insurance Document (Upload)</label>
+                <span id="edit_insurance_file_link" class="small"></span>
+              </div>
+              <input type="file" name="insurance_file" id="edit_insurance_file" class="form-control">
+            </div>
+            <div class="col-md-6 edit-machinery-only d-none">
+              <label class="form-label fw-semibold">Insurance Expiry Date</label>
+              <input type="date" name="insurance_expiry" id="edit_insurance_expiry" class="form-control">
+            </div>
+
+            <!-- RC Details (Machinery only) -->
+            <div class="col-md-6 edit-machinery-only d-none">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0">RC Document (Upload)</label>
+                <span id="edit_rc_file_link" class="small"></span>
+              </div>
+              <input type="file" name="rc_file" id="edit_rc_file" class="form-control">
+            </div>
+            <div class="col-md-6 edit-machinery-only d-none">
+              <label class="form-label fw-semibold">RC Expiry Date</label>
+              <input type="date" name="rc_expiry" id="edit_rc_expiry" class="form-control">
+            </div>
+
+            <!-- Pollution Certificate Details (Machinery only) -->
+            <div class="col-md-6 edit-machinery-only d-none">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0">Pollution Document (Upload)</label>
+                <span id="edit_pollution_file_link" class="small"></span>
+              </div>
+              <input type="file" name="pollution_file" id="edit_pollution_file" class="form-control">
+            </div>
+            <div class="col-md-6 edit-machinery-only d-none">
+              <label class="form-label fw-semibold">Pollution Expiry Date</label>
+              <input type="date" name="pollution_expiry" id="edit_pollution_expiry" class="form-control">
+            </div>
+
+            <!-- Machine Price (Machinery only) -->
+            <div class="col-md-6 edit-machinery-only d-none">
+              <label class="form-label fw-semibold">Machine Price (₹)</label>
+              <input type="number" step="0.01" name="unit_price" id="edit_machinery_price" class="form-control" placeholder="0.00">
+            </div>
+
+            <!-- Description (Tools only) -->
+            <div class="col-12 edit-tools-only d-none">
+              <label class="form-label fw-semibold">Description</label>
+              <textarea name="description" id="edit_description" class="form-control" rows="2" placeholder="Enter tool description or notes..."></textarea>
+            </div>
+
+            <!-- Storage Location (All categories) -->
+            <div class="col-md-6">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0" id="edit_location_label">Storage Location</label>
+                <a href="javascript:void(0)" class="fw-semibold small text-decoration-none" style="color: #f69c55 !important;" onclick="window.openQuickLocationModal()">+ Quick Add</a>
+              </div>
+              <select name="location" id="edit_location_select" class="form-select">
+                {% for loc in locations %}
+                <option value="{{ loc }}">{{ loc }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Status Dropdown (Machinery & Tools only) -->
+            <div class="col-md-6 edit-machinery-tools-only d-none">
+              <label class="form-label fw-semibold">Status</label>
+              <select name="status" id="edit_status_select" class="form-select">
+                <option value="Available">Available</option>
+                <option value="Booked">Booked</option>
+                <option value="Maintenance">Maintenance</option>
+                <option value="Operational">Operational</option>
+                <option value="Idle">Idle</option>
+                <option value="Needs Repair">Needs Repair</option>
+                <option value="In Stock">In Stock</option>
+                <option value="Low Stock">Low Stock</option>
+                <option value="Out of Stock">Out of Stock</option>
+              </select>
+            </div>
+
+            <!-- Available for Rental (Machinery & Tools only) -->
+            <div class="col-md-12 edit-machinery-tools-only d-none mt-2">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="rental_available" id="edit_rental_available" onchange="toggleAddRentalPrice('edit')" style="cursor: pointer;">
+                <label class="form-check-label fw-semibold text-dark" for="edit_rental_available">Available for Rental / Rent out</label>
+              </div>
+            </div>
+
+            <!-- Rental Pricing Fields (Toggled by rental check) -->
+            <div class="col-md-6 add-rental-fields-edit d-none">
+              <label class="form-label fw-semibold">Rental Price (₹)</label>
+              <input type="number" step="0.01" name="rental_price" id="edit_rental_price" class="form-control" placeholder="0.00">
+            </div>
+            <div class="col-md-6 add-rental-fields-edit d-none">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0">Rental Unit</label>
+                <a href="javascript:void(0)" class="fw-semibold small text-decoration-none" style="color: #f69c55 !important;" onclick="window.openQuickUnitModal()">+ Quick Add</a>
+              </div>
+              <select name="rental_unit" id="edit_rental_unit" class="form-select">
+                <option value="Per Day" selected>Per Day</option>
+                <option value="Per Hour">Per Hour</option>
+                <option value="Per Acre">Per Acre</option>
+                <option value="Per Trip">Per Trip</option>
+                <option value="Per Month">Per Month</option>
+                {% for u in units %}
+                <option value="{{ u.name }}">{{ u.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-12 mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
+              <button type="button" class="btn btn-outline-danger" onclick="window.triggerDeleteCurrent()"><i class="ri-delete-bin-line me-1"></i>Delete</button>
+              <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-warning text-white fw-bold" style="background: #f98e38; border: none;"><i class="ri-check-line me-1"></i>Save Changes</button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Delete Inventory Modal -->
+<div class="modal fade" id="delete_inventory_modal" tabindex="-1" aria-hidden="true" style="z-index: 10600 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <div class="modal-header bg-danger text-white rounded-top-4">
+        <h5 class="modal-title fw-bold text-white"><i class="ri-delete-bin-line me-2"></i>Confirm Delete</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="deleteInventoryForm" method="POST" action="{% url 'delete_inventory' %}">
+        {% csrf_token %}
+        <input type="hidden" name="item_id" id="delete_item_id">
+        <div class="modal-body text-center py-4">
+          <p class="mb-1 fs-6">Are you sure you want to delete this inventory record?</p>
+          <strong id="delete_item_name_display" class="text-danger"></strong>
+        </div>
+        <div class="modal-footer border-top-0 d-flex justify-content-center">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger px-4">Yes, Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Stock Log Offcanvas -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="stockLogOffcanvas" aria-labelledby="stockLogOffcanvasLabel" style="width:420px;">
+  <div class="offcanvas-header border-bottom" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);">
+    <div>
+      <h5 class="offcanvas-title fw-bold text-dark mb-0" id="stockLogOffcanvasLabel">
+        <i class="ri-history-line me-2 text-success"></i><span id="log_offcanvas_item_name">Stock Log</span>
+      </h5>
+      <p class="text-muted small mb-0">In / Out movement history</p>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body p-3" id="stockLogOffcanvasBody">
+    <div class="text-center text-muted py-5">
+      <i class="ri-loader-4-line fs-2"></i><br>Loading...
+    </div>
+  </div>
+</div>
+
+<!-- Add Stock Log Modal -->
+<div class="modal fade" id="add_stock_log_modal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <div class="modal-header border-0 pb-2" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7); border-radius:1rem 1rem 0 0;">
+        <div>
+          <h5 class="modal-title fw-bold text-dark mb-0"><i class="ri-file-list-3-line me-2 text-success"></i>Add Stock Log</h5>
+          <p class="text-muted small mb-0">Record inventory usage or return</p>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="addStockLogForm" method="POST" action="{% url 'add_stock_log' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" id="log_action_hidden" value="remove">
+        <div class="modal-body p-4">
+          <div class="row g-3">
+
+            <!-- Inventory Item -->
+            <div class="col-12">
+              <label class="form-label fw-semibold">Inventory Item <span class="text-danger">*</span></label>
+              <select name="item_id" class="form-select" required id="log_item_select">
+                <option value="">-- Select Item --</option>
+                {% for item in all_inventory_items %}
+                <option value="{{ item.id }}" data-unit="{{ item.unit }}" data-qty="{{ item.quantity }}">
+                  {{ item.item_name }} &nbsp;({{ item.quantity }} {{ item.unit }})
+                </option>
+                {% empty %}
+                <option disabled>No inventory items found</option>
+                {% endfor %}
+              </select>
+              <!-- Current stock info -->
+              <div id="log_stock_preview" class="mt-1 small text-muted d-none">
+                Current stock: <strong id="log_current_qty">—</strong>
+              </div>
+            </div>
+
+            <!-- Qty -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Qty <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <input type="number" name="quantity" id="log_qty_input" class="form-control" min="0.01" step="any" placeholder="e.g. 5" required
+                  oninput="checkStockLimit()">
+                <span class="input-group-text text-muted" id="log_unit_display">Units</span>
+              </div>
+              <!-- Limit warning -->
+              <div id="log_limit_warning" class="d-none mt-1 px-2 py-1 rounded-2 d-flex align-items-center gap-2"
+                style="background:#fff3cd; border:1px solid #ffc107; font-size:12.5px; color:#856404;">
+                <i class="ri-alert-line" style="font-size:15px; color:#f59e0b;"></i>
+                <span id="log_limit_msg">Quantity exceeds current stock!</span>
+              </div>
+            </div>
+
+            <!-- Date -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Date <span class="text-danger">*</span></label>
+              <input type="date" name="log_date" class="form-control" id="log_date_input" required>
+            </div>
+
+            <!-- Notes -->
+            <div class="col-12">
+              <label class="form-label fw-semibold">Notes</label>
+              <input type="text" name="notes" class="form-control" placeholder="e.g. Used for field work, returned unused batch...">
+            </div>
+
+            <!-- Out / In buttons -->
+            <div class="col-12">
+              <label class="form-label fw-semibold d-block mb-2">Action</label>
+              <div class="d-flex gap-2">
+                <button type="submit" id="log_out_btn" onclick="setLogAction('remove')"
+                  class="btn flex-fill py-3 fw-bold fs-6 d-flex flex-column align-items-center justify-content-center gap-1"
+                  style="background:#fee2e2; border:2px solid #fca5a5; color:#dc2626; border-radius:12px; transition:all .2s;">
+                  <i class="ri-arrow-up-circle-line" style="font-size:22px;"></i>
+                  Out
+                  <span class="fw-normal" style="font-size:11px; opacity:.8;">Usage / Deduction</span>
+                </button>
+                <button type="submit" id="log_in_btn" onclick="setLogAction('add')"
+                  class="btn flex-fill py-3 fw-bold fs-6 d-flex flex-column align-items-center justify-content-center gap-1"
+                  style="background:#dcfce7; border:2px solid #86efac; color:#16a34a; border-radius:12px; transition:all .2s;">
+                  <i class="ri-arrow-down-circle-line" style="font-size:22px;"></i>
+                  In
+                  <span class="fw-normal" style="font-size:11px; opacity:.8;">Return / Restock</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <div class="modal-footer border-top py-2">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Add Unit Modal -->
+<div class="modal fade" id="quick_add_unit_modal" tabindex="-1" style="z-index: 10700 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header bg-light py-2.5 px-3 border-bottom">
+        <h6 class="modal-title fw-bold mb-0 text-dark"><i class="ri-add-line me-1 text-primary"></i>Quick Add Unit</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="mb-3">
+          <label class="form-label small fw-medium">Unit Name <span class="text-danger">*</span></label>
+          <input type="text" id="quick_unit_name" class="form-control form-control-sm" placeholder="e.g. Bags, Box, Kg">
+        </div>
+        <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold mb-3" onclick="submitQuickUnit()">
+          <i class="ri-add-line me-1"></i> Save Unit
+        </button>
+
+        <div class="border-top pt-2.5">
+          <div class="d-flex align-items-center justify-content-between mb-1.5">
+            <span class="fw-bold text-muted text-uppercase" style="font-size: 11px; letter-spacing: 0.5px;">Existing Units</span>
+            <span class="badge bg-light text-secondary border count-badge" id="quick_unit_count_badge">Loading...</span>
+          </div>
+          <div class="quick-master-items-list overflow-auto rounded-2 p-1.5 border bg-light" id="quick_unit_items_list" style="max-height: 160px; min-height: 50px;"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2 px-3 bg-light d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Add Storage Location Modal -->
+<div class="modal fade" id="quick_add_location_modal" tabindex="-1" style="z-index: 10700 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header bg-light py-2.5 px-3 border-bottom">
+        <h6 class="modal-title fw-bold mb-0 text-dark"><i class="ri-add-line me-1 text-primary"></i>Quick Add Location</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="mb-3">
+          <label class="form-label small fw-medium">Location Name <span class="text-danger">*</span></label>
+          <input type="text" id="quick_location_name" class="form-control form-control-sm" placeholder="e.g. Warehouse B, Tool Shed 3">
+        </div>
+        <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold mb-3" onclick="submitQuickLocation()">
+          <i class="ri-add-line me-1"></i> Save Location
+        </button>
+
+        <div class="border-top pt-2.5">
+          <div class="d-flex align-items-center justify-content-between mb-1.5">
+            <span class="fw-bold text-muted text-uppercase" style="font-size: 11px; letter-spacing: 0.5px;">Existing Locations</span>
+            <span class="badge bg-light text-secondary border count-badge" id="quick_location_count_badge">Loading...</span>
+          </div>
+          <div class="quick-master-items-list overflow-auto rounded-2 p-1.5 border bg-light" id="quick_location_items_list" style="max-height: 160px; min-height: 50px;"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2 px-3 bg-light d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Add Category Modal -->
+<div class="modal fade" id="quick_add_category_modal" tabindex="-1" style="z-index: 10700 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header bg-light py-2.5 px-3 border-bottom">
+        <h6 class="modal-title fw-bold mb-0 text-dark"><i class="ri-add-line me-1 text-primary"></i>Quick Add Category</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="mb-3">
+          <label class="form-label small fw-medium">Category Name <span class="text-danger">*</span></label>
+          <input type="text" id="quick_category_name" class="form-control form-control-sm" placeholder="e.g. Livestock, Feed, Packing">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-medium text-muted">Use Fields Layout From:</label>
+          <div class="d-flex flex-column gap-1">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="category_layout_choice" id="layout_choice_warehouse" value="Warehouse" checked>
+              <label class="form-check-label small text-dark" for="layout_choice_warehouse">Warehouse Stock</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="category_layout_choice" id="layout_choice_machinery" value="Machinery">
+              <label class="form-check-label small text-dark" for="layout_choice_machinery">Machinery</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="category_layout_choice" id="layout_choice_tools" value="Tools">
+              <label class="form-check-label small text-dark" for="layout_choice_tools">Tools</label>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold mb-3" onclick="submitQuickCategory()">
+          <i class="ri-add-line me-1"></i> Save Category
+        </button>
+
+        <div class="border-top pt-2.5">
+          <div class="d-flex align-items-center justify-content-between mb-1.5">
+            <span class="fw-bold text-muted text-uppercase" style="font-size: 11px; letter-spacing: 0.5px;">Existing Categories</span>
+            <span class="badge bg-light text-secondary border count-badge" id="quick_category_count_badge">Loading...</span>
+          </div>
+          <div class="quick-master-items-list overflow-auto rounded-2 p-1.5 border bg-light" id="quick_category_items_list" style="max-height: 160px; min-height: 50px;"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2 px-3 bg-light d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Add Inventory Type Modal -->
+<div class="modal fade" id="quick_add_inventory_type_modal" tabindex="-1" style="z-index: 10700 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header bg-light py-2.5 px-3 border-bottom">
+        <h6 class="modal-title fw-bold mb-0 text-dark"><i class="ri-add-line me-1 text-primary"></i>Quick Add Inventory Type</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="mb-3">
+          <label class="form-label small fw-medium">Inventory Type Name <span class="text-danger">*</span></label>
+          <input type="text" id="quick_inventory_type_name" class="form-control form-control-sm" placeholder="e.g. Herbicide, Feed">
+        </div>
+        <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold mb-3" onclick="submitQuickInventoryType()">
+          <i class="ri-add-line me-1"></i> Save Type
+        </button>
+
+        <div class="border-top pt-2.5">
+          <div class="d-flex align-items-center justify-content-between mb-1.5">
+            <span class="fw-bold text-muted text-uppercase" style="font-size: 11px; letter-spacing: 0.5px;">Existing Types</span>
+            <span class="badge bg-light text-secondary border count-badge" id="quick_inventory_type_count_badge">Loading...</span>
+          </div>
+          <div class="quick-master-items-list overflow-auto rounded-2 p-1.5 border bg-light" id="quick_inventory_type_items_list" style="max-height: 160px; min-height: 50px;"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2 px-3 bg-light d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var dbCategoryLayouts = {{ category_layouts_json|safe|default:"{}" }};
+
+var currentEditItem = {
+    id: '',
+    name: ''
+};
+
+// Toggle form fields dynamically based on category selection
+window.toggleFormFields = function(prefix) {
+    var category = $('#' + prefix + '_inv_category_selector').val();
+    
+    // Hide all first
+    $('.' + prefix + '-warehouse-only').addClass('d-none');
+    $('.' + prefix + '-machinery-only').addClass('d-none');
+    $('.' + prefix + '-tools-only').addClass('d-none');
+    $('.' + prefix + '-machinery-tools-only').addClass('d-none');
+    
+    if (category === 'Machinery') {
+        $('.' + prefix + '-machinery-only').removeClass('d-none');
+        $('.' + prefix + '-machinery-tools-only').removeClass('d-none');
+        
+        // Set values for category
+        $('#' + prefix + '_category_hidden').val('Vehicles & Fleet');
+        
+        // Disable warehouse-only inputs
+        $('#' + prefix + '_qty_input').prop('disabled', true);
+        $('#' + prefix + '_unit_select').prop('disabled', true);
+        $('#' + prefix + '_safety_stock_input').prop('disabled', true);
+        $('#' + prefix + '_price_input').prop('disabled', true);
+        
+        // Enable normal machinery price input, disable others
+        $('#' + prefix + '_machinery_price').prop('disabled', false);
+        $('#' + prefix + '_tools_price').prop('disabled', true);
+        $('#' + prefix + '_price_input').prop('disabled', true);
+        
+        // Status dropdown options
+        $('#' + prefix + '_status_select').html(
+            '<option value="Operational">Operational</option>' +
+            '<option value="Maintenance">Maintenance</option>' +
+            '<option value="Idle">Idle</option>'
+        );
+        
+        // Update Labels & placeholders
+        $('#' + prefix + '_name_label').text('Machine Name');
+        $('#' + prefix + '_name_input').attr('placeholder', 'e.g. John Deere Tractor, Mahindra Bolero');
+        window.toggleAddRentalPrice(prefix);
+        $('#' + prefix + '_location_label').text('Storage Location');
+    } else if (category === 'Tools') {
+        $('.' + prefix + '-tools-only').removeClass('d-none');
+        $('.' + prefix + '-machinery-tools-only').removeClass('d-none');
+        
+        // Set values for category
+        $('#' + prefix + '_category_hidden').val('Tool & Implements');
+        
+        // Disable warehouse-only inputs
+        $('#' + prefix + '_qty_input').prop('disabled', true);
+        $('#' + prefix + '_unit_select').prop('disabled', true);
+        $('#' + prefix + '_safety_stock_input').prop('disabled', true);
+        
+        // Enable normal tools price input, disable others
+        $('#' + prefix + '_tools_price').prop('disabled', false);
+        $('#' + prefix + '_machinery_price').prop('disabled', true);
+        $('#' + prefix + '_price_input').prop('disabled', true);
+        
+        // Status dropdown options
+        $('#' + prefix + '_status_select').html(
+            '<option value="Operational">Operational</option>' +
+            '<option value="Maintenance">Needs Repair</option>'
+        );
+        
+        // Update Labels & placeholders
+        $('#' + prefix + '_name_label').text('Tool Name');
+        $('#' + prefix + '_name_input').attr('placeholder', 'e.g. Power Tiller, Rotavator');
+        window.toggleAddRentalPrice(prefix);
+        $('#' + prefix + '_location_label').text('Storage Location');
+    } else {
+        // Warehouse stock or custom category
+        $('.' + prefix + '-warehouse-only').removeClass('d-none');
+        
+        // Enable warehouse-only inputs
+        $('#' + prefix + '_qty_input').prop('disabled', false);
+        $('#' + prefix + '_unit_select').prop('disabled', false);
+        $('#' + prefix + '_safety_stock_input').prop('disabled', false);
+        $('#' + prefix + '_price_input').prop('disabled', false);
+        
+        // Disable normal machinery & tools price inputs
+        $('#' + prefix + '_machinery_price').prop('disabled', true);
+        $('#' + prefix + '_tools_price').prop('disabled', true);
+        
+        // Disable rental fields
+        $('.add-rental-fields-' + prefix).addClass('d-none');
+        $('#' + prefix + '_rental_price').prop('disabled', true);
+        $('#' + prefix + '_rental_unit').prop('disabled', true);
+        
+        // Update category hidden input
+        if (category === 'Warehouse') {
+            $('#' + prefix + '_category_hidden').val($('#' + prefix + '_wh_type_select').val());
+            $('.' + prefix + '-warehouse-only').each(function() {
+                if ($(this).find('#' + prefix + '_wh_type_select').length > 0) {
+                    $(this).removeClass('d-none');
+                }
+            });
+        } else {
+            $('#' + prefix + '_category_hidden').val(category);
+            $('.' + prefix + '-warehouse-only').each(function() {
+                if ($(this).find('#' + prefix + '_wh_type_select').length > 0) {
+                    $(this).addClass('d-none');
+                }
+            });
+        }
+        
+        // Status dropdown options
+        $('#' + prefix + '_status_select').html(
+            '<option value="In Stock">In Stock</option>' +
+            '<option value="Low Stock">Low Stock</option>' +
+            '<option value="Out of Stock">Out of Stock</option>'
+        );
+        
+        // Update Labels & placeholders
+        $('#' + prefix + '_name_label').text('Name');
+        $('#' + prefix + '_name_input').attr('placeholder', 'e.g. Urea 46% N, Brinjal Seeds');
+        $('#' + prefix + '_price_label').text('Unit Price (₹)');
+        $('#' + prefix + '_location_label').text('Storage Location');
+    }
+    
+    window.calculateTotalPrice(prefix);
+};
+
+window.toggleAddRentalPrice = function(prefix) {
+    var isRental = $('#' + prefix + '_rental_available').is(':checked');
+    if (isRental) {
+        $('.add-rental-fields-' + prefix).removeClass('d-none');
+        $('#' + prefix + '_rental_price').prop('disabled', false);
+        $('#' + prefix + '_rental_unit').prop('disabled', false);
+    } else {
+        $('.add-rental-fields-' + prefix).addClass('d-none');
+        $('#' + prefix + '_rental_price').prop('disabled', true);
+        $('#' + prefix + '_rental_unit').prop('disabled', true);
+    }
+};
+
+window.calculateTotalPrice = function(prefix) {
+    var qtyEl = document.getElementById(prefix + '_qty_input');
+    var priceEl = document.getElementById(prefix + '_price_input');
+    var displayEl = document.getElementById(prefix + '_total_price_display');
+    
+    if (qtyEl && priceEl && displayEl) {
+        var qty = parseFloat(qtyEl.value || 0);
+        var unitPrice = parseFloat(priceEl.value || 0);
+        var totalPrice = qty * unitPrice;
+        displayEl.value = '₹' + totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+};
+
+window.changeInventoryStatus = function(itemId, newStatus) {
+    $.ajax({
+        url: "{% url 'update_inventory_status' %}",
+        method: 'POST',
+        data: {
+            'item_id': itemId,
+            'status': newStatus,
+            'csrfmiddlewaretoken': '{{ csrf_token }}'
+        },
+        success: function(response) {
+            if (response.success) {
+                if (typeof Toastify !== 'undefined') {
+                    Toastify({
+                        text: "Status updated to " + newStatus + "!",
+                        duration: 3000,
+                        close: true,
+                        gravity: "top",
+                        position: "right",
+                        style: { background: "#28a745" },
+                    }).showToast();
+                }
+                setTimeout(function() {
+                    location.reload();
+                }, 500);
+            } else {
+                alert("Error: " + response.error);
+            }
+        }
+    });
+};
+
+window.openQuickUnitModal = function() {
+    document.getElementById('quick_unit_name').value = '';
+    var myModal = new bootstrap.Modal(document.getElementById('quick_add_unit_modal'));
+    myModal.show();
+};
+
+window.openQuickLocationModal = function() {
+    document.getElementById('quick_location_name').value = '';
+    var myModal = new bootstrap.Modal(document.getElementById('quick_add_location_modal'));
+    myModal.show();
+};
+
+window.submitQuickUnit = function() {
+    var name = document.getElementById('quick_unit_name').value.trim();
+    if (!name) {
+        alert('Please enter a Unit name.');
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('name', name);
+
+    fetch("/farmer/expenses/quick_add_expense_unit/", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            var optionHtml = `<option value="${data.name}">${data.name}</option>`;
+            $('#add_unit_select').append(optionHtml).val(data.name);
+            $('#edit_unit_select').append(optionHtml).val(data.name);
+
+            bootstrap.Modal.getInstance(document.getElementById('quick_add_unit_modal')).hide();
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: "Unit '" + data.name + "' added successfully!",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "right",
+                    style: { background: "#28a745" },
+                }).showToast();
+            }
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(e => console.error(e));
+};
+
+window.submitQuickLocation = function() {
+    var name = document.getElementById('quick_location_name').value.trim();
+    if (!name) {
+        alert('Please enter a location name.');
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('name', name);
+
+    fetch("/farmer/inventory/quick_add_location/", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            var optionHtml = `<option value="${data.name}">${data.name}</option>`;
+            $('#add_location_select').append(optionHtml).val(data.name);
+            $('#edit_location_select').append(optionHtml).val(data.name);
+
+            bootstrap.Modal.getInstance(document.getElementById('quick_add_location_modal')).hide();
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: "Location '" + data.name + "' added successfully!",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "right",
+                    style: { background: "#28a745" },
+                }).showToast();
+            }
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(e => console.error(e));
+};
+
+window.openQuickInventoryTypeModal = function() {
+    document.getElementById('quick_inventory_type_name').value = '';
+    var myModal = new bootstrap.Modal(document.getElementById('quick_add_inventory_type_modal'));
+    myModal.show();
+};
+
+window.submitQuickInventoryType = function() {
+    var name = document.getElementById('quick_inventory_type_name').value.trim();
+    if (!name) {
+        alert('Please enter an Inventory Type name.');
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('name', name);
+
+    fetch("/farmer/inventory/quick_add_inventory_type/", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            var optionHtml = `<option value="${data.name}">${data.name}</option>`;
+            $('#add_wh_type_select').append(optionHtml).val(data.name);
+            $('#edit_wh_type_select').append(optionHtml).val(data.name);
+
+            // Trigger onchange to update the hidden fields
+            $('#add_wh_type_select').trigger('change');
+            $('#edit_wh_type_select').trigger('change');
+
+            bootstrap.Modal.getInstance(document.getElementById('quick_add_inventory_type_modal')).hide();
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: "Inventory Type '" + data.name + "' added successfully!",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "right",
+                    style: { background: "#28a745" },
+                }).showToast();
+            }
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(e => console.error(e));
+};
+
+window.openQuickCategoryModal = function() {
+    document.getElementById('quick_category_name').value = '';
+    var myModal = new bootstrap.Modal(document.getElementById('quick_add_category_modal'));
+    myModal.show();
+};
+
+window.submitQuickCategory = function() {
+    var name = document.getElementById('quick_category_name').value.trim();
+    if (!name) {
+        alert('Please enter a Category name.');
+        return;
+    }
+    
+    var choice = $('input[name="category_layout_choice"]:checked').val() || 'Warehouse';
+    
+    // Save to localStorage as a client-side fallback
+    var layouts = JSON.parse(localStorage.getItem('category_layouts') || '{}');
+    layouts[name] = choice;
+    localStorage.setItem('category_layouts', JSON.stringify(layouts));
+
+    // Register in dbCategoryLayouts immediately
+    dbCategoryLayouts[name] = choice;
+
+    var formData = new FormData();
+    formData.append('name', name);
+    formData.append('layout_type', choice);
+
+    fetch("/farmer/inventory/quick_add_category/", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            var optionHtml = `<option value="${data.name}">${data.name}</option>`;
+            if ($('#add_inv_category_selector option[value="' + data.name + '"]').length === 0) {
+                $('#add_inv_category_selector').append(optionHtml);
+                $('#edit_inv_category_selector').append(optionHtml);
+            }
+            $('#add_inv_category_selector').val(data.name);
+            $('#edit_inv_category_selector').val(data.name);
+
+            document.getElementById('quick_category_name').value = '';
+            loadQuickMasterItemsList('inventory_category', 'quick_category_items_list', 'quick_category_count_badge', ['#add_inv_category_selector', '#edit_inv_category_selector']);
+            
+            toggleFormFields('add');
+            toggleFormFields('edit');
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: "Category '" + data.name + "' saved!",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "right",
+                    style: { background: "#28a745" },
+                }).showToast();
+            }
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(e => console.error(e));
+};
+
+window.loadQuickMasterItemsList = function(itemType, containerId, countBadgeId, selectSelectors) {
+    var container = document.getElementById(containerId);
+    var badge = countBadgeId ? document.getElementById(countBadgeId) : null;
+    if (!container) return;
+
+    container.innerHTML = '<div class="text-center text-muted small py-2"><span class="spinner-border spinner-border-sm me-1"></span> Loading...</div>';
+
+    fetch("/farmer/quick_list_master_items/?item_type=" + encodeURIComponent(itemType))
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.items) {
+                if (badge) badge.textContent = data.items.length + ' item' + (data.items.length === 1 ? '' : 's');
+                if (data.items.length === 0) {
+                    container.innerHTML = '<div class="text-center text-muted small py-2 fst-italic">No existing options added yet</div>';
+                    return;
+                }
+                var html = '<div class="d-flex flex-column gap-1">';
+                data.items.forEach(function(item) {
+                    var safeName = (item.name || '').replace(/"/g, '&quot;');
+                    html += '<div class="d-flex align-items-center justify-content-between p-1.5 px-2 bg-white rounded border shadow-xs" id="master_item_' + itemType + '_' + item.id + '" style="font-size: 12px;">' +
+                        '<span class="text-dark fw-medium text-truncate me-2" title="' + safeName + '">' + safeName + '</span>' +
+                        '<button type="button" class="btn btn-sm btn-outline-danger p-0 px-1 rounded d-inline-flex align-items-center justify-content-center" style="height: 22px; min-width: 22px;" title="Delete this option" onclick="deleteQuickMasterItem(\'' + itemType + '\', ' + item.id + ', \'' + safeName + '\', \'' + containerId + '\', \'' + (countBadgeId || '') + '\', ' + JSON.stringify(selectSelectors || []).replace(/"/g, '&quot;') + ')">' +
+                            '<i class="ri-delete-bin-line" style="font-size: 11px;"></i>' +
+                        '</button>' +
+                    '</div>';
+                });
+                html += '</div>';
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<div class="text-center text-danger small py-1">' + (data.error || 'Failed to load') + '</div>';
+            }
+        })
+        .catch(err => {
+            container.innerHTML = '<div class="text-center text-muted small py-1">Error loading items</div>';
+        });
+};
+
+window.confirmQuickDelete = function(itemName, callback) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '<span style="font-size: 19px; font-weight: 700; color: #1e293b;">Confirm Delete</span>',
+            html: '<div class="text-muted fs-6 mb-1">Are you sure you want to delete <strong class="text-danger">"' + (itemName || '').replace(/</g, '&lt;') + '"</strong>?</div><div class="text-muted small" style="font-size: 12px;">This option will be removed from your master options list.</div>',
+            icon: 'warning',
+            iconColor: '#f59e0b',
+            showCancelButton: true,
+            confirmButtonText: '<i class="ri-delete-bin-line me-1"></i> Yes, Delete',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#94a3b8',
+            reverseButtons: true,
+            focusCancel: true,
+            customClass: {
+                popup: 'rounded-4 shadow-lg border-0 p-3',
+                confirmButton: 'btn btn-danger btn-sm px-3 py-2 rounded-3 fw-semibold shadow-sm',
+                cancelButton: 'btn btn-light btn-sm px-3 py-2 rounded-3 fw-medium text-secondary me-2 border',
+                actions: 'gap-2 mt-3'
+            },
+            buttonsStyling: false
+        }).then((result) => {
+            if (result.isConfirmed) {
+                callback();
+            }
+        });
+    } else {
+        if (confirm('Are you sure you want to delete "' + itemName + '"?')) {
+            callback();
+        }
+    }
+};
+
+window.deleteQuickMasterItem = function(itemType, itemId, itemName, containerId, countBadgeId, selectSelectors) {
+    window.confirmQuickDelete(itemName, function() {
+        var formData = new FormData();
+        formData.append('item_type', itemType);
+        formData.append('item_id', itemId);
+
+        fetch("/farmer/quick_delete_master_item/", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                var itemEl = document.getElementById('master_item_' + itemType + '_' + itemId);
+                if (itemEl) itemEl.remove();
+
+                if (Array.isArray(selectSelectors)) {
+                    selectSelectors.forEach(function(selQuery) {
+                        document.querySelectorAll(selQuery).forEach(function(sel) {
+                            Array.from(sel.options).forEach(function(opt) {
+                                if (opt.value == itemId || (opt.text && opt.text.trim().toLowerCase() === (itemName || '').trim().toLowerCase())) {
+                                    opt.remove();
+                                }
+                            });
+                        });
+                    });
+                }
+
+                if (typeof Toastify !== 'undefined') {
+                    Toastify({
+                        text: '🗑️ Deleted "' + itemName + '" successfully!',
+                        style: { background: "#dc2626" },
+                        duration: 2500
+                    }).showToast();
+                }
+
+                window.loadQuickMasterItemsList(itemType, containerId, countBadgeId, selectSelectors);
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.error || 'Failed to delete option',
+                        customClass: { popup: 'rounded-4' }
+                    });
+                } else {
+                    alert(data.error || 'Failed to delete option');
+                }
+            }
+        })
+        .catch(err => {
+            alert('Network error while deleting');
+        });
+    });
+};
+
+window.openQuickUnitModal = function() {
+    document.getElementById('quick_unit_name').value = '';
+    var modalEl = document.getElementById('quick_add_unit_modal');
+    var myModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    myModal.show();
+    window.loadQuickMasterItemsList('unit', 'quick_unit_items_list', 'quick_unit_count_badge', ['#add_unit_select', '#edit_unit_select', 'select[name="unit"]']);
+};
+
+window.openQuickLocationModal = function() {
+    document.getElementById('quick_location_name').value = '';
+    var modalEl = document.getElementById('quick_add_location_modal');
+    var myModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    myModal.show();
+    window.loadQuickMasterItemsList('storage_location', 'quick_location_items_list', 'quick_location_count_badge', ['#add_location_select', '#edit_location_select', 'select[name="location"]']);
+};
+
+window.openQuickCategoryModal = function() {
+    document.getElementById('quick_category_name').value = '';
+    var modalEl = document.getElementById('quick_add_category_modal');
+    var myModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    myModal.show();
+    window.loadQuickMasterItemsList('inventory_category', 'quick_category_items_list', 'quick_category_count_badge', ['#add_inv_category_selector', '#edit_inv_category_selector', 'select[name="category"]']);
+};
+
+window.openQuickInventoryTypeModal = function() {
+    document.getElementById('quick_inventory_type_name').value = '';
+    var modalEl = document.getElementById('quick_add_inventory_type_modal');
+    var myModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    myModal.show();
+    window.loadQuickMasterItemsList('inventory_type', 'quick_inventory_type_items_list', 'quick_inventory_type_count_badge', ['#add_wh_type_select', '#edit_wh_type_select', 'select[name="product_type"]']);
+};
+
+window.submitQuickUnit = function() {
+    var name = document.getElementById('quick_unit_name').value.trim();
+    if (!name) {
+        alert('Please enter a Unit name.');
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('name', name);
+
+    fetch("/farmer/expenses/quick_add_expense_unit/", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            var optionHtml = `<option value="${data.name}">${data.name}</option>`;
+            $('#add_unit_select').append(optionHtml).val(data.name);
+            $('#edit_unit_select').append(optionHtml).val(data.name);
+
+            document.getElementById('quick_unit_name').value = '';
+            window.loadQuickMasterItemsList('unit', 'quick_unit_items_list', 'quick_unit_count_badge', ['#add_unit_select', '#edit_unit_select', 'select[name="unit"]']);
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: "Unit '" + data.name + "' added successfully!",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "right",
+                    style: { background: "#28a745" },
+                }).showToast();
+            }
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(e => console.error(e));
+};
+
+window.submitQuickLocation = function() {
+    var name = document.getElementById('quick_location_name').value.trim();
+    if (!name) {
+        alert('Please enter a location name.');
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('name', name);
+
+    fetch("/farmer/inventory/quick_add_location/", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            var optionHtml = `<option value="${data.name}">${data.name}</option>`;
+            if ($('#add_location_select option[value="' + data.name + '"]').length === 0) {
+                $('#add_location_select').append(optionHtml);
+            }
+            if ($('#edit_location_select option[value="' + data.name + '"]').length === 0) {
+                $('#edit_location_select').append(optionHtml);
+            }
+            $('#add_location_select').val(data.name);
+            $('#edit_location_select').val(data.name);
+
+            document.getElementById('quick_location_name').value = '';
+            window.loadQuickMasterItemsList('storage_location', 'quick_location_items_list', 'quick_location_count_badge', ['#add_location_select', '#edit_location_select', 'select[name="location"]']);
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: "Storage Location '" + data.name + "' added successfully!",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "right",
+                    style: { background: "#28a745" },
+                }).showToast();
+            }
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(e => console.error(e));
+};
+
+window.submitQuickInventoryType = function() {
+    var name = document.getElementById('quick_inventory_type_name').value.trim();
+    if (!name) {
+        alert('Please enter an Inventory Type name.');
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('name', name);
+
+    fetch("/farmer/inventory/quick_add_product_type/", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            var optionHtml = `<option value="${data.name}">${data.name}</option>`;
+            if ($('#add_wh_type_select option[value="' + data.name + '"]').length === 0) {
+                $('#add_wh_type_select').append(optionHtml);
+            }
+            if ($('#edit_wh_type_select option[value="' + data.name + '"]').length === 0) {
+                $('#edit_wh_type_select').append(optionHtml);
+            }
+            $('#add_wh_type_select').val(data.name);
+            $('#edit_wh_type_select').val(data.name);
+
+            document.getElementById('quick_inventory_type_name').value = '';
+            window.loadQuickMasterItemsList('inventory_type', 'quick_inventory_type_items_list', 'quick_inventory_type_count_badge', ['#add_wh_type_select', '#edit_wh_type_select', 'select[name="product_type"]']);
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: "Inventory Type '" + data.name + "' added successfully!",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "right",
+                    style: { background: "#28a745" },
+                }).showToast();
+            }
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(e => console.error(e));
+};
+
+
+window.openEditInventoryModal = function(btn) {
+    var $btn = $(btn);
+    var id = $btn.attr('data-id');
+    var name = $btn.attr('data-name');
+    var category = $btn.attr('data-category') || '';
+    var qty = $btn.attr('data-quantity');
+    var unit = $btn.attr('data-unit');
+    var safety = $btn.attr('data-safety');
+    var location = $btn.attr('data-location');
+    var status = $btn.attr('data-status');
+    var plate = $btn.attr('data-plate');
+    var serviceDate = $btn.attr('data-servicedate');
+    var nextServiceDate = $btn.attr('data-nextservicedate');
+    var fuelType = $btn.attr('data-fueltype');
+    var insuranceFile = $btn.attr('data-insurancefile');
+    var insuranceExpiry = $btn.attr('data-insuranceexpiry');
+    var rcFile = $btn.attr('data-rcfile');
+    var rcExpiry = $btn.attr('data-rcexpiry');
+    var pollutionFile = $btn.attr('data-pollutionfile');
+    var pollutionExpiry = $btn.attr('data-pollutionexpiry');
+    var rentalUnit = $btn.attr('data-rentalunit') || 'Per Day';
+    var price = $btn.attr('data-price');
+    var rental = $btn.attr('data-rental');
+
+    currentEditItem.id = id;
+    currentEditItem.name = name;
+
+    $('.edit_item_id_input').val(id);
+
+    // Determine category selection
+    var mappedCategory = 'Warehouse';
+    if (category.indexOf('Vehicle') !== -1 || category.indexOf('Fleet') !== -1 || category === 'Vehicles & Fleet') {
+        mappedCategory = 'Machinery';
+    } else if (category.indexOf('Tool') !== -1 || category === 'Tool & Implements') {
+        mappedCategory = 'Tools';
+    } else {
+        var standardWarehouseTypes = ['Seeds', 'Fertilizer', 'Pesticide', 'Fuel', 'Other'];
+        if (standardWarehouseTypes.indexOf(category) !== -1) {
+            mappedCategory = 'Warehouse';
+        } else {
+            mappedCategory = category;
+        }
+    }
+
+    if (mappedCategory !== 'Warehouse' && mappedCategory !== 'Machinery' && mappedCategory !== 'Tools') {
+        if ($('#edit_inv_category_selector option[value="' + mappedCategory + '"]').length === 0) {
+            var optionHtml = `<option value="${mappedCategory}">${mappedCategory}</option>`;
+            $('#add_inv_category_selector').append(optionHtml);
+            $('#edit_inv_category_selector').append(optionHtml);
+        }
+    }
+
+    $('#edit_inv_category_selector').val(mappedCategory);
+    toggleFormFields('edit');
+
+    // Populate common fields
+    $('#edit_name_input').val(name);
+    $('#edit_qty_input').val(qty);
+    $('#edit_price_input').val(price);
+    $('#edit_description').val($btn.attr('data-description') || '');
+    
+    // Select option or add if missing
+    if (location && $('#edit_location_select option[value="' + location + '"]').length === 0) {
+        $('#edit_location_select').append(`<option value="${location}">${location}</option>`);
+    }
+    $('#edit_location_select').val(location);
+
+    var resolvedLayout = 'Warehouse';
+    if (mappedCategory === 'Machinery') {
+        resolvedLayout = 'Machinery';
+    } else if (mappedCategory === 'Tools') {
+        resolvedLayout = 'Tools';
+    } else if (mappedCategory !== 'Warehouse') {
+        var layouts = JSON.parse(localStorage.getItem('category_layouts') || '{}');
+        if (layouts[mappedCategory]) {
+            resolvedLayout = layouts[mappedCategory];
+        } else {
+            var nameLower = mappedCategory.toLowerCase();
+            if (nameLower.indexOf('vehicle') !== -1 || nameLower.indexOf('fleet') !== -1 || nameLower.indexOf('tractor') !== -1 || nameLower.indexOf('truck') !== -1 || nameLower.indexOf('car') !== -1 || nameLower.indexOf('machin') !== -1) {
+                resolvedLayout = 'Machinery';
+            } else if (nameLower.indexOf('tool') !== -1 || nameLower.indexOf('implement') !== -1 || nameLower.indexOf('equip') !== -1 || nameLower.indexOf('attachment') !== -1) {
+                resolvedLayout = 'Tools';
+            } else {
+                resolvedLayout = 'Warehouse';
+            }
+        }
+    }
+
+    if (resolvedLayout === 'Warehouse') {
+        if (mappedCategory === 'Warehouse') {
+            $('#edit_wh_type_select').val(category);
+            $('#edit_category_hidden').val(category);
+        } else {
+            $('#edit_category_hidden').val(mappedCategory);
+        }
+        
+        if (unit && $('#edit_unit_select option[value="' + unit + '"]').length === 0) {
+            $('#edit_unit_select').append(`<option value="${unit}">${unit}</option>`);
+        }
+        $('#edit_unit_select').val(unit);
+        $('#edit_safety_stock_input').val(safety);
+        $('#edit_status_select').val(status);
+    } else if (resolvedLayout === 'Machinery') {
+        $('#edit_category_hidden').val(mappedCategory);
+        $('#edit_license_plate').val(plate);
+        $('#edit_fuel_type').val(fuelType);
+        $('#edit_last_service_date').val(serviceDate);
+        $('#edit_tools_purchase_date').val($btn.attr('data-purchasedate') || '');
+        $('#edit_next_service_date').val(nextServiceDate);
+        $('#edit_insurance_expiry').val(insuranceExpiry);
+        $('#edit_rc_expiry').val(rcExpiry);
+        $('#edit_pollution_expiry').val(pollutionExpiry);
+        
+        if (insuranceFile) {
+            $('#edit_insurance_file_link').html(`<a href="${insuranceFile}" target="_blank" class="text-primary text-decoration-none fw-semibold"><i class="ri-file-download-line me-1"></i>View Current</a>`);
+        } else {
+            $('#edit_insurance_file_link').html('');
+        }
+        if (rcFile) {
+            $('#edit_rc_file_link').html(`<a href="${rcFile}" target="_blank" class="text-primary text-decoration-none fw-semibold"><i class="ri-file-download-line me-1"></i>View Current</a>`);
+        } else {
+            $('#edit_rc_file_link').html('');
+        }
+        if (pollutionFile) {
+            $('#edit_pollution_file_link').html(`<a href="${pollutionFile}" target="_blank" class="text-primary text-decoration-none fw-semibold"><i class="ri-file-download-line me-1"></i>View Current</a>`);
+        } else {
+            $('#edit_pollution_file_link').html('');
+        }
+
+        $('#edit_status_select').val(status);
+        var isRental = (rental === 'True' || rental === '1' || rental === 'true' || rental === true);
+        $('#edit_rental_available').prop('checked', isRental);
+        $('#edit_machinery_price').val(price);
+        $('#edit_tools_price').val(price);
+        $('#edit_rental_price').val($btn.attr('data-rentalprice') || '0');
+        if (rentalUnit) {
+            $('#edit_rental_unit').val(rentalUnit);
+        }
+        window.toggleAddRentalPrice('edit');
+    } else if (resolvedLayout === 'Tools') {
+        $('#edit_category_hidden').val(mappedCategory);
+        $('#edit_last_service_date').val(serviceDate);
+        $('#edit_tools_purchase_date').val($btn.attr('data-purchasedate') || '');
+        $('#edit_status_select').val(status);
+        var isRental = (rental === 'True' || rental === '1' || rental === 'true' || rental === true);
+        $('#edit_rental_available').prop('checked', isRental);
+        $('#edit_machinery_price').val(price);
+        $('#edit_tools_price').val(price);
+        $('#edit_rental_price').val($btn.attr('data-rentalprice') || '0');
+        if (rentalUnit) {
+            $('#edit_rental_unit').val(rentalUnit);
+        }
+        window.toggleAddRentalPrice('edit');
+    }
+
+    window.calculateTotalPrice('edit');
+
+    var modalEl = document.getElementById('edit_inventory_modal');
+    if (modalEl && modalEl.parentNode !== document.body) {
+        document.body.appendChild(modalEl);
+    }
+    if (window.bootstrap && bootstrap.Modal) {
+        var bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        bsModal.show();
+    } else {
+        $(modalEl).modal('show');
+    }
+};
+
+window.openDeleteInventoryModal = function(btn) {
+    var $btn = $(btn);
+    var id = $btn.attr('data-id');
+    var name = $btn.attr('data-name');
+
+    $('#delete_item_id').val(id);
+    $('#delete_item_name_display').text(name);
+
+    var modalEl = document.getElementById('delete_inventory_modal');
+    if (modalEl && modalEl.parentNode !== document.body) {
+        document.body.appendChild(modalEl);
+    }
+    if (window.bootstrap && bootstrap.Modal) {
+        var bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        bsModal.show();
+    } else {
+        $(modalEl).modal('show');
+    }
+};
+
+window.triggerDeleteCurrent = function() {
+    var editModalEl = document.getElementById('edit_inventory_modal');
+    if (window.bootstrap && bootstrap.Modal) {
+        var bsModal = bootstrap.Modal.getInstance(editModalEl);
+        if (bsModal) bsModal.hide();
+    } else {
+        $(editModalEl).modal('hide');
+    }
+
+    $('#delete_item_id').val(currentEditItem.id);
+    $('#delete_item_name_display').text(currentEditItem.name);
+
+    var deleteModalEl = document.getElementById('delete_inventory_modal');
+    if (deleteModalEl && deleteModalEl.parentNode !== document.body) {
+        document.body.appendChild(deleteModalEl);
+    }
+    setTimeout(function() {
+        if (window.bootstrap && bootstrap.Modal) {
+            var bsModal = bootstrap.Modal.getOrCreateInstance(deleteModalEl);
+            bsModal.show();
+        } else {
+            $(deleteModalEl).modal('show');
+        }
+    }, 300);
+};
+
+function initInventoryPage() {
+    if (window.jQuery) {
+        {% if messages %}
+            {% for message in messages %}
+                if (typeof Toastify !== 'undefined') {
+                    Toastify({
+                        text: "{{ message|escapejs }}",
+                        duration: 3000,
+                        close: true,
+                        gravity: "top",
+                        position: "right",
+                        style: { background: "{% if message.tags == 'success' %}#28a745{% elif message.tags == 'error' %}#dc3545{% else %}#ffc107{% endif %}" },
+                    }).showToast();
+                }
+            {% endfor %}
+        {% endif %}
+
+        $(document).on('click', '.edit-inventory-btn', function() {
+            window.openEditInventoryModal(this);
+        });
+        $(document).on('click', '.delete-inventory-btn', function() {
+            window.openDeleteInventoryModal(this);
+        });
+        
+        $(document).on('input change keyup', '.qty-input-calc, .price-input-calc', function() {
+            var prefix = $(this).hasClass('add-calc') ? 'add' : 'edit';
+            window.calculateTotalPrice(prefix);
+        });
+
+        $(document).on('change', '#add_rental_available', function() {
+            window.toggleAddRentalPrice('add');
+        });
+        $(document).on('change', '#edit_rental_available', function() {
+            window.toggleAddRentalPrice('edit');
+        });
+        
+        // Initialize Add form defaults on load
+        toggleFormFields('add');
+    } else {
+        setTimeout(initInventoryPage, 50);
+    }
+}
+
+initInventoryPage();
+
+// ---- VIEW INVENTORY MODAL ----
+window.openViewInventoryModal = function(btn) {
+    var $btn = $(btn);
+    var name      = $btn.attr('data-name') || '—';
+    var category  = $btn.attr('data-category') || '—';
+    var status    = $btn.attr('data-status') || '—';
+    var location  = $btn.attr('data-location') || '—';
+    var plate     = $btn.attr('data-plate') || '';
+    var fuelType  = $btn.attr('data-fueltype') || '';
+    var purchaseDate   = $btn.attr('data-purchasedate') || '';
+    var serviceDate    = $btn.attr('data-servicedate') || '';
+    var nextService    = $btn.attr('data-nextservicedate') || '';
+    var insuranceExp   = $btn.attr('data-insuranceexpiry') || '';
+    var rcExp          = $btn.attr('data-rcexpiry') || '';
+    var pollutionExp   = $btn.attr('data-pollutionexpiry') || '';
+    var price     = $btn.attr('data-price') || '0';
+    var rental    = $btn.attr('data-rental');
+    var rentalPrice   = $btn.attr('data-rentalprice') || '0';
+    var rentalUnit    = $btn.attr('data-rentalunit') || '';
+    var description   = $btn.attr('data-description') || '';
+    var isTool    = category.indexOf('Tool') !== -1;
+    var isMachine = !isTool && (category.indexOf('Vehicle') !== -1 || category.indexOf('Fleet') !== -1 || category.indexOf('Machinery') !== -1 || category.indexOf('Vehicles') !== -1);
+    var isRental  = (rental === 'True' || rental === '1' || rental === 'true');
+
+    // Header
+    $('#view_modal_item_name').text(name);
+    $('#view_modal_item_category').text(category);
+
+    // Icon color
+    if (isTool) {
+        $('#view_modal_icon_wrap').css('background','rgba(250,170,50,0.15)');
+        $('#view_modal_icon_wrap i').css('color','#f59e0b');
+        $('#view_modal_icon_wrap i').removeClass().addClass('ri-tools-line fs-4');
+    } else if (isMachine) {
+        $('#view_modal_icon_wrap').css('background','rgba(59,130,246,0.12)');
+        $('#view_modal_icon_wrap i').css('color','#3b82f6');
+        $('#view_modal_icon_wrap i').removeClass().addClass('ri-truck-line fs-4');
+    } else {
+        $('#view_modal_icon_wrap').css('background','rgba(99,102,241,0.12)');
+        $('#view_modal_icon_wrap i').css('color','#6366f1');
+        $('#view_modal_icon_wrap i').removeClass().addClass('ri-box-3-line fs-4');
+    }
+
+    // Status badge
+    var badgeColor = 'bg-secondary text-white';
+    if (status === 'Operational') badgeColor = 'bg-success text-white';
+    else if (status === 'Maintenance' || status === 'Needs Repair') badgeColor = 'bg-warning text-dark';
+    else if (status === 'Idle') badgeColor = 'bg-secondary text-white';
+    $('#view_modal_status_badge').attr('class','badge rounded-pill px-3 py-2 fs-6 ' + badgeColor).text(status);
+    $('#view_modal_location_text').html('<i class="ri-map-pin-line me-1"></i>' + location);
+
+    // Build info cards
+    function infoCard(icon, label, value, colClass) {
+        colClass = colClass || 'col-md-6';
+        if (!value || value === '' || value === '0' || value === 'None') value = '<span class="text-muted">—</span>';
+        return `<div class="${colClass}">
+            <div class="p-3 rounded-3 border h-100" style="background:#fafafa;">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="${icon} text-muted"></i>
+                    <small class="text-muted text-uppercase fw-semibold" style="font-size:10px;letter-spacing:.5px;">${label}</small>
+                </div>
+                <div class="fw-semibold text-dark">${value}</div>
+            </div>
+        </div>`;
+    }
+
+    var html = '';
+    // Common fields
+    if (isMachine && plate) html += infoCard('ri-car-line', 'Number Plate', plate);
+    if (isMachine && fuelType) html += infoCard('ri-gas-station-line', 'Fuel Type', fuelType);
+    if (purchaseDate) html += infoCard('ri-calendar-event-line', 'Date of Purchase', purchaseDate);
+    if ((isMachine || isTool) && serviceDate) html += infoCard('ri-calendar-check-line', 'Last Service Date', serviceDate);
+    if (isMachine && nextService) html += infoCard('ri-calendar-2-line', 'Next Service Date', nextService);
+
+    // Price
+    if (price && price !== '0') html += infoCard('ri-price-tag-3-line', isTool ? 'Tool Price' : (isMachine ? 'Machine Price' : 'Unit Price'), '₹' + parseFloat(price).toLocaleString('en-IN', {minimumFractionDigits:2}));
+
+    // Description (tools)
+    if (isTool && description) html += infoCard('ri-file-text-line', 'Description', description, 'col-12');
+
+    // Documents
+    if (isMachine && insuranceExp) html += infoCard('ri-shield-check-line', 'Insurance Expiry', insuranceExp);
+    if (isMachine && rcExp) html += infoCard('ri-file-shield-2-line', 'RC Expiry', rcExp);
+    if (isMachine && pollutionExp) html += infoCard('ri-leaf-line', 'Pollution Expiry', pollutionExp);
+
+    // Rental
+    if (isRental) {
+        html += infoCard('ri-hand-coin-line', 'Rental Price', '₹' + parseFloat(rentalPrice).toLocaleString('en-IN', {minimumFractionDigits:2}) + ' / ' + rentalUnit);
+    } else if (isMachine || isTool) {
+        html += infoCard('ri-hand-coin-line', 'Available for Rental', '<span class="badge bg-danger-subtle text-danger border">Not Listed</span>');
+    }
+
+    if (!html) {
+        html = '<div class="col-12 text-center text-muted py-3">No additional details available.</div>';
+    }
+
+    $('#view_modal_body').html(html);
+
+    // Wire "Edit" button in footer
+    $('#view_modal_edit_btn').off('click').on('click', function() {
+        var editModal = bootstrap.Modal.getInstance(document.getElementById('view_inventory_modal'));
+        if (editModal) editModal.hide();
+        setTimeout(function() {
+            var editBtn = document.querySelector('.edit-inventory-btn[data-id="' + $btn.attr('data-id') + '"]');
+            if (editBtn) window.openEditInventoryModal(editBtn);
+        }, 300);
+    });
+
+    var modal = new bootstrap.Modal(document.getElementById('view_inventory_modal'));
+    modal.show();
+};
+
+// ---- VIEW WAREHOUSE MODAL ----
+window.openViewWarehouseModal = function(btn) {
+    var $btn = $(btn);
+    var name       = $btn.attr('data-name') || '—';
+    var category   = $btn.attr('data-category') || '—';
+    var qty        = $btn.attr('data-quantity') || '0';
+    var unit       = $btn.attr('data-unit') || '';
+    var safety     = $btn.attr('data-safety') || '0';
+    var location   = $btn.attr('data-location') || '—';
+    var status     = $btn.attr('data-status') || '—';
+    var price      = $btn.attr('data-price') || '0';
+    var totalPrice = $btn.attr('data-totalprice') || '';
+
+    // Header
+    $('#view_modal_item_name').text(name);
+    $('#view_modal_item_category').text(category);
+
+    // Icon — warehouse style
+    $('#view_modal_icon_wrap').css('background','rgba(13,110,253,0.10)');
+    $('#view_modal_icon_wrap i').css('color','#0d6efd');
+    $('#view_modal_icon_wrap i').removeClass().addClass('ri-box-3-line fs-4');
+
+    // Status badge
+    var badgeColor = 'bg-success text-white';
+    if (status === 'Out of Stock') badgeColor = 'bg-danger text-white';
+    else if (status === 'Low Stock') badgeColor = 'bg-warning text-dark';
+    $('#view_modal_status_badge').attr('class','badge rounded-pill px-3 py-2 fs-6 ' + badgeColor).text(status);
+    $('#view_modal_location_text').html('<i class="ri-map-pin-line me-1"></i>' + location);
+
+    // Info cards
+    function infoCard(icon, label, value, colClass) {
+        colClass = colClass || 'col-md-6';
+        if (!value || value === '' || value === '0') value = '<span class="text-muted">—</span>';
+        return `<div class="${colClass}">
+            <div class="p-3 rounded-3 border h-100" style="background:#fafafa;">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="${icon} text-muted"></i>
+                    <small class="text-muted text-uppercase fw-semibold" style="font-size:10px;letter-spacing:.5px;">${label}</small>
+                </div>
+                <div class="fw-semibold text-dark">${value}</div>
+            </div>
+        </div>`;
+    }
+
+    var html = '';
+    html += infoCard('ri-stack-line',         'Depot Qty Balance',  qty + ' ' + unit);
+    html += infoCard('ri-shield-check-line',  'Safety Stock Limit', safety + ' ' + unit);
+    if (price && price !== '0') {
+        html += infoCard('ri-price-tag-3-line', 'Unit Price', '&#8377;' + parseFloat(price).toLocaleString('en-IN', {minimumFractionDigits:2}));
+    }
+    if (totalPrice && totalPrice !== '') {
+        html += infoCard('ri-money-rupee-circle-line', 'Total Stock Value', '<span style="color:#6366f1;font-size:1.1em;">&#8377;' + parseFloat(totalPrice).toLocaleString('en-IN', {minimumFractionDigits:2}) + '</span>');
+    }
+
+    $('#view_modal_body').html(html);
+
+    // Wire Edit button
+    $('#view_modal_edit_btn').off('click').on('click', function() {
+        var vm = bootstrap.Modal.getInstance(document.getElementById('view_inventory_modal'));
+        if (vm) vm.hide();
+        setTimeout(function() {
+            var editBtn = document.querySelector('.edit-inventory-btn[data-id="' + $btn.attr('data-id') + '"]');
+            if (editBtn) window.openEditInventoryModal(editBtn);
+        }, 300);
+    });
+
+    var modal = new bootstrap.Modal(document.getElementById('view_inventory_modal'));
+    modal.show();
+};
+
+// ---- FARMER RENTAL TOGGLE & STATUS HANDLERS ----
+window.toggleFarmerRentalSwitch = function(itemId, isChecked) {
+    var formData = new FormData();
+    formData.append('item_id', itemId);
+    formData.append('rental_available', isChecked ? 'true' : 'false');
+
+    fetch("{% url 'toggle_inventory_rental' %}", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            var labelEl = document.getElementById('rental_switch_label_' + itemId);
+            var statusBtn = document.getElementById('rental_status_btn_' + itemId);
+
+            if (data.rental_available) {
+                if (labelEl) labelEl.innerHTML = '<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1 d-inline-flex align-items-center gap-1" style="font-size: 11px; font-weight: 600;"><i class="ri-checkbox-circle-fill"></i> Rental ON</span>';
+            } else {
+                if (labelEl) labelEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-2.5 py-1 d-inline-flex align-items-center gap-1" style="font-size: 11px; font-weight: 500;"><i class="ri-close-circle-line"></i> Rental OFF</span>';
+            }
+
+            if (statusBtn && data.status) {
+                applyStatusStyle(statusBtn, data.status, itemId);
+            }
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: data.message || "Rental status updated!",
+                    duration: 2500,
+                    gravity: "top",
+                    position: "right",
+                    style: { background: "#10b981" },
+                }).showToast();
+            }
+        } else {
+            alert('Error: ' + (data.error || 'Failed to update rental status'));
+            var sw = document.getElementById('rental_toggle_' + itemId);
+            if (sw) sw.checked = !isChecked;
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Network error while updating rental status.');
+        var sw = document.getElementById('rental_toggle_' + itemId);
+        if (sw) sw.checked = !isChecked;
+    });
+};
+
+window.updateFarmerRentalStatus = function(itemId, newStatus) {
+    var formData = new FormData();
+    formData.append('item_id', itemId);
+    formData.append('status', newStatus);
+
+    fetch("{% url 'update_inventory_status' %}", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            var statusBtn = document.getElementById('rental_status_btn_' + itemId);
+            if (statusBtn) {
+                applyStatusStyle(statusBtn, newStatus, itemId);
+            }
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: "Status updated to '" + newStatus + "'!",
+                    duration: 2500,
+                    gravity: "top",
+                    position: "right",
+                    style: { background: "#10b981" },
+                }).showToast();
+            }
+        } else {
+            alert('Error: ' + (data.error || 'Failed to update status'));
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Network error while updating status.');
+    });
+};
+
+function applyStatusStyle(btnEl, status, itemId) {
+    var statusText = itemId ? document.getElementById('rental_status_text_' + itemId) : btnEl.querySelector('#rental_status_text_' + itemId);
+    var dotColor = '#059669';
+
+    if (status === 'Available') {
+        btnEl.style.background = '#ecfdf5';
+        btnEl.style.color = '#059669';
+        btnEl.style.borderColor = '#a7f3d0';
+        dotColor = '#059669';
+    } else if (status === 'Booked' || status === 'Rented') {
+        btnEl.style.background = '#fffbeb';
+        btnEl.style.color = '#d97706';
+        btnEl.style.borderColor = '#fde68a';
+        dotColor = '#d97706';
+    } else if (status === 'Maintenance' || status === 'Needs Repair') {
+        btnEl.style.background = '#fef2f2';
+        btnEl.style.color = '#dc2626';
+        btnEl.style.borderColor = '#fecaca';
+        dotColor = '#dc2626';
+    } else {
+        btnEl.style.background = '#f8fafc';
+        btnEl.style.color = '#475569';
+        btnEl.style.borderColor = '#e2e8f0';
+        dotColor = '#475569';
+    }
+
+    if (statusText) {
+        statusText.innerHTML = '<span class="status-dot rounded-circle" style="width: 6px; height: 6px; display: inline-block; background: ' + dotColor + ';"></span> ' + status;
+    }
+}
+</script>
+{% endblock %}

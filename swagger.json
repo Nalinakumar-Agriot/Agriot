@@ -1,0 +1,592 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "title": "AgriOT API",
+        "description": "API documentation for AgriOT",
+        "termsOfService": "https://www.google.com/policies/terms/",
+        "contact": {
+            "email": "contact@agriot.local"
+        },
+        "license": {
+            "name": "BSD License"
+        },
+        "version": "v1"
+    },
+    "basePath": "/api/farmer",
+    "consumes": [
+        "application/json"
+    ],
+    "produces": [
+        "application/json"
+    ],
+    "securityDefinitions": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": "Enter JWT token directly (or with Bearer)"
+        }
+    },
+    "security": [
+        {
+            "Bearer": []
+        }
+    ],
+    "paths": {
+        "/dropdowns/crop-types/": {
+            "get": {
+                "operationId": "dropdowns_crop-types_list",
+                "summary": "Get Crop Types",
+                "description": "",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "tags": [
+                    "Farmer Dropdowns"
+                ]
+            },
+            "parameters": []
+        },
+        "/dropdowns/districts/": {
+            "get": {
+                "operationId": "dropdowns_districts_list",
+                "summary": "Get Districts",
+                "description": "",
+                "parameters": [
+                    {
+                        "name": "state_id",
+                        "in": "query",
+                        "description": "Optional State ID to filter by",
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "tags": [
+                    "Farmer Dropdowns"
+                ]
+            },
+            "parameters": []
+        },
+        "/dropdowns/states/": {
+            "get": {
+                "operationId": "dropdowns_states_list",
+                "summary": "Get States",
+                "description": "",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "tags": [
+                    "Farmer Dropdowns"
+                ]
+            },
+            "parameters": []
+        },
+        "/dropdowns/taluks/": {
+            "get": {
+                "operationId": "dropdowns_taluks_list",
+                "summary": "Get Taluks",
+                "description": "",
+                "parameters": [
+                    {
+                        "name": "district_id",
+                        "in": "query",
+                        "description": "Optional District/City ID to filter by",
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "tags": [
+                    "Farmer Dropdowns"
+                ]
+            },
+            "parameters": []
+        },
+        "/farms/": {
+            "get": {
+                "operationId": "farms_list",
+                "summary": "List and Create Farms",
+                "description": "GET returns a list of all farms belonging to the authenticated farmer. POST creates a new farm for this farmer.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Farm"
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "Farmer Farms"
+                ]
+            },
+            "post": {
+                "operationId": "farms_create",
+                "summary": "Create a new Farm",
+                "description": "Creates a new farm linked to the authenticated farmer.",
+                "parameters": [
+                    {
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/Farm"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Farm"
+                        }
+                    }
+                },
+                "tags": [
+                    "Farmer Farms"
+                ]
+            },
+            "parameters": []
+        },
+        "/login/send-otp/": {
+            "post": {
+                "operationId": "login_send-otp_create",
+                "summary": "Send OTP for Farmer Login",
+                "description": "Generates and sends a 6-digit OTP via SMS to the provided mobile number.",
+                "parameters": [
+                    {
+                        "name": "mobile",
+                        "in": "formData",
+                        "description": "10-digit mobile number",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OTP sent successfully"
+                    },
+                    "400": {
+                        "description": "Invalid input"
+                    },
+                    "500": {
+                        "description": "Failed to send SMS"
+                    }
+                },
+                "consumes": [
+                    "application/x-www-form-urlencoded",
+                    "multipart/form-data"
+                ],
+                "tags": [
+                    "Farmer Auth"
+                ]
+            },
+            "parameters": []
+        },
+        "/login/verify-otp/": {
+            "post": {
+                "operationId": "login_verify-otp_create",
+                "summary": "Verify OTP for Farmer Login",
+                "description": "Verifies the OTP sent to the mobile number and logs the user in, returning an auth token.",
+                "parameters": [
+                    {
+                        "name": "mobile",
+                        "in": "formData",
+                        "description": "10-digit mobile number",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "otp",
+                        "in": "formData",
+                        "description": "6-digit OTP received via SMS",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Login successful",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "token": {
+                                    "description": "JWT Auth token (decrypt to get farmer_id)",
+                                    "type": "string"
+                                },
+                                "message": {
+                                    "description": "Success message",
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input or OTP"
+                    },
+                    "403": {
+                        "description": "Access denied"
+                    }
+                },
+                "consumes": [
+                    "application/x-www-form-urlencoded",
+                    "multipart/form-data"
+                ],
+                "tags": [
+                    "Farmer Auth"
+                ]
+            },
+            "parameters": []
+        },
+        "/logout/": {
+            "post": {
+                "operationId": "logout_create",
+                "summary": "Logout Farmer",
+                "description": "Logs out the farmer from the mobile app. The mobile developer should clear the JWT token from local storage after calling this API.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Logged out successfully"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    }
+                },
+                "tags": [
+                    "Farmer Auth"
+                ]
+            },
+            "parameters": []
+        },
+        "/profile/": {
+            "get": {
+                "operationId": "profile_list",
+                "summary": "Get Farmer Profile Details",
+                "description": "Returns the full profile details of the currently authenticated farmer, including their land and crop counts. Requires JWT Bearer token.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/FarmerProfileDetail"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    }
+                },
+                "tags": [
+                    "Farmer Data"
+                ]
+            },
+            "parameters": []
+        },
+        "/subscription/": {
+            "get": {
+                "operationId": "subscription_list",
+                "summary": "Get Farmer Subscription Details",
+                "description": "Returns the details of the active package/subscription for the authenticated farmer.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/FarmerSubscription"
+                        }
+                    },
+                    "404": {
+                        "description": "No active subscription found"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    }
+                },
+                "tags": [
+                    "Farmer Data"
+                ]
+            },
+            "parameters": []
+        }
+    },
+    "definitions": {
+        "Farm": {
+            "required": [
+                "land_name",
+                "total_area"
+            ],
+            "type": "object",
+            "properties": {
+                "id": {
+                    "title": "ID",
+                    "type": "integer",
+                    "readOnly": true
+                },
+                "crop_type_name": {
+                    "title": "Crop type name",
+                    "type": "string",
+                    "readOnly": true,
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "state_name": {
+                    "title": "State name",
+                    "type": "string",
+                    "readOnly": true,
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "district_name": {
+                    "title": "District name",
+                    "type": "string",
+                    "readOnly": true,
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "taluk_name": {
+                    "title": "Taluk name",
+                    "type": "string",
+                    "readOnly": true,
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "land_name": {
+                    "title": "Land name",
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "total_area": {
+                    "title": "Total area",
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                },
+                "latitude": {
+                    "title": "Latitude",
+                    "type": "string",
+                    "maxLength": 50,
+                    "x-nullable": true
+                },
+                "longitude": {
+                    "title": "Longitude",
+                    "type": "string",
+                    "maxLength": 50,
+                    "x-nullable": true
+                },
+                "pincode": {
+                    "title": "Pincode",
+                    "type": "string",
+                    "maxLength": 20,
+                    "x-nullable": true
+                },
+                "soil_ph": {
+                    "title": "Soil ph",
+                    "type": "string",
+                    "maxLength": 50,
+                    "x-nullable": true
+                },
+                "health_indicator": {
+                    "title": "Health indicator",
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                },
+                "created_at": {
+                    "title": "Created at",
+                    "type": "string",
+                    "format": "date-time",
+                    "readOnly": true
+                },
+                "updated_at": {
+                    "title": "Updated at",
+                    "type": "string",
+                    "format": "date-time",
+                    "readOnly": true
+                },
+                "farmer": {
+                    "title": "Farmer",
+                    "type": "integer",
+                    "readOnly": true
+                },
+                "crop_type": {
+                    "title": "Crop type",
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "state": {
+                    "title": "State",
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "district": {
+                    "title": "District",
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "taluk": {
+                    "title": "Taluk",
+                    "type": "integer",
+                    "x-nullable": true
+                }
+            }
+        },
+        "FarmerProfileDetail": {
+            "required": [
+                "id",
+                "mobile_number",
+                "email",
+                "status",
+                "state_name",
+                "district_name",
+                "pincode"
+            ],
+            "type": "object",
+            "properties": {
+                "id": {
+                    "title": "Id",
+                    "type": "integer"
+                },
+                "mobile_number": {
+                    "title": "Mobile number",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "email": {
+                    "title": "Email",
+                    "type": "string",
+                    "format": "email",
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "status": {
+                    "title": "Status",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "state_name": {
+                    "title": "State name",
+                    "type": "string",
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "district_name": {
+                    "title": "District name",
+                    "type": "string",
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "pincode": {
+                    "title": "Pincode",
+                    "type": "string",
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "land_count": {
+                    "title": "Land count",
+                    "type": "string",
+                    "readOnly": true
+                },
+                "crop_count": {
+                    "title": "Crop count",
+                    "type": "string",
+                    "readOnly": true
+                }
+            }
+        },
+        "FarmerSubscription": {
+            "required": [
+                "package_name",
+                "package_price",
+                "max_acre_support",
+                "monthly_amount",
+                "payment_status",
+                "subscription_status",
+                "start_date",
+                "end_date",
+                "my_land",
+                "my_crop",
+                "my_users"
+            ],
+            "type": "object",
+            "properties": {
+                "package_name": {
+                    "title": "Package name",
+                    "type": "string",
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "package_price": {
+                    "title": "Package price",
+                    "type": "string",
+                    "format": "decimal",
+                    "x-nullable": true
+                },
+                "max_acre_support": {
+                    "title": "Max acre support",
+                    "type": "string",
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "monthly_amount": {
+                    "title": "Monthly amount",
+                    "type": "string",
+                    "format": "decimal"
+                },
+                "payment_status": {
+                    "title": "Payment status",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "subscription_status": {
+                    "title": "Subscription status",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "start_date": {
+                    "title": "Start date",
+                    "type": "string",
+                    "format": "date"
+                },
+                "end_date": {
+                    "title": "End date",
+                    "type": "string",
+                    "format": "date"
+                },
+                "my_land": {
+                    "title": "My land",
+                    "type": "string",
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "my_crop": {
+                    "title": "My crop",
+                    "type": "string",
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "my_users": {
+                    "title": "My users",
+                    "type": "string",
+                    "minLength": 1,
+                    "x-nullable": true
+                }
+            }
+        }
+    }
+}

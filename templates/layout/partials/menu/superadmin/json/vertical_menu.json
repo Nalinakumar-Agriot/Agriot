@@ -1,0 +1,333 @@
+{
+  "menu": [
+    {
+      "name": "Dashboards",
+      "icon": "ri ri-home-smile-line",
+      "slug": "dashboard",
+      "url": "superadmin-dashboard"
+    },
+    {
+      "name": "Farmers",
+      "icon": "ri ri-group-line",
+      "slug": "farmers-management",
+      "url": "manage_farmer"
+    },
+    {
+      "name": "Packages & Subscriptions",
+      "icon": "ri ri-box-3-line",
+      "slug": "packages-management",
+      "url": "manage_package"
+    },
+    {
+      "name": "Market",
+      "icon": "ri ri-building-2-line",
+      "slug": "market-management",
+      "url": "manage_market"
+    },
+    {
+      "name": "Schedule & Guidelines",
+      "icon": "ri ri-calendar-event-line",
+      "slug": "schedule-management",
+      "url": "manage_schedule"
+    },
+    {
+      "name": "Near By Locations",
+      "icon": "ri ri-map-pin-line",
+      "slug": "near-by-locations",
+      "url": "manage_nearby"
+    },
+    {
+      "name": "Workers Availability",
+      "icon": "ri ri-user-settings-line",
+      "slug": "workers-availability",
+      "url": "manage_workers_availability"
+    },
+    {
+      "name": "Rental Availability",
+      "icon": "ri ri-hand-coin-line",
+      "slug": "rental-availability",
+      "url": "manage_rental_availability"
+    },
+    {
+      "name": "Documents",
+      "icon": "ri ri-folder-shield-2-line",
+      "slug": "documents-management",
+      "url": "superadmin-documents"
+    },
+    {
+      "name": "Users",
+      "icon": "ri ri-user-3-line",
+      "slug": "users-management",
+      "url": "manage_users"
+    },
+    {
+      "name": "Reports",
+      "icon": "ri ri-file-chart-line",
+      "slug": "reports",
+      "url": "superadmin_reports",
+      "submenu": [
+        {
+          "name": "Customer Report",
+          "icon": "ri ri-file-chart-line",
+          "slug": "customer-report",
+          "url": "customer_report"
+        },
+        {
+          "name": "Land Report",
+          "icon": "ri ri-file-chart-line",
+          "slug": "land-report",
+          "url": "land_report"
+        },
+        {
+          "name": "Expense Report",
+          "icon": "ri ri-file-chart-line",
+          "slug": "expense-report",
+          "url": "expense_report"
+        },
+        {
+          "name": "Vendor Report",
+          "icon": "ri ri-file-chart-line",
+          "slug": "vendor-report",
+          "url": "vendor_report"
+        },
+        {
+          "name": "Salary Report",
+          "icon": "ri ri-file-chart-line",
+          "slug": "salary-report",
+          "url": "salary_report"
+        },
+        {
+          "name": "Attendance Report",
+          "icon": "ri ri-file-chart-line",
+          "slug": "attendance-report",
+          "url": "attendance_report"
+        },
+        {
+          "name": "Advance Report",
+          "icon": "ri ri-file-chart-line",
+          "slug": "advance-report",
+          "url": "advance_report"
+        }
+      ]
+    },
+    {
+      "name": "Settings",
+      "icon": "ri ri-settings-line",
+      "slug": "settings",
+      "url": "general_settings"
+    },
+    {
+      "name": "Farm Dropdowns",
+      "icon": "ri ri-plant-line",
+      "slug": "farm-dropdowns",
+      "submenu": [
+        {
+          "name": "Soil Type",
+          "icon": "ri ri-settings-line",
+          "slug": "soil-type",
+          "url": "soil_type"
+        },
+        {
+          "name": "Crop Type",
+          "icon": "ri ri-settings-line",
+          "slug": "crop-type",
+          "url": "crop_type"
+        },
+        {
+          "name": "Crop",
+          "icon": "ri ri-settings-line",
+          "slug": "crop",
+          "url": "crop_settings"
+        },
+        {
+          "name": "Harvesting Frequency",
+          "icon": "ri-box-1-line",
+          "slug": "harvesting_frequency",
+          "url": "harvesting_frequency"
+        },
+        {
+          "name": "Schedule Activity Type",
+          "icon": "ri ri-settings-line",
+          "slug": "schedule-activity",
+          "url": "schedule_activity"
+        },
+        {
+          "name": "Sales Deduction",
+          "icon": "ri ri-settings-line",
+          "slug": "sales-deduction",
+          "url": "sales_deduction"
+        },
+        {
+          "name": "Man Power Work Type",
+          "icon": "ri ri-settings-line",
+          "slug": "man-power",
+          "url": "man_power"
+        },
+        {
+          "name": "Expense Type",
+          "icon": "ri ri-price-tag-3-line",
+          "slug": "expense-type",
+          "url": "expense_type_settings"
+        },
+        {
+          "name": "Expense Unit",
+          "icon": "ri ri-scales-line",
+          "slug": "expense-unit",
+          "url": "expense_unit_settings"
+        },
+        {
+          "name": "Task Category",
+          "icon": "ri ri-price-tag-line",
+          "slug": "task-category",
+          "url": "task_category_settings"
+        },
+        {
+          "name": "Task Priority",
+          "icon": "ri ri-alert-line",
+          "slug": "task-priority",
+          "url": "task_priority_settings"
+        },
+        {
+          "name": "Irrigation Type",
+          "icon": "ri ri-drop-line",
+          "slug": "irrigation-type",
+          "url": "irrigation_type"
+        },
+        {
+          "name": "Water Source",
+          "icon": "ri ri-water-flash-line",
+          "slug": "water-source-type",
+          "url": "water_source_type"
+        },
+        {
+          "name": "Electricity Type",
+          "icon": "ri ri-flashlight-line",
+          "slug": "electricity-type",
+          "url": "electricity_type"
+        },
+        {
+          "name": "Farming Type",
+          "icon": "ri ri-seedling-line",
+          "slug": "farming-type",
+          "url": "farming_type"
+        },
+        {
+          "name": "Fencing Type",
+          "icon": "ri ri-shield-line",
+          "slug": "fencing-type",
+          "url": "fencing_type"
+        },
+        {
+          "name": "Crop Category",
+          "icon": "ri ri-plant-line",
+          "slug": "crop-category",
+          "url": "crop_category_settings"
+        },
+        {
+          "name": "Crop Pattern",
+          "icon": "ri ri-grid-line",
+          "slug": "crop-pattern",
+          "url": "crop_pattern_settings"
+        },
+        {
+          "name": "Crop Variety",
+          "icon": "ri ri-leaf-line",
+          "slug": "crop-variety",
+          "url": "crop_variety_settings"
+        },
+        {
+          "name": "Crop Quality",
+          "icon": "ri ri-medal-line",
+          "slug": "crop-quality",
+          "url": "crop_quality_settings"
+        },
+        {
+          "name": "Maintenance Schedule",
+          "icon": "ri ri-calendar-check-line",
+          "slug": "maintenance-schedule",
+          "url": "maintenance_schedule_settings"
+        }
+      ]
+    },
+    {
+      "name": "Inventory Dropdowns",
+      "icon": "ri ri-box-1-line",
+      "slug": "inventory-dropdowns",
+      "submenu": [
+        {
+          "name": "Inventory Type",
+          "icon": "ri-box-1-line",
+          "slug": "product_type",
+          "url": "product_type"
+        },
+        {
+          "name": "Inventory Items",
+          "icon": "ri-box-1-line",
+          "slug": "inventory_item",
+          "url": "inventory_item"
+        },
+        {
+          "name": "Inventory Category",
+          "icon": "ri-box-1-line",
+          "slug": "inventory_category",
+          "url": "inventory_category_settings"
+        },
+        {
+          "name": "Product Unit",
+          "icon": "ri ri-settings-line",
+          "slug": "product-unit",
+          "url": "product_unit"
+        },
+        {
+          "name": "Storage Location",
+          "icon": "ri ri-map-pin-line",
+          "slug": "storage_location",
+          "url": "storage_location_settings"
+        },
+        {
+          "name": "Hardware Class",
+          "icon": "ri ri-settings-line",
+          "slug": "hardware-class",
+          "url": "hardware_class_settings"
+        }
+      ]
+    },
+    {
+      "name": "General Dropdowns",
+      "icon": "ri ri-list-settings-line",
+      "slug": "general-dropdowns",
+      "submenu": [
+        {
+          "name": "Designation",
+          "icon": "ri ri-scales-line",
+          "slug": "designation",
+          "url": "designation_settings"
+        },
+        {
+          "name": "Customer Type",
+          "icon": "ri ri-user-star-line",
+          "slug": "customer-type",
+          "url": "customer_type_settings"
+        },
+        {
+          "name": "Location Type",
+          "icon": "ri ri-settings-line",
+          "slug": "location-category",
+          "url": "location_category"
+        },
+        {
+          "name": "Guideline Category",
+          "icon": "ri ri-settings-line",
+          "slug": "guideline-category",
+          "url": "guideline_category"
+        },
+        {
+          "name": "Document Category",
+          "icon": "ri ri-settings-line",
+          "slug": "document-category",
+          "url": "document_category"
+        }
+      ]
+    }
+  ]
+}

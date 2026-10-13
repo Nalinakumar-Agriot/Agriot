@@ -1,0 +1,802 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Rental Availability{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
+<style>
+  .search-collapse-wrapper {
+    position: relative;
+  }
+  .search-input-group {
+    width: 0;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-width 0.25s ease, opacity 0.2s ease;
+    white-space: nowrap;
+  }
+  .search-input-group.expanded {
+    max-width: 420px;
+    width: 420px;
+    opacity: 1;
+    margin-left: 8px;
+  }
+  @media (max-width: 576px) {
+    .search-input-group.expanded {
+      max-width: 220px;
+      width: 220px;
+    }
+  }
+
+  .card-stats {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .card-stats:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08) !important;
+  }
+
+  .rental-item-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .rental-item-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+    background: #fafcff;
+  }
+
+  .rental-avatar-box {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 22px;
+  }
+
+  .rental-phone-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid #dcfce7;
+    background: #f0fdf4;
+    color: #15803d;
+    text-decoration: none;
+    transition: all 0.18s ease;
+  }
+  .rental-phone-pill:hover {
+    background: #15803d;
+    border-color: #15803d;
+    color: #ffffff !important;
+  }
+  .rental-phone-pill:hover i {
+    color: #ffffff !important;
+  }
+
+  .btn-action-round {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: #64748b;
+    transition: all 0.18s ease;
+    cursor: pointer;
+  }
+  .btn-action-round:hover {
+    border-color: #cbd5e1;
+    color: #0f172a;
+    background: #f1f5f9;
+  }
+  .btn-action-round.btn-edit:hover {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #2563eb;
+  }
+  .btn-action-round.btn-delete:hover {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #dc2626;
+  }
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+
+<script>
+function toggleRentalSearchBox() {
+  var group = document.getElementById('rental_search_input_group');
+  var isExpanded = group && group.classList.contains('expanded');
+
+  if (isExpanded) {
+    closeRentalSearchBox();
+  } else if (group) {
+    group.classList.remove('d-none');
+    setTimeout(function () {
+      group.classList.add('expanded');
+      var input = document.getElementById('rentalSearchInput');
+      if (input) input.focus();
+    }, 10);
+  }
+}
+
+function closeRentalSearchBox() {
+  var group = document.getElementById('rental_search_input_group');
+  var input = document.getElementById('rentalSearchInput');
+  if (group) group.classList.remove('expanded');
+  if (input) {
+    input.value = '';
+    if (typeof filterRentals === 'function') filterRentals();
+  }
+  setTimeout(function () {
+    if (group) group.classList.add('d-none');
+  }, 250);
+}
+
+document.addEventListener('click', function (e) {
+  var wrapper = document.getElementById('rental_search_collapse_wrapper');
+  var group = document.getElementById('rental_search_input_group');
+  if (wrapper && group && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+    closeRentalSearchBox();
+  }
+});
+</script>
+{% endblock page_js %}
+
+{% block content %}
+
+<!-- Header Card -->
+<div class="card mb-4 border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 p-4">
+      <div>
+          <h4 class="mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+            <i class="ri-truck-line text-primary"></i>
+            {% trans "Rental Availability" %}
+          </h4>
+      </div>
+
+      <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-primary d-flex align-items-center gap-1.5 px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#add_rentals_modal">
+            <i class="ri-add-line fs-5"></i> Add Machinery
+        </button>
+      </div>
+    </div>
+</div>
+
+<!-- Stats Summary Cards -->
+<div class="row g-3 mb-4">
+  <!-- Total Fleet -->
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+      <div class="card-body d-flex align-items-center gap-3 p-3">
+        <div class="rental-avatar-box" style="background:rgba(13,110,253,0.10); color:#0d6efd;">
+          <i class="ri-truck-line"></i>
+        </div>
+        <div>
+          <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Fleet Count</small>
+          <div class="fw-bold fs-5 text-dark mb-0">{{ total_assets|default:rentals|length }} Assets</div>
+          <small class="text-muted" style="font-size:11px;">registered equipment</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Available Units -->
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+      <div class="card-body d-flex align-items-center gap-3 p-3">
+        <div class="rental-avatar-box" style="background:rgba(16,185,129,0.12); color:#10b981;">
+          <i class="ri-checkbox-circle-line"></i>
+        </div>
+        <div>
+          <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Available</small>
+          <div class="fw-bold fs-5 mb-0" style="color:#10b981;">{{ available_assets|default:"0" }} Units</div>
+          <small class="text-muted" style="font-size:11px;">ready for hire</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rented / Booked -->
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+      <div class="card-body d-flex align-items-center gap-3 p-3">
+        <div class="rental-avatar-box" style="background:rgba(245,158,11,0.12); color:#f59e0b;">
+          <i class="ri-time-line"></i>
+        </div>
+        <div>
+          <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Rented / Booked</small>
+          <div class="fw-bold fs-5 text-warning mb-0">{{ rented_assets|default:"0" }} Units</div>
+          <small class="text-muted" style="font-size:11px;">currently deployed</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- In Maintenance -->
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+      <div class="card-body d-flex align-items-center gap-3 p-3">
+        <div class="rental-avatar-box" style="background:rgba(239,68,68,0.12); color:#ef4444;">
+          <i class="ri-tools-line"></i>
+        </div>
+        <div>
+          <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">In Maintenance</small>
+          <div class="fw-bold fs-5 text-danger mb-0">{{ maintenance_assets|default:"0" }} Units</div>
+          <small class="text-muted" style="font-size:11px;">under inspection</small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filter Toolbar Card -->
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+  <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3">
+    <!-- Collapsible Search -->
+    <div class="d-flex align-items-center search-collapse-wrapper" id="rental_search_collapse_wrapper">
+      <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="rental_search_toggle_btn" onclick="toggleRentalSearchBox()" style="width: 38px; height: 38px;">
+        <i class="ri-search-line"></i>
+      </button>
+      <div class="input-group search-input-group d-none" id="rental_search_input_group">
+        <span class="input-group-text bg-white border-end-0">
+          <i class="ri-search-line text-muted"></i>
+        </span>
+        <input type="text"
+            id="rentalSearchInput"
+            onkeyup="filterRentals()"
+            class="form-control border-start-0"
+            placeholder="Search machinery name, model, class or owner...">
+        <button class="btn btn-outline-secondary border-start-0" type="button" id="rental_search_close_btn" onclick="closeRentalSearchBox()">
+          <i class="ri-close-line"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Hardware Class Filter -->
+    <input type="hidden" id="rentalHardwareFilter" value="">
+    <div class="dropdown">
+      <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" id="rentalHardwareBtn">
+        All Hardware
+      </button>
+      <ul class="dropdown-menu shadow border-0 py-1.5 rounded-3">
+        <li><a class="dropdown-item hardware-filter" data-val="" href="#">All Hardware</a></li>
+        {% for hc in hardware_classes %}
+        <li><a class="dropdown-item hardware-filter" data-val="{{ hc.name }}" href="#">{{ hc.name }}</a></li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <!-- Status Filter -->
+    <input type="hidden" id="rentalStatusFilter" value="">
+    <div class="dropdown">
+      <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" id="rentalStatusFilterBtn">
+        All Statuses
+      </button>
+      <ul class="dropdown-menu shadow border-0 py-1.5 rounded-3">
+        <li><a class="dropdown-item status-filter-opt" data-val="" href="#">All Statuses</a></li>
+        <li><a class="dropdown-item status-filter-opt" data-val="Available" href="#">Available</a></li>
+        <li><a class="dropdown-item status-filter-opt" data-val="Rented" href="#">Rented / Booked</a></li>
+        <li><a class="dropdown-item status-filter-opt" data-val="Maintenance" href="#">Maintenance</a></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Verified Machinery List Container Card -->
+<div class="card p-4 border-0 shadow-sm rounded-4 mb-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h6 class="text-dark fw-bold mb-0">Verified Machinery List</h6>
+      <small class="text-muted">Live inventory directory of heavy farm machinery & implements</small>
+    </div>
+    <span class="badge border rounded-pill px-3 py-1.5 fw-semibold" id="rentalMatchCount" style="background: #fff7ed; color: #ea580c; border-color: #ffedd5;">
+      Showing {{ rentals|length }} assets
+    </span>
+  </div>
+
+  <div class="machinery-list-container">
+    {% for rental in rentals %}
+    <div class="rental-item-card d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 rental-item">
+      <!-- Left Box: Avatar & Machinery info -->
+      <div class="d-flex align-items-center gap-3" style="min-width: 320px;">
+        <div class="rental-avatar-box {% if 'Tool' in rental.class %}bg-warning-subtle text-warning{% else %}bg-primary-subtle text-primary{% endif %}">
+          {% if 'Tool' in rental.class %}
+            <i class="ri-tools-line"></i>
+          {% else %}
+            <i class="ri-truck-line"></i>
+          {% endif %}
+        </div>
+
+        <div class="d-flex flex-column">
+          <!-- Title & Origin Badge -->
+          <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+            <h6 class="mb-0 fw-bold text-dark rental-name">{{ rental.name }}</h6>
+            {% if rental.is_farmer %}
+              <span class="badge bg-info-subtle text-info border border-info-subtle rounded-pill px-2 py-0.5" style="font-size: 10.5px;">
+                <i class="ri-user-smile-line me-1"></i> Farmer Asset
+              </span>
+            {% else %}
+              <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2 py-0.5" style="font-size: 10.5px;">
+                <i class="ri-shield-check-line me-1"></i> Platform Fleet
+              </span>
+            {% endif %}
+          </div>
+
+          <!-- Badges & Owner info -->
+          <div class="d-flex align-items-center gap-2 flex-wrap text-muted small">
+            <span class="badge bg-secondary-subtle text-secondary border rounded-pill px-2 py-0.5 rental-class" style="font-size: 10.5px;">
+              {{ rental.class }}
+            </span>
+
+            {% if 'Excellent' in rental.rating %}
+              <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-0.5" style="font-size: 10.5px;">
+                <i class="ri-sparkling-fill me-1"></i> Excellent Condition
+              </span>
+            {% elif 'Good' in rental.rating %}
+              <span class="badge bg-info-subtle text-info border border-info-subtle rounded-pill px-2 py-0.5" style="font-size: 10.5px;">
+                <i class="ri-thumb-up-line me-1"></i> Good Condition
+              </span>
+            {% elif 'Maintenance' in rental.rating or 'Repair' in rental.rating %}
+              <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-2 py-0.5" style="font-size: 10.5px;">
+                <i class="ri-alarm-warning-line me-1"></i> Needs Repair
+              </span>
+            {% else %}
+              <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill px-2 py-0.5" style="font-size: 10.5px;">
+                {{ rental.rating }}
+              </span>
+            {% endif %}
+
+            <span class="rental-owner ms-1">
+              <i class="ri-user-3-line text-muted me-1"></i>Owner: <strong class="text-dark">{{ rental.owner }}</strong>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Box: Pricing, Contact, Status & Actions -->
+      <div class="d-flex align-items-center justify-content-between justify-content-lg-end gap-3 flex-wrap ms-auto">
+        <!-- Wage / Rental Rate -->
+        <div class="text-start text-lg-end px-2" style="min-width: 100px;">
+          <small class="text-muted d-block fw-semibold" style="font-size: 10px; letter-spacing: 0.5px;">RENTAL RATE</small>
+          <strong class="fs-6 text-dark">₹{{ rental.price }} <small class="text-muted fw-normal">/{% if rental.rental_unit == 'Per Hour' %}hr{% elif rental.rental_unit == 'Per Week' %}wk{% elif rental.rental_unit == 'Per Month' %}mo{% elif rental.rental_unit == 'Per Acre' %}acre{% else %}day{% endif %}</small></strong>
+        </div>
+
+        <!-- Phone Pill -->
+        {% if rental.phone %}
+        <div>
+          <a href="tel:{{ rental.phone }}" class="rental-phone-pill" title="Call Owner">
+            <i class="ri-phone-line"></i> {{ rental.phone }}
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- Status Pill / Dropdown -->
+        <div class="rental-status-wrapper">
+          {% if rental.is_farmer %}
+            <!-- Farmer Asset status pill (Read-only for superadmin) -->
+            <span class="badge rounded-pill px-3 py-1.5 d-inline-flex align-items-center gap-1.5 fw-semibold rental-status-val"
+                  data-status="{{ rental.status }}"
+                  style="font-size: 11.5px;
+                  {% if rental.status == 'Available' or rental.status == 'Operational' %}background:#ecfdf5; color:#059669; border:1px solid #a7f3d0;
+                  {% elif rental.status == 'Rented' or rental.status == 'Booked' %}background:#fffbeb; color:#d97706; border:1px solid #fde68a;
+                  {% elif rental.status == 'Maintenance' or rental.status == 'Needs Repair' %}background:#fef2f2; color:#dc2626; border:1px solid #fecaca;
+                  {% else %}background:#f8fafc; color:#475569; border:1px solid #e2e8f0;{% endif %}">
+              <span class="rounded-circle" style="width: 6px; height: 6px; display: inline-block;
+                {% if rental.status == 'Available' or rental.status == 'Operational' %}background:#059669;
+                {% elif rental.status == 'Rented' or rental.status == 'Booked' %}background:#d97706;
+                {% elif rental.status == 'Maintenance' or rental.status == 'Needs Repair' %}background:#dc2626;
+                {% else %}background:#475569;{% endif %}"></span>
+              {{ rental.status }}
+            </span>
+          {% else %}
+            <!-- Admin Fleet Status Dropdown -->
+            <form method="POST" class="m-0">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="update_status">
+              <input type="hidden" name="rental_id" value="{{ rental.id }}">
+              <div class="dropdown">
+                <button class="btn btn-xs rounded-pill px-3 py-1.5 d-inline-flex align-items-center justify-content-between gap-1.5 shadow-none border fw-semibold rental-status-val"
+                        type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                        data-status="{{ rental.status }}"
+                        style="font-size: 11.5px; min-width: 120px;
+                        {% if rental.status == 'Available' %}background:#ecfdf5; color:#059669; border-color:#a7f3d0;
+                        {% elif rental.status == 'Rented' or rental.status == 'Booked' %}background:#fffbeb; color:#d97706; border-color:#fde68a;
+                        {% elif rental.status == 'Maintenance' or rental.status == 'Needs Repair' %}background:#fef2f2; color:#dc2626; border-color:#fecaca;
+                        {% else %}background:#f8fafc; color:#475569; border-color:#e2e8f0;{% endif %}">
+                  <span class="d-inline-flex align-items-center gap-1.5">
+                    <span class="rounded-circle" style="width: 6px; height: 6px; display: inline-block;
+                      {% if rental.status == 'Available' %}background:#059669;
+                      {% elif rental.status == 'Rented' or rental.status == 'Booked' %}background:#d97706;
+                      {% elif rental.status == 'Maintenance' or rental.status == 'Needs Repair' %}background:#dc2626;
+                      {% else %}background:#475569;{% endif %}"></span>
+                    {{ rental.status }}
+                  </span>
+                  <i class="ri-arrow-down-s-line fs-6 text-muted ms-auto"></i>
+                </button>
+                <ul class="dropdown-menu shadow border-0 py-1.5 rounded-3" style="min-width: 135px; font-size: 12px; z-index: 1050;">
+                  <li>
+                    <button class="dropdown-item py-1.5 px-3 d-flex align-items-center gap-2" type="submit" name="status" value="Available">
+                      <span class="rounded-circle bg-success" style="width: 7px; height: 7px;"></span>
+                      <span class="fw-medium text-success">Available</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="dropdown-item py-1.5 px-3 d-flex align-items-center gap-2" type="submit" name="status" value="Rented">
+                      <span class="rounded-circle bg-warning" style="width: 7px; height: 7px;"></span>
+                      <span class="fw-medium text-warning">Rented</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="dropdown-item py-1.5 px-3 d-flex align-items-center gap-2" type="submit" name="status" value="Maintenance">
+                      <span class="rounded-circle bg-danger" style="width: 7px; height: 7px;"></span>
+                      <span class="fw-medium text-danger">Maintenance</span>
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            </form>
+          {% endif %}
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="d-flex align-items-center gap-1.5 ms-1">
+          {% if not rental.is_farmer %}
+            <button type="button" class="btn-action-round btn-edit" title="Edit Machinery"
+                    data-bs-toggle="modal" data-bs-target="#edit_rentals_modal"
+                    onclick="populateEditModal('{{ rental.id }}', '{{ rental.name|escapejs }}', '{{ rental.class|escapejs }}', '{{ rental.price }}', '{{ rental.owner|escapejs }}', '{{ rental.phone|escapejs }}', '{{ rental.rating|escapejs }}', '{{ rental.status|escapejs }}')">
+              <i class="ri-pencil-line fs-6"></i>
+            </button>
+            <button type="button" class="btn-action-round btn-delete" title="Delete Machinery"
+                    data-bs-toggle="modal" data-bs-target="#delete_rentals_modal"
+                    onclick="populateDeleteModal('{{ rental.id }}', '{{ rental.name|escapejs }}')">
+              <i class="ri-delete-bin-line fs-6"></i>
+            </button>
+          {% else %}
+            <span class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" title="Farmer Inventory Asset (Managed in Farmer module)">
+              <button type="button" class="btn-action-round" style="opacity: 0.5; cursor: not-allowed;" disabled>
+                <i class="ri-lock-line fs-6"></i>
+              </button>
+            </span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="text-center py-5">
+       <i class="ri-truck-line fs-1 text-muted d-block mb-2 opacity-50"></i>
+       <h6 class="text-dark fw-bold">No rental machinery registered yet</h6>
+       <p class="text-muted small">Click "Add Machinery" above to register your first equipment.</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Add Rentals Modal -->
+<div class="modal fade" id="add_rentals_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <form method="POST">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_rental">
+      <!-- Header -->
+      <div class="modal-header border-bottom p-4">
+        <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2 mb-0">
+          <i class="ri-truck-line text-primary"></i> Register Rental Machinery
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body p-4">
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold text-dark">Equipment / Model Name <span class="text-danger">*</span></label>
+            <input type="text" name="equipment_name" class="form-control rounded-3" placeholder="E.g. John Deere 5075E 4WD Tractor" required>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold text-dark">Hardware Class <span class="text-danger">*</span></label>
+            <select name="hardware_class" class="form-select rounded-3" required>
+              {% for hc in hardware_classes %}
+              <option value="{{ hc.name }}">{{ hc.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-dark">Price Per Day (₹ INR) <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0">₹</span>
+              <input type="number" name="price_per_day" class="form-control border-start-0" value="500" step="0.01" required>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-dark">Owner / Agency Name <span class="text-danger">*</span></label>
+            <input type="text" name="owner_name" class="form-control rounded-3" placeholder="E.g. AgriOT Central Fleet" required>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-dark">Contact Phone <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0"><i class="ri-phone-line text-muted"></i></span>
+              <input type="text" name="contact_phone" class="form-control border-start-0" placeholder="+91 98765 43210" required>
+            </div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-dark">Asset Condition</label>
+            <select name="condition_rating" class="form-select rounded-3">
+              <option value="Excellent">Excellent</option>
+              <option value="Good" selected>Good</option>
+              <option value="Fair">Fair Wear</option>
+            </select>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-dark">Initial Status</label>
+            <select name="status" class="form-select rounded-3">
+              <option value="Available" selected>Available</option>
+              <option value="Rented">Rented</option>
+              <option value="Maintenance">Maintenance</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="modal-footer border-top p-3 d-flex justify-content-between">
+        <button type="button" class="btn btn-light rounded-3 px-4" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary rounded-3 px-4 shadow-sm">
+          <i class="ri-check-line me-1"></i> Register Machinery
+        </button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Rentals Modal -->
+<div class="modal fade" id="edit_rentals_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <form method="POST">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="edit_rental">
+      <input type="hidden" name="rental_id" id="edit_rental_id">
+      <!-- Header -->
+      <div class="modal-header border-bottom p-4">
+        <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2 mb-0">
+          <i class="ri-pencil-line text-primary"></i> Edit Rental Machinery
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body p-4">
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold text-dark">Equipment / Model Name <span class="text-danger">*</span></label>
+            <input type="text" name="equipment_name" id="edit_equipment_name" class="form-control rounded-3" required>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold text-dark">Hardware Class <span class="text-danger">*</span></label>
+            <select name="hardware_class" id="edit_hardware_class" class="form-select rounded-3" required>
+              {% for hc in hardware_classes %}
+              <option value="{{ hc.name }}">{{ hc.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-dark">Price Per Day (₹ INR) <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0">₹</span>
+              <input type="number" name="price_per_day" id="edit_price_per_day" class="form-control border-start-0" step="0.01" required>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-dark">Owner / Agency Name <span class="text-danger">*</span></label>
+            <input type="text" name="owner_name" id="edit_owner_name" class="form-control rounded-3" required>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-dark">Contact Phone <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0"><i class="ri-phone-line text-muted"></i></span>
+              <input type="text" name="contact_phone" id="edit_contact_phone" class="form-control border-start-0" required>
+            </div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-dark">Asset Condition</label>
+            <select name="condition_rating" id="edit_condition_rating" class="form-select rounded-3">
+              <option value="Excellent">Excellent</option>
+              <option value="Good">Good</option>
+              <option value="Fair">Fair Wear</option>
+            </select>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-dark">Asset State</label>
+            <select name="status" id="edit_status" class="form-select rounded-3">
+              <option value="Available">Available</option>
+              <option value="Rented">Rented</option>
+              <option value="Maintenance">Maintenance</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="modal-footer border-top p-3 d-flex justify-content-between">
+        <button type="button" class="btn btn-light rounded-3 px-4" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary rounded-3 px-4 shadow-sm">
+          <i class="ri-check-line me-1"></i> Update Machinery
+        </button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Rentals Modal -->
+<div class="modal fade" id="delete_rentals_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <form method="POST">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="delete_rental">
+      <input type="hidden" name="rental_id" id="delete_rental_id">
+      <div class="modal-header border-bottom p-3">
+        <h6 class="modal-title fw-bold text-danger d-flex align-items-center gap-1.5 mb-0">
+          <i class="ri-delete-bin-line"></i> Confirm Deletion
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body text-center p-4">
+        <div class="avatar avatar-md bg-danger-subtle text-danger rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+          <i class="ri-alert-line fs-3"></i>
+        </div>
+        <p class="mb-1 text-dark fw-semibold">Are you sure you want to delete this equipment?</p>
+        <p class="text-muted small mb-0" id="deleteRentalName">—</p>
+      </div>
+
+      <div class="modal-footer border-top p-3 d-flex justify-content-center gap-2">
+        <button type="button" class="btn btn-light rounded-3 px-3" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-danger rounded-3 px-3">
+          <i class="ri-delete-bin-line me-1"></i> Yes, Delete
+        </button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function populateEditModal(id, name, hwClass, price, owner, phone, rating, status) {
+      document.getElementById('edit_rental_id').value = id;
+      document.getElementById('edit_equipment_name').value = name;
+      document.getElementById('edit_hardware_class').value = hwClass;
+      document.getElementById('edit_price_per_day').value = price;
+      document.getElementById('edit_owner_name').value = owner;
+      document.getElementById('edit_contact_phone').value = phone;
+      document.getElementById('edit_condition_rating').value = rating;
+      document.getElementById('edit_status').value = status;
+  }
+
+  function populateDeleteModal(id, name) {
+      document.getElementById('delete_rental_id').value = id;
+      document.getElementById('deleteRentalName').innerText = name;
+  }
+
+  function filterRentals() {
+      let searchVal = document.getElementById("rentalSearchInput").value.toLowerCase().trim();
+      let hwVal = document.getElementById("rentalHardwareFilter").value.toLowerCase().trim();
+      let statusVal = document.getElementById("rentalStatusFilter").value.toLowerCase().trim();
+      
+      let items = document.querySelectorAll(".rental-item");
+      let count = 0;
+      
+      items.forEach(function(item) {
+          let nameEl = item.querySelector(".rental-name");
+          let ownerEl = item.querySelector(".rental-owner");
+          let classEl = item.querySelector(".rental-class");
+          let statusEl = item.querySelector(".rental-status-val");
+          
+          let name = nameEl ? nameEl.innerText.toLowerCase() : "";
+          let owner = ownerEl ? ownerEl.innerText.toLowerCase() : "";
+          let hwClass = classEl ? classEl.innerText.toLowerCase().trim() : "";
+          let status = statusEl ? (statusEl.getAttribute('data-status') || statusEl.innerText).toLowerCase().trim() : "";
+          
+          let matchSearch = (searchVal === "") || name.includes(searchVal) || owner.includes(searchVal) || hwClass.includes(searchVal);
+          let matchHw = (hwVal === "") || (hwClass === hwVal);
+          let matchStatus = (statusVal === "") || status.includes(statusVal);
+          
+          if (matchSearch && matchHw && matchStatus) {
+              item.classList.remove('d-none');
+              item.classList.add('d-flex');
+              count++;
+          } else {
+              item.classList.remove('d-flex');
+              item.classList.add('d-none');
+          }
+      });
+      
+      let matchCountEl = document.getElementById("rentalMatchCount");
+      if (matchCountEl) {
+          matchCountEl.innerText = "Showing " + count + " assets";
+      }
+  }
+
+  // Hardware Class Filter click handler
+  document.querySelectorAll('.hardware-filter').forEach(item => {
+      item.addEventListener('click', function (e) {
+          e.preventDefault();
+          document.getElementById('rentalHardwareBtn').innerText = this.innerText;
+          document.getElementById('rentalHardwareFilter').value = this.getAttribute('data-val');
+          filterRentals();
+      });
+  });
+
+  // Status Filter click handler
+  document.querySelectorAll('.status-filter-opt').forEach(item => {
+      item.addEventListener('click', function (e) {
+          e.preventDefault();
+          document.getElementById('rentalStatusFilterBtn').innerText = this.innerText;
+          document.getElementById('rentalStatusFilter').value = this.getAttribute('data-val');
+          filterRentals();
+      });
+  });
+</script>
+
+{% endblock %}

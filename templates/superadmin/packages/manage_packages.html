@@ -1,0 +1,1443 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+
+{% block title %}Packages & Subscription Management{% endblock %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
+<style>
+.search-collapse-wrapper {
+  position: relative;
+}
+.search-input-group {
+  width: 0;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.25s ease, opacity 0.2s ease;
+  white-space: nowrap;
+}
+.search-input-group.expanded {
+  max-width: 420px;
+  width: 420px;
+  opacity: 1;
+  margin-left: 8px;
+}
+@media (max-width: 576px) {
+  .search-input-group.expanded {
+    max-width: 220px;
+    width: 220px;
+  }
+}
+/* tab buttons */
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link {
+  background-color: #F69C55 !important;
+  color: #fff !important;
+  border-radius: 8px;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(246, 156, 85, 0.25);
+}
+.nav-pills .nav-link {
+  border-radius: 8px;
+  font-weight: 500;
+  color: #566a7f !important;
+  padding: 0.5rem 1.25rem;
+  transition: all 0.2s ease;
+  background: transparent;
+}
+.nav-pills .nav-link:hover:not(.active) {
+  background-color: #f5f5f9;
+  color: #F69C55 !important;
+}
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+  function setupDynamicList(inputId, btnId, listId, initialData = []) {
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(btnId);
+    const list = document.getElementById(listId);
+
+    if (!input || !btn || !list) return;
+
+    function toggleListVisibility() {
+      if (list.children.length > 0) {
+        list.classList.remove("d-none");
+        list.classList.add("p-2");
+      } else {
+        list.classList.add("d-none");
+        list.classList.remove("p-2");
+      }
+    }
+
+    function createItem(value) {
+      const item = document.createElement("div");
+      item.className =
+        "d-flex justify-content-between align-items-center border rounded px-2 py-1 bg-white";
+
+      item.innerHTML = `
+        <span class="fw-medium text-dark fs-7">${value}</span>
+        <button type="button" class="btn btn-sm text-danger p-0 remove-btn">
+          <i class="ri-close-line"></i>
+        </button>
+        <input type="hidden" name="${listId}[]" value="${value}">
+      `;
+
+      item.querySelector(".remove-btn").addEventListener("click", () => {
+        item.remove();
+        toggleListVisibility();
+      });
+
+      list.appendChild(item);
+      toggleListVisibility();
+    }
+
+    // Expose methods to dynamically manage list later
+    list.clearItems = function() {
+      list.innerHTML = "";
+      toggleListVisibility();
+    };
+    list.addItem = function(val) {
+      createItem(val);
+    };
+
+    // Load initial data
+    initialData.forEach(val => createItem(val));
+    toggleListVisibility();
+
+    btn.addEventListener("click", () => {
+      const value = input.value.trim();
+      if (!value) return;
+
+      createItem(value);
+      input.value = "";
+    });
+
+    input.addEventListener("keypress", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        btn.click();
+      }
+    });
+    
+    return list;
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    setupDynamicList("featureInput", "addFeatureBtn", "featureList", []);
+    const featureMainList = setupDynamicList("featureInputMain", "addFeatureMainBtn", "featureMainList", []);
+
+    document.querySelectorAll(".edit-package-btn").forEach(btn => {
+      btn.addEventListener("click", function() {
+        document.getElementById("edit_package_id").value = this.dataset.id;
+        document.getElementById("edit_name").value = this.dataset.name;
+        document.getElementById("edit_price").value = this.dataset.price;
+        document.getElementById("edit_max_acre_support").value = this.dataset.maxAcre;
+        document.getElementById("edit_description").value = this.dataset.desc;
+        document.getElementById("edit_my_land").value = this.dataset.myland;
+        document.getElementById("edit_my_crop").value = this.dataset.mycrop;
+        document.getElementById("edit_my_users").value = this.dataset.myusers;
+
+        // Reset and populate modules
+        document.querySelectorAll(".edit-module-checkbox").forEach(cb => cb.checked = false);
+        const modulesStr = this.dataset.modules || "";
+        const modules = modulesStr.split("||").map(m => m.trim()).filter(m => m !== "");
+        document.querySelectorAll(".edit-module-checkbox").forEach(cb => {
+          if (modules.includes(cb.value)) cb.checked = true;
+        });
+
+        // Reset and populate features list
+        if (featureMainList) {
+          featureMainList.clearItems();
+          const featuresStr = this.dataset.features || "";
+          const features = featuresStr.split("||").map(f => f.trim()).filter(f => f !== "");
+          features.forEach(f => featureMainList.addItem(f));
+        }
+      });
+    });
+
+    document.querySelectorAll(".delete-package-btn").forEach(btn => {
+      btn.addEventListener("click", function() {
+        document.getElementById("delete_package_id").value = this.dataset.id;
+        document.getElementById("delete_package_name_display").innerText = this.dataset.name;
+      });
+    });
+  });
+
+  function toggleSubSearchBox() {
+    var group = document.getElementById('sub_search_input_group');
+    var isExpanded = group && group.classList.contains('expanded');
+
+    if (isExpanded) {
+      closeSubSearchBox();
+    } else if (group) {
+      group.classList.remove('d-none');
+      setTimeout(function () {
+        group.classList.add('expanded');
+        var input = document.getElementById('subSearchBox');
+        if (input) input.focus();
+      }, 10);
+    }
+  }
+
+  function closeSubSearchBox() {
+    var group = document.getElementById('sub_search_input_group');
+    var input = document.getElementById('subSearchBox');
+    if (group) group.classList.remove('expanded');
+    if (input) {
+      input.value = '';
+      var dt = $('.datatable').data('dt_table');
+      if (dt) dt.search('').draw();
+    }
+    setTimeout(function () {
+      if (group) group.classList.add('d-none');
+    }, 250);
+  }
+
+  document.addEventListener('click', function (e) {
+    var wrapper = document.getElementById('sub_search_collapse_wrapper');
+    var group = document.getElementById('sub_search_input_group');
+    if (wrapper && group && !wrapper.contains(e.target) && group.classList.contains('expanded')) {
+      closeSubSearchBox();
+    }
+  });
+
+  $(document).ready(function () {
+      document.querySelectorAll(".delete-btn").forEach(btn => {
+          btn.addEventListener("click", function() {
+              document.getElementById("delete_subscription_id").value = this.dataset.id;
+              document.getElementById("deleteFarmerName").innerText = this.dataset.name;
+          });
+      });
+
+
+      $('.datatable').each(function () {
+
+          // prevent double init
+          if ($.fn.dataTable.isDataTable(this)) {
+              $(this).DataTable().destroy();
+          }
+
+          let dt_table = $(this).DataTable({
+              pageLength: $(this).data('page-length') || 5,
+              lengthMenu: [5, 10, 25, 50],
+              responsive: true,
+              dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'>>" +
+                   "<'row'<'col-sm-12'tr>>" +
+                   "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end'p>>"
+          });
+          
+          $(this).data('dt_table', dt_table);
+
+      });
+
+      $('.custom-search').on('keyup', function () {
+          let container = $(this).closest('.card').next('.card');
+          let dt = container.find('.datatable').data('dt_table');
+          if (dt) {
+              dt.search(this.value).draw();
+          }
+      });
+
+      $('.status-filter').on('change', function () {
+          let val = $.fn.dataTable.util.escapeRegex($(this).val());
+          let container = $(this).closest('.card').next('.card');
+          let dt = container.find('.datatable').data('dt_table');
+          if (dt) {
+              if (val === 'all' || val === '') {
+                  dt.column(4).search('').draw();
+              } else {
+                  dt.column(4).search('^' + val + '$', true, false, true).draw();
+              }
+          }
+      });
+
+      // Auto-update Monthly Billing Amount based on Package selection
+      $('#packageSelect').on('change', function() {
+          var selectedOption = $(this).find('option:selected');
+          var price = selectedOption.data('price');
+          
+          if (price !== undefined && price !== "") {
+              $('#monthlyBillingAmount').val(price);
+          } else {
+              $('#monthlyBillingAmount').val('');
+          }
+      });
+
+  });
+
+  let selectedRow = null;
+
+  $(document).ready(function() {
+      $(document).on('click', '.delete-btn', function () {
+          let farmerName = $(this).data('name');
+
+          // Set name in modal
+          $('#deleteFarmerName').text(farmerName);
+
+          // Store row reference
+          selectedRow = $(this).closest('tr');
+      });
+
+      $('#confirmDeleteBtn').on('click', function () {
+          // Remove row (frontend)
+          if (selectedRow) {
+              selectedRow.remove();
+          }
+
+          // Close modal
+          $('#delete_farmer_modal').modal('hide');
+
+          // Optional: primary toast
+          console.log("Farmer deleted");
+      });
+  });
+
+  function toggleForm() {
+      const form = document.getElementById("expandForm");
+      if (form.style.display === "none") {
+          form.style.display = "block";
+      } else {
+          form.style.display = "none";
+      }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+      // Restore active tab from localStorage if it exists
+      let activeTab = localStorage.getItem('packagesActiveTab');
+      if (activeTab) {
+          let tabEl = document.querySelector(`button[data-bs-target="${activeTab}"]`);
+          if (tabEl) {
+              // Need to remove active classes from others first if using standard bootstrap tabs
+              document.querySelectorAll('[data-bs-toggle="tab"]').forEach(b => {
+                  b.classList.remove('active', 'active-tab');
+              });
+              document.querySelectorAll('.tab-pane').forEach(p => {
+                  p.classList.remove('show', 'active');
+              });
+              
+              tabEl.classList.add('active', 'active-tab');
+              let pane = document.querySelector(activeTab);
+              if(pane) pane.classList.add('show', 'active');
+          }
+      }
+
+      document.querySelectorAll('[data-bs-toggle="tab"]').forEach(btn => {
+          btn.addEventListener('click', function (e) {
+              let target = this.getAttribute('data-bs-target');
+              localStorage.setItem('packagesActiveTab', target);
+              
+              document.querySelectorAll('[data-bs-toggle="tab"]').forEach(b => {
+                  b.classList.remove('active-tab');
+              });
+              this.classList.add('active-tab');
+          });
+      });
+  });
+
+  document.addEventListener('DOMContentLoaded', function() {
+      let startDateInput = document.getElementById('startDate');
+      let endDateInput = document.getElementById('endDate');
+
+      if (startDateInput && endDateInput) {
+          startDateInput.addEventListener('change', function() {
+              if (this.value) {
+                  let date = new Date(this.value);
+                  // Standard 30-day renewal cycle
+                  date.setDate(date.getDate() + 30);
+                  
+                  let nextMonth = String(date.getMonth() + 1).padStart(2, '0');
+                  let nextDay = String(date.getDate()).padStart(2, '0');
+                  let nextYear = date.getFullYear();
+                  
+                  endDateInput.value = `${nextYear}-${nextMonth}-${nextDay}`;
+              } else {
+                  endDateInput.value = '';
+              }
+          });
+      }
+  });
+</script>
+{% endblock page_js %}
+
+{% block content %}
+
+<!-- Tabs Header -->
+<div class="mb-4 d-flex justify-content-start">
+    <ul class="nav nav-pills gap-2 flex-wrap" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active d-flex align-items-center gap-2"
+                    data-bs-toggle="tab"
+                    data-bs-target="#packagesTab"
+                    type="button"
+                    role="tab">
+                <i class="ri-box-3-line fs-5"></i> Packages
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link d-flex align-items-center gap-2"
+                    data-bs-toggle="tab"
+                    data-bs-target="#subscriptionsTab"
+                    type="button"
+                    role="tab">
+                <i class="ri-money-dollar-circle-line fs-5"></i> Subscriptions
+            </button>
+        </li>
+    </ul>
+</div>
+
+<div class="tab-content text-muted p-0 border-0 bg-transparent">
+    <div class="tab-pane fade show active" id="packagesTab" role="tabpanel">
+<style>
+    .bg-gray-100{
+        background-color: #F8FAFC;
+    }
+
+  .pkg-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 28px 24px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    transition: box-shadow 0.2s;
+  }
+  .pkg-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.08); }
+  .pkg-card.featured {
+    border: 2px solid #009966;
+    position: relative;
+  }
+  .pkg-card-title {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #111827;
+    margin-bottom: 6px;
+  }
+  .pkg-card-desc {
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.5;
+    margin-bottom: 20px;
+  }
+  .pkg-price {
+    font-size: 32px;
+    font-weight: 800;
+    color: #111827;
+    margin-bottom: 20px;
+  }
+  .pkg-price span {
+    font-size: 13px;
+    font-weight: 500;
+    color: #9ca3af;
+  }
+  .pkg-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #009966;
+    margin: 16px 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pkg-device-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+  .pkg-device-tag {
+    font-size: 11px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    color: #374151;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .pkg-feature {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    color: #374151;
+    margin-bottom: 6px;
+  }
+  .pkg-feature.highlight {
+    font-weight: 700;
+    color: #009966;
+    font-size: 13px;
+  }
+  .pkg-feature i.check { color: #009966; font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+  .pkg-module-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 12px;
+  }
+  .pkg-module-row:last-child { border-bottom: none; }
+  .pkg-module-name {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #374151;
+    font-weight: 500;
+  }
+  .pkg-module-name.locked { color: #9ca3af; }
+  .pkg-module-status {
+    font-size: 11px;
+    font-weight: 600;
+    color: #009966;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .pkg-module-status.locked { color: #9ca3af; }
+  .pkg-footer {
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid #f3f4f6;
+    font-size: 11px;
+    color: #9ca3af;
+    font-style: italic;
+    text-align: center;
+  }
+  .popular-badge {
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #009966;
+    color: white;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 16px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .pkg-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .module-pill {
+    cursor: pointer;
+  }
+
+  .module-pill input {
+    display: none;
+  }
+
+  .module-pill span {
+    display: inline-block;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
+    transition: all 0.2s ease;
+  }
+
+  /* Selected (green style like image) */
+  .module-pill input:checked + span {
+    background: #d1fae59d;
+    border-color: #34d399;
+    color: #065f46;
+  }
+
+  /* Hover */
+  .module-pill span:hover {
+    border-color: #34d399;
+  }
+</style>
+
+<!-- ── Page Header ── -->
+<div class="card mb-3 border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex justify-content-between align-items-center p-3 border-bottom">
+        <div>
+            <h4 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="ri-stack-line text-primary"></i>
+                {% trans "Packages " %}
+            </h4>
+        </div>
+        <button class="btn btn-primary d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#add_package_modal">
+            <i class="ri-add-line"></i> Add Package
+        </button>
+    </div>
+</div>
+
+<!-- ── Package Cards ── -->
+<div class="row g-4 mb-4">
+  {% for package in packages %}
+  <div class="col-lg-4">
+    <div class="pkg-card">
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <i class="ri-stack-line text-primary fs-5"></i>
+        <p class="pkg-card-title mb-0">{{ package.name }}</p>
+      </div>
+      <p class="pkg-card-desc">{{ package.description }}</p>
+      <div class="pkg-price">₹{{ package.price }} <span>/ Month</span></div>
+
+      <div class="pkg-section-label">
+        <i class="ri-cpu-line"></i> Key Features:
+      </div>
+      <div class="pkg-device-tags">
+        {% if package.my_land %}
+        <span class="pkg-device-tag fw-semibold">{{ package.my_land }} Land</span>
+        {% endif %}
+        {% if package.my_crop %}
+        <span class="pkg-device-tag fw-semibold">{{ package.my_crop }} Crop</span>
+        {% endif %}
+        {% if package.my_users %}
+        <span class="pkg-device-tag fw-semibold">{{ package.my_users }} Manager</span>
+        {% endif %}
+      </div>
+
+      <div class="pkg-section-label">
+        <i class="ri-briefcase-line"></i> Package Features:
+      </div>
+      <div class="pkg-feature highlight">
+        <i class="ri-checkbox-circle-line check"></i>
+        Max Acre Support: {{ package.max_acre_support }}
+      </div>
+      {% for feature in package.features %}
+      <div class="pkg-feature"><i class="ri-checkbox-circle-line check"></i> {{ feature }}</div>
+      {% endfor %}
+
+      <div class="pkg-section-label">
+        <i class="ri-apps-line"></i> Unlocked App Modules:
+      </div>
+      {% for mod in eco_modules %}
+      <div class="pkg-module-row">
+        <div class="pkg-module-name {% if mod.name not in package.modules %}locked{% endif %}">
+          <i class="{{ mod.icon }} {% if mod.name not in package.modules %}text-muted{% endif %}" style="font-size:13px;"></i>
+          {{ mod.name }}
+        </div>
+        <div class="pkg-module-status {% if mod.name not in package.modules %}locked{% endif %}">
+          {% if mod.name in package.modules %}
+            <i class="ri-check-line"></i> Active
+          {% else %}
+            <i class="ri-lock-line"></i> Locked
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+
+      <div class="pkg-footer">
+        <div class="d-flex align-items-center justify-content-end gap-2">
+          <button class="btn btn-outline-secondary d-flex align-items-center gap-2 edit-package-btn" style="font-size:13px;" data-bs-toggle="modal" data-bs-target="#edit_package_modal"
+            data-id="{{ package.id }}" data-name="{{ package.name }}" data-price="{{ package.price }}" data-max-acre="{{ package.max_acre_support }}" data-desc="{{ package.description|default_if_none:'' }}" data-myland="{{ package.my_land|default_if_none:'' }}" data-mycrop="{{ package.my_crop|default_if_none:'' }}" data-myusers="{{ package.my_users|default_if_none:'' }}"
+            data-modules="{% for m in package.modules %}{{ m }}||{% endfor %}"
+            data-features="{% for f in package.features %}{{ f }}||{% endfor %}">
+            <i class="ri-pencil-line"></i> Edit
+          </button>
+          <button class="btn btn-outline-danger d-flex align-items-center gap-2 delete-package-btn" style="font-size:13px;" data-bs-toggle="modal" data-bs-target="#delete_package_modal"
+            data-id="{{ package.id }}" data-name="{{ package.name }}">
+            <i class="ri-delete-bin-7-line"></i> Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12 text-center py-5">
+    <div class="text-muted fs-5 mb-2"><i class="ri-inbox-2-line" style="font-size: 2rem;"></i></div>
+    <p class="text-muted">No packages found. Create a new package to get started.</p>
+  </div>
+  {% endfor %}
+
+</div>
+
+
+<!-- Add Package Modal -->
+<div class="modal fade" id="add_package_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <form method="POST" action="{% url 'manage_package' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create">
+
+        <!-- Header -->
+        <div class="modal-header">
+          <h5 class="modal-title fw-semibold">Create New Package</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-12">
+              <label class="form-label">Package Name</label>
+              <input type="text" name="name" class="form-control" placeholder="Enter Package Name" required>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Price Per Month (in ₹)</label>
+              <input type="number" step="0.01" name="price" class="form-control" placeholder="Enter Price Per Month (in ₹)" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Max Acre Support</label>
+              <input type="text" name="max_acre_support" class="form-control" placeholder="Enter Max Acre Support" required>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label">Description</label>
+              <textarea name="description" class="form-control"></textarea>
+            </div>
+          <div class="col-md-12">
+            <label class="form-label">Unlock Software Modules</label>
+            <div class="d-flex flex-wrap gap-2 mt-2 p-2 rounded border">
+                {% for mod in eco_modules %}
+                <label class="module-pill">
+                    <input type="checkbox" name="modules" value="{{ mod.name }}">
+                    <span>
+                      <i class="{{ mod.icon }} me-1"></i>
+                      {{ mod.name }}
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Package Features</label>
+
+            <div class="d-flex gap-2 mb-2">
+              <input type="text" id="featureInput" class="form-control" placeholder="Enter Features">
+              <button type="button" id="addFeatureBtn" class="btn btn-light px-3">Add</button>
+            </div>
+            <div id="featureList" class="d-flex flex-column gap-2 bg-gray-100 rounded d-none"
+                style="max-height:150px; overflow-y:auto; padding:0;">
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-dark fs-7 mb-2">Key Features</label>
+
+            <div class="mb-2">
+              <label class="form-label fs-8 text-muted mb-1">My Land</label>
+              <input type="text" name="my_land" class="form-control" placeholder="Enter My Land">
+            </div>
+            <div class="mb-2">
+              <label class="form-label fs-8 text-muted mb-1">My Crop</label>
+              <input type="text" name="my_crop" class="form-control" placeholder="Enter My Crop">
+            </div>
+            <div class="mb-0">
+              <label class="form-label fs-8 text-muted mb-1">My Users</label>
+              <input type="text" name="my_users" class="form-control" placeholder="Enter My Users">
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <!-- Footer -->
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary">
+          <i class="ri-check-line me-1"></i>Add Package
+        </button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<!-- Edit Package Modal -->
+<div class="modal fade" id="edit_package_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <form method="POST" action="{% url 'manage_package' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="edit">
+        <input type="hidden" name="package_id" id="edit_package_id">
+
+        <!-- Header -->
+        <div class="modal-header">
+          <h5 class="modal-title fw-semibold">Update Package</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-12">
+              <label class="form-label">Package Name</label>
+              <input type="text" name="name" id="edit_name" class="form-control" placeholder="Enter Package Name" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Price Per Month (in ₹)</label>
+              <input type="number" step="0.01" name="price" id="edit_price" class="form-control" placeholder="Enter Price Per Month (in ₹)" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Max Acre Support</label>
+              <input type="text" name="max_acre_support" id="edit_max_acre_support" class="form-control" placeholder="Enter Max Acre Support" required>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label">Description</label>
+              <textarea name="description" id="edit_description" class="form-control"></textarea>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label">Unlock Software Modules</label>
+              <div class="d-flex flex-wrap gap-2 mt-2 p-2 rounded border" id="edit_modules_container">
+                {% for mod in eco_modules %}
+                <label class="module-pill">
+                    <input type="checkbox" name="modules" class="edit-module-checkbox" value="{{ mod.name }}">
+                    <span>
+                      <i class="{{ mod.icon }} me-1"></i>
+                      {{ mod.name }}
+                    </span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Package Features</label>
+
+              <div class="d-flex gap-2 mb-2">
+                <input type="text" id="featureInputMain" class="form-control" placeholder="Enter Feature">
+                <button type="button" id="addFeatureMainBtn" class="btn btn-light px-3">Add</button>
+              </div>
+              <div id="featureMainList"
+                  class="d-flex flex-column gap-2 bg-gray-100 rounded d-none"
+                  style="max-height:150px; overflow-y:auto; padding:0;">
+              </div>
+            </div>
+            <!-- ✅ Hardware Units -->
+            <div class="col-md-6">
+              <label class="form-label text-dark fs-7 mb-2">Key Features</label>
+
+              <div class="mb-2">
+                <label class="form-label fs-8 text-muted mb-1">My Land</label>
+                <input type="text" name="my_land" id="edit_my_land" class="form-control" placeholder="Enter My Land">
+              </div>
+              <div class="mb-2">
+                <label class="form-label fs-8 text-muted mb-1">My Crop</label>
+                <input type="text" name="my_crop" id="edit_my_crop" class="form-control" placeholder="Enter My Crop">
+              </div>
+              <div class="mb-0">
+                <label class="form-label fs-8 text-muted mb-1">My Manager</label>
+                <input type="text" name="my_users" id="edit_my_users" class="form-control" placeholder="Enter My Manager">
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Footer -->
+        <div class="modal-footer d-flex justify-content-between">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <i class="ri-check-line me-1"></i>Update Package
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Package Modal -->
+<div class="modal fade" id="delete_package_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <form method="POST" action="{% url 'manage_package' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="package_id" id="delete_package_id">
+        <div class="modal-header">
+          <h5 class="modal-title text-danger">Confirm Delete</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body text-center">
+          <p class="mb-0">
+            Are you sure you want to delete
+            <strong id="delete_package_name_display" class="text-dark">this package</strong>?
+          </p>
+          <div class="alert alert-danger mt-3 text-start fs-7 mb-0">
+            <i class="ri-error-warning-line me-1"></i>
+            <strong>Warning:</strong> This package might be used by multiple farmers. Deleting it could cause those farmers to face issues or lose access to their subscribed features.
+          </div>
+        </div>
+
+        <div class="modal-footer d-flex justify-content-between">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">Permanently Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+    </div>
+    <div class="tab-pane fade" id="subscriptionsTab" role="tabpanel">
+<!-- Header Card -->
+<div class="card mb-3 border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex justify-content-between align-items-center p-3 border-bottom">
+        <div>
+            <h4 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="ri-bank-card-line text-primary"></i>
+                {% trans "Billing & Subscription" %}
+            </h4>
+        </div>
+        <a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#add_subscription_modal">
+            <i class="ri-add-line"></i> Add Subscription
+        </a>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-md-4">
+    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <span class="text-uppercase small fw-bold text-muted" style="font-size:11px; letter-spacing:0.8px;">Monthly Revenue</span>
+          <div class="fs-4 fw-bold text-dark mt-1">₹{{ total_revenue|default:0|floatformat:2 }}</div>
+        </div>
+        <div class="rounded-3 p-3 bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center" style="width:48px; height:48px;">
+          <i class="ri-money-dollar-circle-line fs-4"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <span class="text-uppercase small fw-bold text-muted" style="font-size:11px; letter-spacing:0.8px;">Outstanding Pending</span>
+          <div class="fs-4 fw-bold text-warning mt-1">₹{{ total_pending|default:0|floatformat:2 }}</div>
+        </div>
+        <div class="rounded-3 p-3 bg-warning bg-opacity-10 text-warning d-flex align-items-center justify-content-center" style="width:48px; height:48px;">
+          <i class="ri-time-line fs-4"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <span class="text-uppercase small fw-bold text-muted" style="font-size:11px; letter-spacing:0.8px;">Active Accounts</span>
+          <div class="fs-4 fw-bold text-success mt-1">{{ active_accounts|default:0 }} Accounts</div>
+        </div>
+        <div class="rounded-3 p-3 bg-success bg-opacity-10 text-success d-flex align-items-center justify-content-center" style="width:48px; height:48px;">
+          <i class="ri-user-follow-line fs-4"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Table Card -->
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+        <!-- Collapsible Search -->
+        <div class="d-flex align-items-center search-collapse-wrapper" id="sub_search_collapse_wrapper">
+          <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="sub_search_toggle_btn" onclick="toggleSubSearchBox()" style="width: 38px; height: 38px;">
+            <i class="ri-search-line"></i>
+          </button>
+          <div class="input-group search-input-group d-none" id="sub_search_input_group">
+            <span class="input-group-text bg-white border-end-0">
+              <i class="ri-search-line text-muted"></i>
+            </span>
+            <input type="text"
+                id="subSearchBox"
+                class="form-control border-start-0 custom-search"
+                placeholder="Search subscriptions, farmers, packages...">
+            <button class="btn btn-outline-secondary border-start-0" type="button" id="sub_search_close_btn" onclick="closeSubSearchBox()">
+              <i class="ri-close-line"></i>
+            </button>
+          </div>
+        </div>
+
+        <select class="form-select form-select-sm w-auto status-filter" id="subStatusFilter">
+            <option value="all">All Statuses</option>
+            <option value="Paid">Paid</option>
+            <option value="Pending">Pending</option>
+            <option value="Overdue">Overdue</option>
+        </select>
+    </div>
+
+    <div class="table-responsive text-nowrap p-3">
+        <table class="table table-hover align-middle border-top datatable" data-page-length="10" style="width: 100%;">
+            <thead class="table-gray-200 ">
+                <tr class="fs-8 fw-medium">
+                    <th>Farmer /Subscribed</th>
+                    <th>	Billing Amount</th>
+                    <th>Dates</th>
+                    <th>	Auto Renewal</th>
+                    <th>Status </th>
+                    <th>Actions </th>
+                </tr>
+            </thead>
+            <tbody class="fs-7 fw-medium text-black">
+                {% for sub in subscriptions %}
+                <tr>
+                    <td>
+                        <div class="d-flex flex-column ms-0">
+                            <label class="fw-semibold text-black">{% if sub.farmer.user.first_name %}{{ sub.farmer.user.first_name }}{% elif sub.farmer.user.username %}{{ sub.farmer.user.username }}{% else %}Unknown{% endif %}</label>
+                            <span class="badge bg-light-subtle text-black rounded-3 fs-8">{% if sub.package %}{{ sub.package.name }}{% else %}No Package{% endif %}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <label class="fs-8 fw-normal"><i class="ri-arrow-right-up-line me-1"></i>₹{{ sub.monthly_amount|default:0|floatformat:2 }} /mo</label>
+                    </td>
+                    <td>
+                        <div class="d-flex flex-column">
+                            <label class="fw-semibold text-black">Start: {{ sub.created_at|date:"Y-m-d" }}</label>
+                            <div class="d-flex align-items-center justify-content-start gap-2 fs-8">
+                                <small class="text-dark fw-normal">Next: {{ sub.end_date|date:"Y-m-d" }}</small>
+                            </div>
+                        </div>
+                    </td>
+                   <td>
+                      <div class="dropdown">
+                        <button class="btn btn-outline-{% if sub.auto_renew %}primary{% else %}danger{% endif %} dropdown-toggle fs-7" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="width: 190px;">
+                          {% if sub.auto_renew %}Active recurring{% else %}Manual Renew{% endif %}
+                        </button>
+                        <ul class="dropdown-menu p-2">
+                          <li>
+                            <form method="POST" action="{% url 'manage_subscription' %}">
+                              {% csrf_token %}
+                              <input type="hidden" name="action" value="update_auto_renew">
+                              <input type="hidden" name="subscription_id" value="{{ sub.id }}">
+                              <input type="hidden" name="auto_renew" value="{% if sub.auto_renew %}false{% else %}true{% endif %}">
+                              <button type="submit" class="dropdown-item {% if sub.auto_renew %}bg-label-danger text-danger{% else %}bg-label-primary text-primary{% endif %} rounded-3 mb-1 text-start py-1 px-2 fs-7 fw-semibold" style="border: none; width: 100%;">
+                                {% if sub.auto_renew %}Manual Renew{% else %}Active Recurring{% endif %}
+                              </button>
+                            </form>
+                          </li>
+                        </ul>
+                      </div>
+                    </td>
+                    <td data-search="{{ sub.payment_status|title }}">
+                      <div class="dropdown">
+                        <button class="btn {% if sub.payment_status == 'paid' %}btn-outline-primary{% elif sub.payment_status == 'pending' %}btn-outline-warning{% else %}btn-outline-danger{% endif %} dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="width: 100px;">
+                          {{ sub.payment_status|title }}
+                        </button>
+                        <ul class="dropdown-menu p-2">
+                          {% if sub.payment_status != 'paid' %}
+                          <li>
+                            <form method="POST" action="{% url 'manage_subscription' %}">
+                              {% csrf_token %}
+                              <input type="hidden" name="action" value="update_payment_status">
+                              <input type="hidden" name="subscription_id" value="{{ sub.id }}">
+                              <input type="hidden" name="payment_status" value="paid">
+                              <button type="submit" class="dropdown-item badge bg-label-primary text-primary rounded-3 mb-1 text-start" style="border: none; width: 100%;">Paid</button>
+                            </form>
+                          </li>
+                          {% endif %}
+                          {% if sub.payment_status != 'pending' %}
+                          <li>
+                            <form method="POST" action="{% url 'manage_subscription' %}">
+                              {% csrf_token %}
+                              <input type="hidden" name="action" value="update_payment_status">
+                              <input type="hidden" name="subscription_id" value="{{ sub.id }}">
+                              <input type="hidden" name="payment_status" value="pending">
+                              <button type="submit" class="dropdown-item badge bg-label-warning text-warning rounded-3 mb-1 text-start" style="border: none; width: 100%;">Pending</button>
+                            </form>
+                          </li>
+                          {% endif %}
+                          {% if sub.payment_status != 'overdue' %}
+                          <li>
+                            <form method="POST" action="{% url 'manage_subscription' %}">
+                              {% csrf_token %}
+                              <input type="hidden" name="action" value="update_payment_status">
+                              <input type="hidden" name="subscription_id" value="{{ sub.id }}">
+                              <input type="hidden" name="payment_status" value="overdue">
+                              <button type="submit" class="dropdown-item badge bg-label-danger text-danger rounded-3 text-start" style="border: none; width: 100%;">Overdue</button>
+                            </form>
+                          </li>
+                          {% endif %}
+                        </ul>
+                      </div>
+                    </td>
+                    <td class="text-end">
+                      <div class="d-flex justify-content-end me-2 gap-2">
+                        <button
+                            class="btn btn-sm btn-outline-primary view-profile-btn p-1"
+                            data-bs-toggle="offcanvas"
+                            data-bs-target="#farmerProfileDrawer_{{ sub.id }}"
+                            >
+                            <i class="ri-eye-line me-1"></i>History
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-btn p-1"
+                                data-id="{{ sub.id }}"
+                                data-name="{{ sub.farmer.name }}"
+                                data-bs-toggle="modal"
+                                data-bs-target="#delete_farmer_modal">
+                            Delete
+                        </button>
+                      </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+<!-- Add Subscription Modal -->
+<div class="modal fade" id="add_subscription_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+
+      <form method="POST" action="{% url 'manage_subscription' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create">
+      <!-- Header -->
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Attach IoT Subscription</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body">
+
+        <div class="row g-3">
+
+          <!-- Full Name -->
+          <div class="col-12">
+            <label class="form-label">Select Farmer Account</label>
+            <select class="select3 form-select" name="farmer_id" required>
+              {% for farmer in farmers %}
+              <option value="{{ farmer.id }}">{{ farmer.user.first_name|default:farmer.user.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Select Core Package</label>
+            <select class="select3 form-select" name="package_id" id="packageSelect" required>
+              <option value="">Select Package</option>
+              {% for package in packages %}
+              <option value="{{ package.id }}" data-price="{{ package.price }}">{{ package.name }} - ₹{{ package.price }} /mo</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Monthly Billing -->
+          <div class="col-md-12">
+            <label class="form-label">Monthly Billing Amount (₹)</label>
+            <input type="number" class="form-control" name="monthly_amount" id="monthlyBillingAmount" placeholder="0.00" step="0.01">
+          </div>
+
+          <div class="col-lg-6">
+            <div class="mb-3" style="max-width: 300px;">
+              <label for="startDate" class="form-label">Contract Start Date</label>
+              <input type="date" id="startDate" class="form-control">
+            </div>
+          </div>
+
+          <div class="col-lg-6">
+            <div class="mb-3" style="max-width: 300px;">
+              <label for="endDate" class="form-label">Next Renewal Date</label>
+              <input type="date" id="endDate" class="form-control">
+            </div>
+          </div>
+
+          <!-- Status -->
+          <div class="col-md-4">
+            <label class="form-label">Payment Status</label>
+            <select class="select3 form-select" name="payment_status">
+              <option value="paid">Paid</option>
+              <option value="pending">Pending</option>
+              <option value="overdue">Overdue</option>
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Subscription Status</label>
+            <select class="select3 form-select" name="subscription_status">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
+          <div class="col-md-4 d-flex align-items-center mt-4">
+            <div class="form-check mt-3">
+              <input class="form-check-input" type="checkbox" name="auto_renew" id="autoRenewCycle">
+              <label class="form-check-label text-black" for="autoRenewCycle">
+                Auto-Renew Cycle
+              </label>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary">
+          <i class="ri-check-line me-1"></i> Confirm Subscription
+        </button>
+      </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- Update Subscription Modal -->
+<div class="modal fade" id="adjust_subscription_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+
+      <!-- Header -->
+      <div class="modal-header">
+        <h5 class="modal-title fw-semibold">Adjust Subscription Contract</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body">
+
+        <div class="row g-3">
+
+          <!-- Full Name -->
+          <div class="col-12">
+            <label class="form-label">Select Farmer Account</label>
+            <select class="select3 form-select" placeholder="Emma Vance (North valley)">
+              <option value="0">Emma Vance (North valley)</option>
+              <option value="1">Marcus Sterling (East Plains)</option>
+              <option value="2">Aaliyah Patel (South delta)</option>
+              <option value="3">Roberto Santana (West Coast Hills)</option>
+            </select>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Select Core Package</label>
+            <select class="select3 form-select" placeholder="Eco-Starter Package - $49 /mo">
+              <option value="0">Eco-Starter Package - $49 /mo</option>
+              <option value="1">Bumper Yield Professional - $129 /mo</option>
+            </select>
+          </div>
+
+          <!-- Land Size -->
+          <div class="col-md-12">
+            <label class="form-label">Monthly Billing Amount ($)</label>
+            <input type="number" class="form-control" placeholder="49">
+          </div>
+
+          <div class="col-lg-6">
+            <div class="mb-3" style="max-width: 300px;">
+              <label for="startDate" class="form-label">Contract Start Date</label>
+              <input type="date" id="startDate" class="form-control">
+            </div>
+          </div>
+
+          <div class="col-lg-6">
+            <div class="mb-3" style="max-width: 300px;">
+              <label for="endDate" class="form-label">Next Renewal Date</label>
+              <input type="date" id="endDate" class="form-control">
+            </div>
+          </div>
+
+          <!-- Status -->
+          <div class="col-md-6">
+            <label class="form-label">State Registry Status</label>
+            <select class="form-select">
+              <option>Paid</option>
+              <option>Pending</option>
+              <option>Overdue</option>
+            </select>
+          </div>
+
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" value="" id="autoRenewCycle">
+            <label class="form-check-label text-black" autoRenewCycle="autoRenewCycle">
+              Auto-Renew Cycle
+            </label>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary">
+          <i class="ri-check-line me-1"></i> Confirm Subscription
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Delete subscription Modal -->
+<div class="modal fade" id="delete_farmer_modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <form method="POST" action="{% url 'manage_subscription' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="subscription_id" id="delete_subscription_id">
+
+        <div class="modal-header">
+          <h5 class="modal-title text-danger">Confirm Delete</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body text-center">
+          <p class="mb-0">
+            Are you sure you want to delete the subscription for
+            <strong id="deleteFarmerName">this farmer</strong>?
+          </p>
+        </div>
+
+        <div class="modal-footer justify-content-center">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">Permanently Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Farmer Profile Drawer -->
+{% for sub in subscriptions %}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="farmerProfileDrawer_{{ sub.id }}" style="width: 700px;">
+  <div class="row">
+    <div class="col-lg-12">
+      <div class="offcanvas-header border-bottom">
+
+        <div class="d-flex align-items-center w-100 gap-3">
+
+          <div class="d-flex align-items-center justify-content-center">
+              <i class="ri-bank-card-line me-2 bg-dark border rounded text-white p-2 w-200 h-200"></i>
+          </div>
+
+          <div class="flex-grow-1">
+
+            <span class="badge bg-light text-black rounded-3 fs-7">CONTRACT ID: sub-{{ sub.id }}</span>
+
+            <div class="d-flex align-items-center gap-2">
+              <h4 class="mb-0" id="profileName">Billing Profile for {% if sub.farmer.user.first_name %}{{ sub.farmer.user.first_name }}{% elif sub.farmer.user.username %}{{ sub.farmer.user.username }}{% else %}Unknown{% endif %}</h4>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 mt-1">
+              <small class="text-muted">
+                <span>Region: {% if sub.farmer.district %}{{ sub.farmer.district.name }}{% elif sub.farmer.state %}{{ sub.farmer.state.name }}{% else %}Unknown{% endif %}</span>
+              </small>
+
+              <small>|</small>
+
+              <small class="text-muted">
+                <span>Phone: {{ sub.farmer.mobile_number|default:'N/A' }}</span>
+              </small>
+            </div>
+
+          </div>
+
+          <button type="button" class="btn-close ms-auto" data-bs-dismiss="offcanvas"></button>
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="offcanvas-body">
+    <div class="d-flex gap-2 mb-4">
+      <div class="w-100 border border-dark rounded">
+        <div class="align-items-center justify-content-between p-5">
+          <div class="d-flex flex-column gap-1 mb-4">
+            <span class="text-muted fw-semibold">Active Plan</span>
+            <label class="text-dark fw-bold fs-6">{% if sub.package %}{{ sub.package.name }}{% else %}No Package{% endif %}</label>
+            <small class="text-muted">{% if sub.package %}{{ sub.package.description }}{% else %}Active plan details...{% endif %}</small>
+          </div>
+          <div class="d-flex">
+            <label class="text-primary fs-6">₹{{ sub.monthly_amount|default:0|floatformat:2 }}</label>
+            <span class="text-muted fs-7">/ Month (Recurring)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- History Section -->
+    <h6 class="fw-bold mb-3">Subscription History</h6>
+    <div class="table-responsive border rounded">
+      <table class="table table-sm align-middle mb-0">
+        <thead class="table-light text-muted fs-8">
+          <tr>
+            <th>Package</th>
+            <th>Amount</th>
+            <th>Start Date</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody class="fs-7">
+          {% for history_sub in sub.farmer.subscriptions.all|dictsortreversed:"id" %}
+          <tr>
+            <td>
+              <span class="fw-semibold text-dark">{% if history_sub.package %}{{ history_sub.package.name }}{% else %}N/A{% endif %}</span>
+            </td>
+            <td>₹{{ history_sub.monthly_amount|default:0|floatformat:2 }}</td>
+            <td>{{ history_sub.created_at|date:"M d, Y" }}</td>
+            <td>
+              {% if history_sub.subscription_status == 'active' %}
+                <span class="badge bg-label-success">Active</span>
+              {% else %}
+                <span class="badge bg-label-secondary">Cancelled</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="4" class="text-center text-muted">No history found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+
+    </div>
+</div>
+{% endblock content %}

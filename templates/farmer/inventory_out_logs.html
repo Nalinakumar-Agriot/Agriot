@@ -1,0 +1,270 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/farmer/vertical_menu.html" %}
+{% endblock %}
+{% block title %}Out Logs Summary{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<style>
+  .hover-card:hover {
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+      transition: all 0.25s ease;
+  }
+</style>
+{% endblock page_css %}
+
+{% block content %}
+<div class="mb-3 d-flex align-items-center justify-content-between">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a href="{% url 'farmer-inventory' %}">Warehouse & Inventory</a></li>
+            <li class="breadcrumb-item active">Out Logs Summary</li>
+        </ol>
+    </nav>
+    <a href="{% url 'farmer-inventory' %}" class="btn btn-outline-secondary d-flex align-items-center gap-2 px-3 shadow-sm">
+        <i class="ri-arrow-left-line"></i> Back to Inventory
+    </a>
+</div>
+
+<!-- Header Card -->
+<div class="card mb-4 border-0 shadow-sm rounded-4 hover-card">
+    <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+        <div>
+            <h4 class="mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="ri-pie-chart-2-line text-warning"></i>
+                {% trans "Out - In Logs Summary" %}
+            </h4>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-warning d-flex align-items-center gap-2 px-4 shadow-sm" id="returnStockBtn" disabled>
+                <i class="ri-arrow-go-back-line fs-5"></i>
+                Return Selected to Stock
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Table Card -->
+<div class="card border-0 shadow-sm rounded-4 hover-card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light border-bottom text-muted">
+                    <tr>
+                        <th style="width: 40px;" class="ps-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="selectAllCheckbox">
+                            </div>
+                        </th>
+                        <th class="fw-semibold py-3 text-uppercase small" style="font-size: 11px;">Item Name</th>
+                        <th class="fw-semibold py-3 text-uppercase small" style="font-size: 11px;">Category</th>
+                        <th class="fw-semibold py-3 text-uppercase small" style="font-size: 11px;">Quantity Out</th>
+                        <th class="fw-semibold py-3 text-uppercase small" style="font-size: 11px;">Log Date</th>
+                        <th class="fw-semibold py-3 text-uppercase small" style="font-size: 11px;">Notes / Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in out_logs %}
+                    <tr id="log-row-{{ log.id }}">
+                        <td class="ps-4">
+                            <div class="form-check">
+                                <input class="form-check-input log-checkbox" type="checkbox" value="{{ log.id }}">
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge rounded-circle p-2 bg-label-secondary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                                    <i class="ri-box-3-line text-secondary" style="font-size: 16px;"></i>
+                                </span>
+                                <div>
+                                    <span class="fw-bold text-dark d-block" style="font-size: 13.5px;">{{ log.inventory.item_name }}</span>
+                                    <small class="text-muted" style="font-size: 11px;">Loc: {{ log.inventory.location }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge bg-label-primary px-3 py-1 rounded-pill" style="font-size: 10px;">{{ log.inventory.category }}</span>
+                        </td>
+                        <td>
+                            <span class="fw-bold text-danger" style="font-size: 13.5px;">-{{ log.quantity }} {{ log.inventory.unit }}</span>
+                        </td>
+                        <td>
+                            <span class="text-muted small" style="font-size: 12px;">{{ log.log_date|date:"d N Y" }}</span>
+                        </td>
+                        <td>
+                            <span class="text-secondary small">{{ log.notes|default:"No description provided" }}</span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-5">
+                            <i class="ri-inbox-line fs-1 d-block mb-2 text-light"></i>
+                            No "Out" logs found in inventory.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% block page_js %}
+<script>
+$(document).ready(function () {
+    const $selectAll = $('#selectAllCheckbox');
+    const $checkboxes = $('.log-checkbox');
+    const $returnBtn = $('#returnStockBtn');
+
+    // CSRF Token Helper
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    // Update Action Button state based on selection
+    function updateButtonState() {
+        const checkedCount = $('.log-checkbox:checked').length;
+        $returnBtn.prop('disabled', checkedCount === 0);
+        if (checkedCount > 0) {
+            $returnBtn.text(`Return Selected (${checkedCount}) to Stock`);
+        } else {
+            $returnBtn.text('Return Selected to Stock');
+        }
+    }
+
+    // Select All Checkbox logic
+    $selectAll.on('change', function () {
+        $checkboxes.prop('checked', this.checked);
+        updateButtonState();
+    });
+
+    // Individual Checkbox logic
+    $checkboxes.on('change', function () {
+        const allChecked = $('.log-checkbox:checked').length === $checkboxes.length;
+        $selectAll.prop('checked', allChecked);
+        updateButtonState();
+    });
+
+    // Return Stock click handler
+    $returnBtn.on('click', function () {
+        const selectedIds = [];
+        $('.log-checkbox:checked').each(function () {
+            selectedIds.push(parseInt($(this).val()));
+        });
+
+        if (selectedIds.length === 0) return;
+
+        Swal.fire({
+            title: 'Are you sure?',
+            text: "This will increase inventory quantities and mark these logs as 'In' (Returned).",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#63771F',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Yes, return to stock!',
+            customClass: {
+                confirmButton: 'btn btn-primary me-3',
+                cancelButton: 'btn btn-label-secondary'
+            },
+            buttonsStyling: false
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Show loading state
+                Swal.fire({
+                    title: 'Processing...',
+                    text: 'Please wait while we restock items.',
+                    allowOutsideClick: false,
+                    showConfirmButton: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                $.ajax({
+                    url: "{% url 'return_out_logs_api' %}",
+                    type: 'POST',
+                    data: JSON.stringify({ 'log_ids': selectedIds }),
+                    contentType: 'application/json',
+                    headers: { 'X-CSRFToken': csrftoken },
+                    success: function (response) {
+                        if (response.success) {
+                            Swal.fire({
+                                title: 'Success!',
+                                text: response.message,
+                                icon: 'success',
+                                confirmButtonText: 'OK',
+                                customClass: {
+                                    confirmButton: 'btn btn-primary'
+                                },
+                                buttonsStyling: false
+                            }).then(() => {
+                                location.reload();
+                            });
+                        } else {
+                            Swal.fire({
+                                title: 'Error!',
+                                text: response.message || 'An error occurred.',
+                                icon: 'error',
+                                confirmButtonText: 'OK',
+                                customClass: {
+                                    confirmButton: 'btn btn-primary'
+                                },
+                                buttonsStyling: false
+                            });
+                            $returnBtn.prop('disabled', false);
+                            updateButtonState();
+                        }
+                    },
+                    error: function (xhr, status, error) {
+                        Swal.fire({
+                            title: 'Error!',
+                            text: 'Server error occurred. Please try again.',
+                            icon: 'error',
+                            confirmButtonText: 'OK',
+                            customClass: {
+                                confirmButton: 'btn btn-primary'
+                                },
+                            buttonsStyling: false
+                        });
+                        $returnBtn.prop('disabled', false);
+                        updateButtonState();
+                    }
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock page_js %}
+{% endblock content %}
