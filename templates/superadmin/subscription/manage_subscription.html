@@ -51,6 +51,44 @@
     width: 220px;
   }
 }
+.status-filter-btn {
+  border-color: #e2e8f0;
+  color: #475569;
+  font-size: 0.8125rem;
+  height: 38px;
+  background-color: #fff;
+  transition: all 0.2s ease;
+}
+.status-filter-btn:hover,
+.status-filter-btn:focus,
+.status-filter-btn[aria-expanded="true"] {
+  border-color: #F69C55 !important;
+  color: #F69C55 !important;
+  background-color: #fff7ed !important;
+  box-shadow: 0 2px 6px rgba(246, 156, 85, 0.15) !important;
+}
+.status-filter-opt {
+  color: #475569;
+  font-size: 0.8125rem;
+  border-radius: 6px;
+  margin: 1px 4px;
+  padding: 0.45rem 0.75rem;
+  transition: all 0.15s ease;
+}
+.status-filter-opt:hover,
+.status-filter-opt:focus {
+  background-color: #fff7ed !important;
+  color: #F69C55 !important;
+}
+.status-filter-opt.active {
+  background-color: #fff7ed !important;
+  color: #F69C55 !important;
+  font-weight: 600;
+}
+.status-filter-opt.active .check-mark {
+  display: inline-block !important;
+  color: #F69C55;
+}
 </style>
 {% endblock page_css %}
 
@@ -136,6 +174,20 @@ $(document).ready(function () {
                 dt.column(4).search('^' + val + '$', true, false, true).draw();
             }
         }
+    });
+
+    $(document).on('click', '.status-filter-opt', function (e) {
+        e.preventDefault();
+        let val = $(this).data('val');
+        let label = $(this).find('.status-opt-text').text().trim();
+
+        $('#subStatusFilter').val(val).trigger('change');
+        $('#subStatusFilterLabel').text(label);
+
+        $('.status-filter-opt').removeClass('active');
+        $('.status-filter-opt .check-mark').addClass('d-none');
+        $(this).addClass('active');
+        $(this).find('.check-mark').removeClass('d-none');
     });
 
     // Auto-update Monthly Billing Amount based on Package selection
@@ -235,12 +287,56 @@ $(document).ready(function () {
           </div>
         </div>
 
-        <select class="form-select form-select-sm w-auto" id="subStatusFilter">
-            <option value="all">All Statuses</option>
-            <option value="Paid">Paid</option>
-            <option value="Pending">Pending</option>
-            <option value="Overdue">Overdue</option>
-        </select>
+        <!-- Themed Status Filter Dropdown -->
+        <input type="hidden" class="status-filter" id="subStatusFilter" value="all">
+        <div class="dropdown">
+          <button class="btn dropdown-toggle d-flex align-items-center gap-2 px-3 rounded-3 fw-semibold status-filter-btn" 
+                  type="button" 
+                  id="subStatusFilterBtn" 
+                  data-bs-toggle="dropdown" 
+                  aria-expanded="false">
+            <i class="ri-filter-3-line" style="color: #F69C55;"></i>
+            <span id="subStatusFilterLabel">All Statuses</span>
+          </button>
+          <ul class="dropdown-menu shadow-lg border-0 py-1 rounded-3" aria-labelledby="subStatusFilterBtn" style="min-width: 170px;">
+            <li>
+              <a class="dropdown-item status-filter-opt d-flex align-items-center justify-content-between active" href="javascript:void(0)" data-val="all">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #94a3b8;"></span>
+                  <span class="status-opt-text">All Statuses</span>
+                </span>
+                <i class="ri-check-line check-mark"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item status-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Paid">
+                <span class="d-flex align-items-center gap-2 text-success">
+                  <span class="rounded-circle bg-success" style="width: 8px; height: 8px;"></span>
+                  <span class="status-opt-text">Paid</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item status-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Pending">
+                <span class="d-flex align-items-center gap-2 text-warning">
+                  <span class="rounded-circle bg-warning" style="width: 8px; height: 8px;"></span>
+                  <span class="status-opt-text">Pending</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item status-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Overdue">
+                <span class="d-flex align-items-center gap-2 text-danger">
+                  <span class="rounded-circle bg-danger" style="width: 8px; height: 8px;"></span>
+                  <span class="status-opt-text">Overdue</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+          </ul>
+        </div>
     </div>
 
     <div class="table-responsive text-nowrap p-3">
@@ -265,11 +361,11 @@ $(document).ready(function () {
                         </div>
                     </td>
                     <td>
-                        <label class="fs-8 fw-normal"><i class="ri-arrow-right-up-line me-1"></i>₹{{ sub.monthly_amount|default:0|floatformat:2 }} /mo</label>
+                        <label class="fs-8 fw-normal"><i class="ri-arrow-right-up-line me-1"></i>₹{{ sub.monthly_amount|default:0|floatformat:2 }} <span class="text-muted text-capitalize">/ {{ sub.billing_cycle|default:'mo' }}</span></label>
                     </td>
                     <td>
                         <div class="d-flex flex-column">
-                            <label class="fw-semibold text-black">Start: {{ sub.created_at|date:"Y-m-d" }}</label>
+                            <label class="fw-semibold text-black">Start: {{ sub.start_date|default:sub.created_at|date:"Y-m-d" }}</label>
                             <div class="d-flex align-items-center justify-content-start gap-2 fs-8">
                                 <small class="text-dark fw-normal">Next: {{ sub.end_date|date:"Y-m-d" }}</small>
                             </div>
@@ -295,50 +391,44 @@ $(document).ready(function () {
                         </ul>
                       </div>
                     </td>
-                    <td data-search="{{ sub.payment_status|title }}">
-                      <div class="dropdown">
-                        <button class="btn {% if sub.payment_status == 'paid' %}btn-outline-primary{% elif sub.payment_status == 'pending' %}btn-outline-warning{% else %}btn-outline-danger{% endif %} dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="width: 100px;">
-                          {{ sub.payment_status|title }}
-                        </button>
-                        <ul class="dropdown-menu p-2">
-                          {% if sub.payment_status != 'paid' %}
-                          <li>
-                            <form method="POST" action="{% url 'manage_subscription' %}">
-                              {% csrf_token %}
-                              <input type="hidden" name="action" value="update_payment_status">
-                              <input type="hidden" name="subscription_id" value="{{ sub.id }}">
-                              <input type="hidden" name="payment_status" value="paid">
-                              <button type="submit" class="dropdown-item badge bg-label-primary text-primary rounded-3 mb-1 text-start" style="border: none; width: 100%;">Paid</button>
-                            </form>
-                          </li>
-                          {% endif %}
-                          {% if sub.payment_status != 'pending' %}
-                          <li>
-                            <form method="POST" action="{% url 'manage_subscription' %}">
-                              {% csrf_token %}
-                              <input type="hidden" name="action" value="update_payment_status">
-                              <input type="hidden" name="subscription_id" value="{{ sub.id }}">
-                              <input type="hidden" name="payment_status" value="pending">
-                              <button type="submit" class="dropdown-item badge bg-label-warning text-warning rounded-3 mb-1 text-start" style="border: none; width: 100%;">Pending</button>
-                            </form>
-                          </li>
-                          {% endif %}
-                          {% if sub.payment_status != 'overdue' %}
-                          <li>
-                            <form method="POST" action="{% url 'manage_subscription' %}">
-                              {% csrf_token %}
-                              <input type="hidden" name="action" value="update_payment_status">
-                              <input type="hidden" name="subscription_id" value="{{ sub.id }}">
-                              <input type="hidden" name="payment_status" value="overdue">
-                              <button type="submit" class="dropdown-item badge bg-label-danger text-danger rounded-3 text-start" style="border: none; width: 100%;">Overdue</button>
-                            </form>
-                          </li>
-                          {% endif %}
-                        </ul>
-                      </div>
+                    <td data-search="{% if sub.payment_status|lower in 'paid,success,active' %}Paid{% elif sub.payment_status|lower == 'pending' %}Pending{% elif sub.payment_status|lower == 'overdue' %}Overdue{% else %}{{ sub.payment_status|title }}{% endif %}">
+                      {% if sub.payment_status|lower == 'paid' or sub.payment_status|lower == 'success' or sub.payment_status|lower == 'active' %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill fs-7 fw-semibold d-inline-flex align-items-center gap-1">
+                          <i class="ri-checkbox-circle-fill"></i> Paid
+                        </span>
+                      {% elif sub.payment_status|lower == 'pending' %}
+                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-3 py-2 rounded-pill fs-7 fw-semibold d-inline-flex align-items-center gap-1">
+                          <i class="ri-time-fill"></i> Pending
+                        </span>
+                      {% elif sub.payment_status|lower == 'overdue' %}
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2 rounded-pill fs-7 fw-semibold d-inline-flex align-items-center gap-1">
+                          <i class="ri-error-warning-fill"></i> Overdue
+                        </span>
+                      {% else %}
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-3 py-2 rounded-pill fs-7 fw-semibold d-inline-flex align-items-center gap-1">
+                          <i class="ri-information-fill"></i> {{ sub.payment_status|title|default:'Pending' }}
+                        </span>
+                      {% endif %}
                     </td>
                     <td class="text-end">
                       <div class="d-flex justify-content-end me-2 gap-2">
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-success p-1"
+                            title="View / Download Invoice"
+                            data-invoice-id="INV-{{ sub.start_date|date:'Y'|default:'2026' }}-{{ sub.id|stringformat:'04d' }}"
+                            data-invoice-date="{% if sub.start_date %}{{ sub.start_date|date:'d-M-Y' }}{% elif sub.created_at %}{{ sub.created_at|date:'d-M-Y' }}{% else %}31-Oct-2026{% endif %}"
+                            data-farmer-name="{% if sub.farmer.user.get_full_name %}{{ sub.farmer.user.get_full_name }}{% elif sub.farmer.user.first_name %}{{ sub.farmer.user.first_name }}{% elif sub.farmer.user.username %}{{ sub.farmer.user.username }}{% elif sub.farmer.company_name %}{{ sub.farmer.company_name }}{% elif sub.farmer.mobile_number %}{{ sub.farmer.mobile_number }}{% else %}Farmer{% endif %}"
+                            data-farmer-phone="{% if sub.farmer.mobile_number %}{{ sub.farmer.mobile_number }}{% elif sub.farmer.user.username %}{{ sub.farmer.user.username }}{% else %}N/A{% endif %}"
+                            data-farmer-email="{% if sub.farmer.user.email %}{{ sub.farmer.user.email }}{% elif sub.farmer.email %}{{ sub.farmer.email }}{% else %}N/A{% endif %}"
+                            data-package-name="{{ sub.package.name|default:'Custom Plan' }}"
+                            data-amount="₹{{ sub.monthly_amount|floatformat:2 }}"
+                            data-billing-cycle="{{ sub.billing_cycle|title }}"
+                            data-status="{{ sub.payment_status|title }}"
+                            data-end-date="{% if sub.end_date %}{{ sub.end_date|date:'d-M-Y' }}{% else %}-{% endif %}"
+                            onclick="openAdminInvoiceModalFromBtn(this)">
+                            <i class="ri-file-download-line me-1"></i>Invoice
+                        </button>
                         <button
                             class="btn btn-sm btn-outline-primary view-profile-btn p-1"
                             data-bs-toggle="offcanvas"
@@ -348,7 +438,7 @@ $(document).ready(function () {
                         </button>
                         <button class="btn btn-sm btn-outline-danger delete-btn p-1"
                                 data-id="{{ sub.id }}"
-                                data-name="{{ sub.farmer.name }}"
+                                data-name="{% if sub.farmer.user.get_full_name %}{{ sub.farmer.user.get_full_name }}{% elif sub.farmer.user.first_name %}{{ sub.farmer.user.first_name }}{% elif sub.farmer.user.username %}{{ sub.farmer.user.username }}{% elif sub.farmer.company_name %}{{ sub.farmer.company_name }}{% elif sub.farmer.mobile_number %}{{ sub.farmer.mobile_number }}{% else %}this farmer{% endif %}"
                                 data-bs-toggle="modal"
                                 data-bs-target="#delete_farmer_modal">
                             Delete
@@ -387,7 +477,7 @@ $(document).ready(function () {
             <label class="form-label">Select Farmer Account</label>
             <select class="select3 form-select" name="farmer_id" required>
               {% for farmer in farmers %}
-              <option value="{{ farmer.id }}">{{ farmer.user.first_name|default:farmer.user.username }}</option>
+              <option value="{{ farmer.id }}">{% if farmer.user.first_name %}{{ farmer.user.first_name }}{% elif farmer.user.username %}{{ farmer.user.username }}{% elif farmer.mobile_number %}{{ farmer.mobile_number }}{% else %}Farmer #{{ farmer.id }}{% endif %}</option>
               {% endfor %}
             </select>
           </div>
@@ -397,28 +487,37 @@ $(document).ready(function () {
             <select class="select3 form-select" name="package_id" id="packageSelect" required>
               <option value="">Select Package</option>
               {% for package in packages %}
-              <option value="{{ package.id }}" data-price="{{ package.price }}">{{ package.name }} - ₹{{ package.price }} /mo</option>
+              <option value="{{ package.id }}" data-price="{{ package.price }}" data-price-quarterly="{{ package.price_quarterly|default:'' }}" data-price-yearly="{{ package.price_yearly|default:'' }}">{{ package.name }} (₹{{ package.price }}/mo)</option>
               {% endfor %}
             </select>
           </div>
 
-          <!-- Monthly Billing -->
-          <div class="col-md-12">
-            <label class="form-label">Monthly Billing Amount (₹)</label>
+          <div class="col-md-6">
+            <label class="form-label">Billing Cycle</label>
+            <select class="form-select" name="billing_cycle" id="billingCycleSelect">
+              <option value="monthly" selected>Monthly (1 Month)</option>
+              <option value="quarterly">Quarterly (3 Months)</option>
+              <option value="yearly">Yearly (1 Year)</option>
+            </select>
+          </div>
+
+          <!-- Billing Amount -->
+          <div class="col-md-6">
+            <label class="form-label">Billing Amount (₹)</label>
             <input type="number" class="form-control" name="monthly_amount" id="monthlyBillingAmount" placeholder="0.00" step="0.01">
           </div>
 
           <div class="col-lg-6">
             <div class="mb-3" style="max-width: 300px;">
               <label for="startDate" class="form-label">Contract Start Date</label>
-              <input type="date" id="startDate" class="form-control">
+              <input type="date" id="startDate" name="start_date" class="form-control">
             </div>
           </div>
 
           <div class="col-lg-6">
             <div class="mb-3" style="max-width: 300px;">
               <label for="endDate" class="form-label">Next Renewal Date</label>
-              <input type="date" id="endDate" class="form-control">
+              <input type="date" id="endDate" name="end_date" class="form-control">
             </div>
           </div>
 
@@ -701,7 +800,103 @@ $('#confirmDeleteBtn').on('click', function () {
       this.classList.add('active-tab');
     });
   });
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var pkgSelect = document.getElementById('packageSelect');
+    var cycleSelect = document.getElementById('billingCycleSelect');
+    var amountInput = document.getElementById('monthlyBillingAmount');
+    var startInput = document.getElementById('startDate');
+    var endInput = document.getElementById('endDate');
+
+    function updatePrice() {
+      if (!pkgSelect) return;
+      var selectedOpt = pkgSelect.options[pkgSelect.selectedIndex];
+      if (!selectedOpt || !selectedOpt.value) return;
+      var cycle = cycleSelect ? cycleSelect.value : 'monthly';
+      var mPrice = parseFloat(selectedOpt.getAttribute('data-price') || 0);
+      var qPrice = parseFloat(selectedOpt.getAttribute('data-price-quarterly') || (mPrice * 3));
+      var yPrice = parseFloat(selectedOpt.getAttribute('data-price-yearly') || (mPrice * 12));
+
+      if (amountInput) {
+        if (cycle === 'yearly') {
+          amountInput.value = yPrice.toFixed(2);
+        } else if (cycle === 'quarterly') {
+          amountInput.value = qPrice.toFixed(2);
+        } else {
+          amountInput.value = mPrice.toFixed(2);
+        }
+      }
+    }
+
+    function updateRenewalDate() {
+      if (!startInput || !endInput) return;
+      var startVal = startInput.value;
+      if (!startVal) return;
+      
+      var parts = startVal.split('-');
+      var startD;
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          startD = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else {
+          startD = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        }
+      } else {
+        startD = new Date(startVal);
+      }
+      if (isNaN(startD.getTime())) return;
+
+      var cycle = cycleSelect ? cycleSelect.value : 'monthly';
+      var endD = new Date(startD);
+
+      if (cycle === 'yearly') {
+        endD.setFullYear(endD.getFullYear() + 1);
+      } else if (cycle === 'quarterly') {
+        endD.setMonth(endD.getMonth() + 3);
+      } else {
+        endD.setMonth(endD.getMonth() + 1);
+      }
+
+      var y = endD.getFullYear();
+      var m = String(endD.getMonth() + 1).padStart(2, '0');
+      var d = String(endD.getDate()).padStart(2, '0');
+      endInput.value = y + '-' + m + '-' + d;
+    }
+
+    function initDates() {
+      var today = new Date();
+      var yyyy = today.getFullYear();
+      var mm = String(today.getMonth() + 1).padStart(2, '0');
+      var dd = String(today.getDate()).padStart(2, '0');
+      if (startInput && !startInput.value) {
+        startInput.value = yyyy + '-' + mm + '-' + dd;
+      }
+      updateRenewalDate();
+    }
+
+    initDates();
+
+    if (pkgSelect) {
+      $(pkgSelect).on('change', function () {
+        updatePrice();
+      });
+    }
+
+    if (cycleSelect) {
+      $(cycleSelect).on('change', function () {
+        updatePrice();
+        updateRenewalDate();
+      });
+    }
+
+    if (startInput) {
+      startInput.addEventListener('change', updateRenewalDate);
+      startInput.addEventListener('input', updateRenewalDate);
+    }
+  });
 </script>
 
 
+
+{% include "superadmin/subscription/invoice_modal.html" %}
 {% endblock %}

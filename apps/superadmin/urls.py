@@ -4,6 +4,7 @@ from apps.superadmin.views import login_view as superadmin_login
 
 urlpatterns = [
     # Auth / base
+    path('', superadmin_login, name='superadmin-login'),
     path('', superadmin_login, name='home'),
     path('logout/', views.logout_view, name='logout'),
     path('update-profile/', views.update_my_profile, name='update_my_profile'),
@@ -27,6 +28,7 @@ urlpatterns = [
     # Package Management
     path('packages/', views.manage_package, name='manage_package'),
     path('packages/revenue-report/', views.manage_package_revenue, name='manage_package_revenue'),
+    path('packages/toggle-status/', views.toggle_package_status, name='toggle_package_status'),
 
     # Subscription
     path('subscriptions/', views.manage_subscription, name='manage_subscription'),
@@ -79,6 +81,14 @@ urlpatterns = [
 
     # Settings
     path('general_settings/', views.general_settings, name="general_settings"),
+    path('integrations/', views.payment_integrations, name="payment_integrations"),
+    path('integrations/test-auto-renew/', views.trigger_auto_renew_check, name="trigger_auto_renew_check"),
+    path('integrations/mail/', views.superadmin_mail_settings, name="superadmin_mail_settings"),
+    path('integrations/mail/test/', views.superadmin_test_mail, name="superadmin_test_mail"),
+    path('integrations/mail/preview/<str:template_type>/', views.superadmin_preview_email, name="superadmin_preview_email"),
+    path('state_settings/', views.state_settings, name="state_settings"),
+    path('city_settings/', views.city_settings, name="city_settings"),
+    path('taluk_settings/', views.taluk_settings, name="taluk_settings"),
     path('ajax/get-states/', views.ajax_get_states, name="ajax_get_states"),
     path('ajax/get-cities/', views.ajax_get_cities, name="ajax_get_cities"),
     path('ajax/get-taluks/', views.ajax_get_taluks, name="ajax_get_taluks"),
@@ -91,6 +101,7 @@ urlpatterns = [
     path('location_category/', views.location_category, name="location_category"),
     path('man_power/', views.man_power, name="man_power"),
     path('guideline_category/', views.guideline_category, name="guideline_category"),
+    path('document_type/', views.document_type, name="document_type"),
     path('document_category/', views.document_category, name="document_category"),
     path('product_type/', views.product_type, name="product_type"),
     path('inventory_item/', views.inventory_item, name="inventory_item"),
@@ -114,6 +125,7 @@ urlpatterns = [
     path('crop_variety/', views.crop_variety_settings, name="crop_variety_settings"),
     path('crop_quality/', views.crop_quality_settings, name="crop_quality_settings"),
     path('maintenance_schedule/', views.maintenance_schedule_settings, name="maintenance_schedule_settings"),
+    path('health_indicator/', views.health_indicator, name="health_indicator"),
 
     # Auth flows
     path('forgot-password/', views.forgot_password, name='forgot-password'),

@@ -1,0 +1,12 @@
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 p-3">
+  <span class="text-muted small">Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} entries</span>
+  <nav aria-label="Pages" class="d-flex align-items-center gap-2">
+    {% if page_obj.has_previous %}
+    <a class="btn btn-sm btn-outline-secondary" href="?{% if page_query %}{{ page_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+    {% endif %}
+    <span class="small">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a class="btn btn-sm btn-outline-secondary" href="?{% if page_query %}{{ page_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+    {% endif %}
+  </nav>
+</div>

@@ -6,11 +6,12 @@ from django.utils import timezone
 class FarmerStaff(models.Model):
     objects = models.Manager()
     DoesNotExist = models.ObjectDoesNotExist
-    user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="staff_profile")
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="staff_assignments")
     farmer = models.ForeignKey('accounts.Profile', on_delete=models.CASCADE, related_name="staffs")
     name = models.CharField(max_length=100)
     mobile_number = models.CharField(max_length=20)
     date_of_birth = models.DateField(null=True, blank=True)
+    date_of_joining = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=20, null=True, blank=True)
     document_type = models.CharField(max_length=100, null=True, blank=True)
     document_file = models.FileField(upload_to="staff_documents/", null=True, blank=True)
@@ -24,6 +25,7 @@ class FarmerStaff(models.Model):
     salary = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     designation = models.ForeignKey('superadmin.Designation', on_delete=models.SET_NULL, null=True, blank=True)
     address = models.TextField(null=True, blank=True)
+    fcm_token = models.TextField(blank=True, null=True, help_text="Firebase Cloud Messaging Device Token for Push Notifications")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -57,9 +59,12 @@ class Farm(models.Model):
     objects = models.Manager()
     DoesNotExist = models.ObjectDoesNotExist
     farmer = models.ForeignKey('accounts.Profile', on_delete=models.CASCADE, related_name="farms")
+    created_by_staff = models.ForeignKey('FarmerStaff', on_delete=models.SET_NULL, null=True, blank=True, related_name="created_farms")
     land_name = models.CharField(max_length=255)
     total_area = models.CharField(max_length=100)
-    crop_type = models.ForeignKey('superadmin.CropType', on_delete=models.SET_NULL, null=True, blank=True)
+    crop = models.ForeignKey('superadmin.Crop', on_delete=models.SET_NULL, null=True, blank=True, related_name="farms")
+    crop_type = models.ForeignKey('superadmin.CropType', on_delete=models.SET_NULL, null=True, blank=True, related_name="farms")
+    crops = models.ManyToManyField('superadmin.Crop', blank=True, related_name="multi_farms")
     latitude = models.CharField(max_length=50, blank=True, null=True)
     longitude = models.CharField(max_length=50, blank=True, null=True)
     state = models.ForeignKey('superadmin.State', on_delete=models.SET_NULL, null=True, blank=True)
@@ -115,6 +120,32 @@ class Farm(models.Model):
         except Exception:
             return "[]"
 
+    @property
+    def crops_ids_json(self):
+        import json
+        ids = list(self.crops.values_list('id', flat=True))
+        if not ids and self.crop_id:
+            ids = [self.crop_id]
+        return json.dumps(ids)
+
+    @property
+    def crops_display(self):
+        c_list = [c.name for c in self.crops.all()]
+        if not c_list and self.crop:
+            c_list = [self.crop.name]
+        elif not c_list and self.crop_type:
+            c_list = [self.crop_type.name]
+        return c_list
+
+    @property
+    def status_badge(self):
+        splits_cnt = self.splits.count()
+        if splits_cnt > 0:
+            return f"Active Cultivation ({splits_cnt} Crop{'s' if splits_cnt > 1 else ''})"
+        elif self.crop or self.crop_type:
+            return "Active Cultivation"
+        return "Available Land"
+
 class CropSplit(models.Model):
     objects = models.Manager()
     DoesNotExist = models.ObjectDoesNotExist
@@ -125,17 +156,19 @@ class CropSplit(models.Model):
     crop_variety = models.CharField(max_length=100, blank=True, null=True)
     harvest_type = models.CharField(max_length=50, default="single", blank=True, null=True)
     total_flushes = models.IntegerField(default=1, blank=True, null=True, help_text="Total planned flushes for multiple harvest")
+    current_flush = models.IntegerField(default=1, blank=True, null=True, help_text="Current active flush number")
     acreage = models.DecimalField(max_digits=10, decimal_places=2)
     has_advanced_details = models.BooleanField(default=False)
-    crop_latitude = models.DecimalField(max_digits=18, decimal_places=8, null=True, blank=True)
-    crop_longitude = models.DecimalField(max_digits=18, decimal_places=8, null=True, blank=True)
+    crop_latitude = models.DecimalField(max_digits=15, decimal_places=8, null=True, blank=True)
+    crop_longitude = models.DecimalField(max_digits=15, decimal_places=8, null=True, blank=True)
     row_count = models.IntegerField(null=True, blank=True)
     plant_count = models.IntegerField(null=True, blank=True)
     growth_duration = models.IntegerField(help_text="Growth duration in days", default=90)
     duration_min = models.IntegerField(null=True, blank=True)
     duration_max = models.IntegerField(null=True, blank=True)
     cultivation_method = models.CharField(max_length=255, blank=True, null=True)
-    supervisor = models.ForeignKey(FarmerStaff, on_delete=models.SET_NULL, null=True, blank=True)
+    supervisor = models.ForeignKey(FarmerStaff, on_delete=models.SET_NULL, null=True, blank=True, related_name="legacy_splits")
+    supervisors = models.ManyToManyField(FarmerStaff, blank=True, related_name="supervised_splits")
     start_date = models.DateField(null=True, blank=True)
     stage = models.CharField(max_length=50, default="Sown")
     expected_yield = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -144,15 +177,58 @@ class CropSplit(models.Model):
     harvest_batches = models.JSONField(default=list, blank=True, null=True)
     seed_details = models.CharField(max_length=255, blank=True, null=True)
     plant_spacing = models.CharField(max_length=100, blank=True, null=True)
-    geo_marks = models.JSONField(default=list, blank=True, null=True)
     yield_tons = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     price_per_mt = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     total_sale_value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    geo_marks = models.JSONField(default=list, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    @property
+    def is_completed(self):
+        if self.crop_notes and '[ALL_FLUSHES_COMPLETED]' in self.crop_notes:
+            return True
+        if self.stage in ['Sold', 'Completed']:
+            return True
+        if self.harvest_type not in ['Multiple Harvest', 'multiple'] and self.stage == 'Harvested':
+            return True
+        return False
+
+    @property
+    def supervisor_names(self):
+        names = [s.name for s in self.supervisors.all()]
+        if not names and self.supervisor:
+            return [self.supervisor.name]
+        return names
+
+    @property
+    def supervisor_ids_list(self):
+        ids = list(self.supervisors.values_list('id', flat=True))
+        if not ids and self.supervisor_id:
+            return [self.supervisor_id]
+        return ids
+
     def __str__(self):
         return f"{self.crop.name if self.crop else 'Unknown'} - {self.acreage} Ac"
+
+class CropHarvestLoss(models.Model):
+    objects = models.Manager()
+    DoesNotExist = models.ObjectDoesNotExist
+    farmer = models.ForeignKey('accounts.Profile', on_delete=models.CASCADE, related_name="crop_losses")
+    split = models.ForeignKey(CropSplit, on_delete=models.CASCADE, related_name="losses")
+    loss_date = models.DateField(default=timezone.now)
+    loss_quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    unit = models.CharField(max_length=50, default="Tons")
+    loss_reason = models.CharField(max_length=100)
+    estimated_loss_value = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-loss_date', '-id']
+
+    def __str__(self):
+        return f"{self.split} - {self.loss_quantity} {self.unit} Loss ({self.loss_reason})"
 
 class FarmActivity(models.Model):
     objects = models.Manager()
@@ -244,10 +320,38 @@ class LedgerTransaction(models.Model):
     quantity = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     unit = models.CharField(max_length=50, blank=True, null=True)
     is_recurring = models.BooleanField(default=False)
-    repeat_cycle = models.CharField(max_length=20, blank=True, null=True)  # Weekly, Monthly, Yearly
-    reminder_type = models.CharField(max_length=30, blank=True, null=True)  # On Due Date, 1 Day Before etc.
+    repeat_cycle = models.CharField(max_length=20, blank=True, null=True)  # Daily, Weekly, Monthly, Yearly
+    reminder_type = models.CharField(max_length=100, blank=True, null=True)  # On Due Date, Every 2 Hours, etc.
     reminder_custom_date = models.DateField(null=True, blank=True)
+    next_due_date = models.DateField(null=True, blank=True)
+    last_recurring_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def actual_price(self):
+        return abs(float(self.amount)) if self.amount is not None else 0.0
+
+    @property
+    def paid_amount(self):
+        if hasattr(self, '_custom_paid_amount'):
+            return self._custom_paid_amount
+        actual = self.actual_price
+        bal = float(self.balance_due or 0)
+        return max(0.0, actual - bal)
+
+    @paid_amount.setter
+    def paid_amount(self, value):
+        self._custom_paid_amount = float(value) if value is not None else 0.0
+
+    @property
+    def balance_amount(self):
+        if hasattr(self, '_custom_balance_amount'):
+            return self._custom_balance_amount
+        return float(self.balance_due or 0)
+
+    @balance_amount.setter
+    def balance_amount(self, value):
+        self._custom_balance_amount = float(value) if value is not None else 0.0
 
     @property
     def document(self):
@@ -273,9 +377,11 @@ class FarmerCustomer(models.Model):
     email = models.EmailField(blank=True, null=True)
     state = models.CharField(max_length=100, blank=True, null=True)
     district = models.CharField(max_length=100, blank=True, null=True)
+    taluk = models.CharField(max_length=100, blank=True, null=True)
     pincode = models.CharField(max_length=20, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
     gst_number = models.CharField(max_length=50, blank=True, null=True)
+    document_type = models.CharField(max_length=255, blank=True, null=True)
     customer_type = models.ForeignKey('superadmin.CustomerType', on_delete=models.SET_NULL, null=True, blank=True, related_name="customers")
     document = models.ForeignKey('superadmin.Document', on_delete=models.SET_NULL, null=True, blank=True, related_name="customer_documents")
     status = models.CharField(max_length=50, default="Active")
@@ -291,6 +397,7 @@ class FarmerOutstanding(models.Model):
     DoesNotExist = models.ObjectDoesNotExist
 
     farmer = models.ForeignKey('accounts.Profile', on_delete=models.CASCADE, related_name="outstandings")
+    farm = models.ForeignKey(Farm, on_delete=models.SET_NULL, null=True, blank=True, related_name="outstandings")
     customer = models.ForeignKey(FarmerCustomer, on_delete=models.SET_NULL, null=True, blank=True)
     vendor = models.ForeignKey('FarmerVendor', on_delete=models.SET_NULL, null=True, blank=True, related_name="outstandings")
     invoice_no = models.CharField(max_length=100)
@@ -309,6 +416,7 @@ class FarmerVendor(models.Model):
     mobile_number = models.CharField(max_length=20, blank=True, null=True)
     state = models.CharField(max_length=100, blank=True, null=True)
     district = models.CharField(max_length=100, blank=True, null=True)
+    taluk = models.CharField(max_length=100, blank=True, null=True)
     pincode = models.CharField(max_length=20, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
     gst_number = models.CharField(max_length=50, blank=True, null=True)
@@ -350,9 +458,10 @@ class FarmerInventory(models.Model):
     DoesNotExist = models.ObjectDoesNotExist
     farmer = models.ForeignKey('accounts.Profile', on_delete=models.CASCADE, related_name="inventories")
     farm = models.ForeignKey(Farm, on_delete=models.SET_NULL, null=True, blank=True, related_name="inventories")
+    vendor = models.ForeignKey('FarmerVendor', on_delete=models.SET_NULL, null=True, blank=True, related_name="inventories")
     item_name = models.CharField(max_length=255)
     category = models.CharField(max_length=100)
-    quantity = models.IntegerField(default=1)
+    quantity = models.FloatField(default=1)
     unit = models.CharField(max_length=50, default="Units")
     safety_stock = models.IntegerField(default=5)
     location = models.CharField(max_length=255, default="Main Warehouse")
@@ -372,6 +481,7 @@ class FarmerInventory(models.Model):
     pollution_expiry = models.DateField(blank=True, null=True)
     
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Price per unit of this inventory item")
+    total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, blank=True, null=True, help_text="Total purchase price of inventory batch")
     rental_available = models.BooleanField(default=False)
     rental_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, blank=True, null=True)
     rental_unit = models.CharField(max_length=50, default="Per Day", blank=True, null=True)
@@ -386,6 +496,8 @@ class FarmerInventory(models.Model):
 class InventoryStockLog(models.Model):
     ACTION_CHOICES = [('add', 'In (Return/Restock)'), ('remove', 'Out (Usage/Deduction)')]
     inventory = models.ForeignKey(FarmerInventory, on_delete=models.CASCADE, related_name='stock_logs')
+    farm = models.ForeignKey(Farm, on_delete=models.SET_NULL, null=True, blank=True, related_name='stock_logs')
+    crop_split = models.ForeignKey('CropSplit', on_delete=models.SET_NULL, null=True, blank=True, related_name='stock_logs')
     action = models.CharField(max_length=10, choices=ACTION_CHOICES)
     quantity = models.FloatField()
     notes = models.TextField(blank=True, null=True)
@@ -401,6 +513,36 @@ class InventoryStockLog(models.Model):
         return f"{self.inventory.item_name} — {self.action} {self.quantity}"
 
 
+class FCMDeviceToken(models.Model):
+    DEVICE_CHOICES = (
+        ('android', 'Android'),
+        ('ios', 'iOS'),
+        ('web', 'Web'),
+    )
+    objects = models.Manager()
+    DoesNotExist = models.ObjectDoesNotExist
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='fcm_device_tokens')
+    farmer = models.ForeignKey('accounts.Profile', on_delete=models.CASCADE, null=True, blank=True, related_name='fcm_device_tokens')
+    staff = models.ForeignKey(FarmerStaff, on_delete=models.CASCADE, null=True, blank=True, related_name='fcm_device_tokens')
+
+    token = models.TextField(unique=True, help_text="Firebase Cloud Messaging Registration Token")
+    device_type = models.CharField(max_length=20, choices=DEVICE_CHOICES, default='android')
+    device_id = models.CharField(max_length=255, blank=True, null=True, help_text="Hardware / unique device identifier")
+    device_name = models.CharField(max_length=255, blank=True, null=True, help_text="Device model / browser name")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "FCM Device Token"
+        verbose_name_plural = "FCM Device Tokens"
+
+    def __str__(self):
+        target = self.farmer or self.staff or self.user or "Unknown"
+        return f"{target} ({self.device_type}) - {'Active' if self.is_active else 'Inactive'}"
+
+
 # --- Global CRUD Notifications for Farmer Models ---
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
@@ -408,7 +550,7 @@ from django.dispatch import receiver
 # List of models we want to track CRUD for automatically
 TRACKED_MODELS = [
     'Farm', 'CropSplit', 'FarmerVendor', 'FarmerInventory',
-    'LedgerTransaction', 'FarmTask', 'FarmerCustomer'
+    'LedgerTransaction', 'FarmTask', 'FarmerCustomer', 'CropHarvestLoss'
 ]
 
 def get_farmer_user(instance):
@@ -425,30 +567,39 @@ def trigger_crud_notification(instance, action):
     if model_name not in TRACKED_MODELS:
         return
 
-    user = get_farmer_user(instance)
-    if not user:
-        return
+    try:
+        user = get_farmer_user(instance)
+        if not user or not getattr(user, 'id', None):
+            return
 
-    # Pretty name formatting
-    pretty_name = ''.join([' ' + c if c.isupper() else c for c in model_name]).strip()
+        from django.contrib.auth.models import User
+        if not User.objects.filter(id=user.id).exists():
+            return
 
-    # Customize message
-    display_name = str(instance) if str(instance) and len(str(instance)) < 50 else f"A {pretty_name} record"
+        # Pretty name formatting
+        pretty_name = ''.join([' ' + c if c.isupper() else c for c in model_name]).strip()
 
-    title = f"{pretty_name} {action}d"
-    message = f"{display_name} was successfully {action.lower()}d."
+        # Customize message
+        display_name = str(instance) if str(instance) and len(str(instance)) < 50 else f"A {pretty_name} record"
 
-    icon_class = "ri-check-line" if action == "Create" else "ri-pencil-line" if action == "Update" else "ri-delete-bin-line"
-    bg_color = "success" if action == "Create" else "info" if action == "Update" else "warning"
+        title = f"{pretty_name} {action}d"
+        message = f"{display_name} was successfully {action.lower()}d."
 
-    from auth.models import SystemNotification
-    SystemNotification.objects.create(
-        user=user,
-        title=title,
-        message=message,
-        icon_class=icon_class,
-        bg_color=bg_color
-    )
+        icon_class = "ri-check-line" if action == "Create" else "ri-pencil-line" if action == "Update" else "ri-delete-bin-line"
+        bg_color = "success" if action == "Create" else "info" if action == "Update" else "warning"
+
+        from auth.models import SystemNotification
+        from django.db import transaction
+        with transaction.atomic():
+            SystemNotification.objects.create(
+                user=user,
+                title=title,
+                message=message,
+                icon_class=icon_class,
+                bg_color=bg_color
+            )
+    except Exception:
+        pass
 
 @receiver(post_save)
 def notify_on_save(sender, instance, created, **kwargs):

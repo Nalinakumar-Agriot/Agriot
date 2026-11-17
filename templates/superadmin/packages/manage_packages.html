@@ -74,6 +74,87 @@
   background-color: #f5f5f9;
   color: #F69C55 !important;
 }
+.pkg-card.pkg-card-disabled {
+  opacity: 0.72;
+  border: 1.5px dashed #cbd5e1 !important;
+  background-color: #fcfcfd;
+}
+.pkg-card.pkg-card-disabled .pkg-pricing-box {
+  background-color: #f1f3f5 !important;
+}
+.status-filter-btn {
+  border-color: #e2e8f0;
+  color: #475569;
+  font-size: 0.8125rem;
+  height: 38px;
+  background-color: #fff;
+  transition: all 0.2s ease;
+}
+.status-filter-btn:hover,
+.status-filter-btn:focus,
+.status-filter-btn[aria-expanded="true"] {
+  border-color: #F69C55 !important;
+  color: #F69C55 !important;
+  background-color: #fff7ed !important;
+  box-shadow: 0 2px 6px rgba(246, 156, 85, 0.15) !important;
+}
+.status-filter-opt {
+  color: #475569;
+  font-size: 0.8125rem;
+  border-radius: 6px;
+  margin: 1px 4px;
+  padding: 0.45rem 0.75rem;
+  transition: all 0.15s ease;
+}
+.status-filter-opt:hover,
+.status-filter-opt:focus {
+  background-color: #fff7ed !important;
+  color: #F69C55 !important;
+}
+.status-filter-opt.active {
+  background-color: #fff7ed !important;
+  color: #F69C55 !important;
+  font-weight: 600;
+}
+.status-filter-opt.active .check-mark {
+  display: inline-block !important;
+  color: #F69C55;
+}
+/* The subscriptions table has its own compact DataTables structure.  The
+   stock two-column top row contained an empty column and created a large
+   unused gap between the toolbar and table header. */
+.subscription-table-card .subscription-dt-top {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0px !important;
+}
+.subscription-table-card .subscription-dt-top .dataTables_length {
+  display: flex;
+  align-items: center;
+}
+.subscription-table-card .subscription-dt-top .dataTables_length label {
+  margin: 0;
+  white-space: nowrap;
+}
+.subscription-table-card .subscription-dt-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+}
+.subscription-table-card .subscription-dt-pagination {
+  margin-left: auto;
+}
+@media (max-width: 767.98px) {
+  .subscription-table-card .subscription-dt-bottom {
+    flex-wrap: wrap;
+  }
+  .subscription-table-card .subscription-dt-pagination {
+    margin-left: 0;
+  }
+}
 </style>
 {% endblock page_css %}
 
@@ -154,16 +235,327 @@
     setupDynamicList("featureInput", "addFeatureBtn", "featureList", []);
     const featureMainList = setupDynamicList("featureInputMain", "addFeatureMainBtn", "featureMainList", []);
 
+    function setupPackagePricingCalculator(prefix) {
+      const origInput = document.getElementById(prefix + '_original_price');
+      const discNumInput = document.getElementById(prefix + '_discount_num');
+      const discTypeSelect = document.getElementById(prefix + '_discount_type');
+      const discHiddenInput = document.getElementById(prefix + '_discount');
+      const priceInput = document.getElementById(prefix + '_price');
+      const priceQtrInput = document.getElementById(prefix + '_price_quarterly');
+      const priceYrInput = document.getElementById(prefix + '_price_yearly');
+      const summaryText = document.getElementById(prefix + '_summary_text');
+      const savingBadge = document.getElementById(prefix + '_summary_saving_badge');
+      const actualQtr = document.getElementById(prefix + '_actual_qtr');
+      const saveQtr = document.getElementById(prefix + '_save_qtr');
+      const actualYr = document.getElementById(prefix + '_actual_yr');
+      const saveYr = document.getElementById(prefix + '_save_yr');
+
+      if (!origInput || !priceInput) return;
+
+      function calculateFromDiscount() {
+        let orig = parseFloat(origInput.value) || 0;
+        let discVal = parseFloat(discNumInput.value) || 0;
+        let discType = discTypeSelect ? discTypeSelect.value : 'percent';
+
+        if (orig <= 0 && priceInput.value) {
+          orig = parseFloat(priceInput.value) || 0;
+          origInput.value = orig.toFixed(2);
+        }
+
+        let discountAmount = 0;
+        let formattedDiscountStr = '';
+
+        if (discVal > 0 && orig > 0) {
+          if (discType === 'percent') {
+            discountAmount = (orig * discVal) / 100;
+            formattedDiscountStr = discVal + '% OFF';
+          } else {
+            discountAmount = discVal;
+            formattedDiscountStr = '₹' + Math.round(discVal) + ' OFF';
+          }
+        }
+
+        if (discountAmount > orig) {
+          discountAmount = orig;
+        }
+
+        let payableMonthly = Math.max(0, orig - discountAmount);
+
+        // Zero is a valid payable amount (for example, a 100% free trial).
+        // Do not replace it with the original price or leave the required field blank.
+        if (origInput.value !== '' || discVal > 0) {
+          priceInput.value = payableMonthly.toFixed(2);
+        }
+        if (discHiddenInput) {
+          discHiddenInput.value = formattedDiscountStr;
+        }
+
+        updateCycles(orig, payableMonthly, discountAmount, formattedDiscountStr);
+      }
+
+      function calculateFromPayable() {
+        let orig = parseFloat(origInput.value) || 0;
+        let payable = parseFloat(priceInput.value) || 0;
+
+        if (orig <= 0 && payable > 0) {
+          orig = payable;
+          origInput.value = orig.toFixed(2);
+        }
+
+        let discountAmount = 0;
+        let formattedDiscountStr = '';
+
+        if (orig > payable && orig > 0) {
+          discountAmount = orig - payable;
+          let pct = Math.round((discountAmount / orig) * 100);
+          if (discTypeSelect) discTypeSelect.value = 'percent';
+          if (discNumInput) discNumInput.value = pct;
+          formattedDiscountStr = pct + '% OFF';
+        } else {
+          if (discNumInput) discNumInput.value = '';
+        }
+
+        if (discHiddenInput) discHiddenInput.value = formattedDiscountStr;
+        updateCycles(orig, payable, discountAmount, formattedDiscountStr);
+      }
+
+      function updateCycles(origMonthly, payableMonthly, discountAmount, formattedDiscountStr) {
+        let qtrPayable = payableMonthly * 3;
+        let yrPayable = payableMonthly * 12;
+
+        if (priceQtrInput) priceQtrInput.value = payableMonthly >= 0 ? qtrPayable.toFixed(2) : '';
+        if (priceYrInput) priceYrInput.value = payableMonthly >= 0 ? yrPayable.toFixed(2) : '';
+
+        let origQtr = origMonthly * 3;
+        let origYr = origMonthly * 12;
+        let qtrSave = discountAmount * 3;
+        let yrSave = discountAmount * 12;
+
+        if (actualQtr) actualQtr.innerText = origQtr.toFixed(2);
+        if (saveQtr) saveQtr.innerText = qtrSave.toFixed(2);
+        if (actualYr) actualYr.innerText = origYr.toFixed(2);
+        if (saveYr) saveYr.innerText = yrSave.toFixed(2);
+
+        if (summaryText) {
+          if (origMonthly > 0 && discountAmount > 0) {
+            summaryText.innerHTML = `Actual: <del class="text-muted">₹${origMonthly.toFixed(2)}</del> &rarr; <strong class="text-success">Payable: ₹${payableMonthly.toFixed(2)}</strong> (${formattedDiscountStr})`;
+            if (savingBadge) {
+              savingBadge.style.display = 'inline-block';
+              savingBadge.innerHTML = `<i class="ri-check-line me-1"></i>You save ₹${discountAmount.toFixed(2)} / month`;
+            }
+          } else if (payableMonthly > 0) {
+            summaryText.innerHTML = `Standard Price: <strong>₹${payableMonthly.toFixed(2)} / month</strong> (No discount applied)`;
+            if (savingBadge) savingBadge.style.display = 'none';
+          } else {
+            summaryText.innerText = 'Enter prices to see discount breakdown';
+            if (savingBadge) savingBadge.style.display = 'none';
+          }
+        }
+      }
+
+      origInput.addEventListener('input', calculateFromDiscount);
+      if (discNumInput) discNumInput.addEventListener('input', calculateFromDiscount);
+      if (discTypeSelect) discTypeSelect.addEventListener('change', calculateFromDiscount);
+      priceInput.addEventListener('input', calculateFromPayable);
+
+      // Return trigger function
+      return { calculateFromDiscount, calculateFromPayable };
+    }
+
+    const addPricingCalc = setupPackagePricingCalculator('add');
+    const editPricingCalc = setupPackagePricingCalculator('edit');
+
+    let activeBillingCycle = 'monthly';
+
+    function updateCardStatus(card, cycle) {
+      const toggle = card.querySelector('.package-cycle-toggle');
+      const badge = card.querySelector('.cycle-status-badge');
+      if (!toggle || !badge) return;
+
+      let isActive = true;
+      if (cycle === 'yearly') {
+        isActive = (card.dataset.activeYearly === 'true');
+      } else if (cycle === 'quarterly') {
+        isActive = (card.dataset.activeQuarterly === 'true');
+      } else {
+        isActive = (card.dataset.activeMonthly === 'true');
+      }
+
+      toggle.checked = isActive;
+      if (isActive) {
+        badge.className = 'badge rounded-pill cycle-status-badge fs-8 px-2 py-1 bg-label-success text-success';
+        badge.innerText = 'Active';
+        card.classList.remove('pkg-card-disabled');
+      } else {
+        badge.className = 'badge rounded-pill cycle-status-badge fs-8 px-2 py-1 bg-label-secondary text-secondary';
+        badge.innerText = 'Inactive';
+        card.classList.add('pkg-card-disabled');
+      }
+    }
+
+    // ── Billing Cycle Switcher Tabs (Monthly / Quarterly / Yearly) ──
+    function switchBillingCycle(cycle) {
+      activeBillingCycle = cycle;
+      document.querySelectorAll('.pkg-card').forEach(card => {
+        const valPayable = card.querySelector('.val-payable');
+        const valActual = card.querySelector('.val-actual');
+        const valUnit = card.querySelector('.val-unit');
+        const valSave = card.querySelector('.val-save');
+        const actualWrap = card.querySelector('.pkg-actual-wrap');
+        const saveWrap = card.querySelector('.val-save-text');
+
+        let price = '', orig = '', save = '', unit = '';
+
+        if (cycle === 'yearly') {
+          price = card.dataset.priceYearly || '';
+          orig = card.dataset.origYearly || card.dataset.priceYearly || '';
+          save = card.dataset.saveYearly || '0.00';
+          unit = '/ Year (12 Mo)';
+        } else if (cycle === 'quarterly') {
+          price = card.dataset.priceQuarterly || '';
+          orig = card.dataset.origQuarterly || card.dataset.priceQuarterly || '';
+          save = card.dataset.saveQuarterly || '0.00';
+          unit = '/ Quarter (3 Mo)';
+        } else {
+          price = card.dataset.priceMonthly || '';
+          orig = card.dataset.origMonthly || card.dataset.priceMonthly || '';
+          save = card.dataset.saveMonthly || '0.00';
+          unit = '/ Month';
+        }
+
+        if (valPayable && price) valPayable.innerText = parseFloat(price).toFixed(2);
+        if (valActual && orig) valActual.innerText = parseFloat(orig).toFixed(2);
+        if (valUnit) valUnit.innerText = unit;
+        if (valSave) valSave.innerText = parseFloat(save || 0).toFixed(2);
+
+        const hasDiscount = parseFloat(save) > 0;
+        if (actualWrap) actualWrap.style.visibility = hasDiscount ? 'visible' : 'hidden';
+        if (saveWrap) saveWrap.style.visibility = hasDiscount ? 'visible' : 'hidden';
+
+        // Update active switch & badge for this card according to selected cycle
+        updateCardStatus(card, cycle);
+      });
+    }
+
+    // Handle AJAX toggle switch for package cycle active status
+    document.querySelectorAll('.package-cycle-toggle').forEach(toggle => {
+      toggle.addEventListener('change', function() {
+        const pkgId = this.dataset.packageId;
+        const isChecked = this.checked;
+        const card = this.closest('.pkg-card');
+        const badge = card.querySelector('.cycle-status-badge');
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        // Immediate visual feedback
+        if (isChecked) {
+          badge.className = 'badge rounded-pill cycle-status-badge fs-8 px-2 py-1 bg-label-success text-success';
+          badge.innerText = 'Active';
+          card.classList.remove('pkg-card-disabled');
+        } else {
+          badge.className = 'badge rounded-pill cycle-status-badge fs-8 px-2 py-1 bg-label-secondary text-secondary';
+          badge.innerText = 'Inactive';
+          card.classList.add('pkg-card-disabled');
+        }
+
+        // Update local dataset
+        if (activeBillingCycle === 'yearly') {
+          card.dataset.activeYearly = isChecked ? 'true' : 'false';
+        } else if (activeBillingCycle === 'quarterly') {
+          card.dataset.activeQuarterly = isChecked ? 'true' : 'false';
+        } else {
+          card.dataset.activeMonthly = isChecked ? 'true' : 'false';
+        }
+
+        const formData = new FormData();
+        formData.append('package_id', pkgId);
+        formData.append('cycle', activeBillingCycle);
+        formData.append('is_active', isChecked ? 'true' : 'false');
+        formData.append('csrfmiddlewaretoken', csrfToken);
+
+        fetch('{% url "toggle_package_status" %}', {
+          method: 'POST',
+          body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status !== 'success') {
+            alert(data.message || 'Failed to update package status');
+            // revert
+            toggle.checked = !isChecked;
+            updateCardStatus(card, activeBillingCycle);
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          alert('Error updating package status.');
+          toggle.checked = !isChecked;
+          updateCardStatus(card, activeBillingCycle);
+        });
+      });
+    });
+
+    document.querySelectorAll('.billing-cycle-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.billing-cycle-btn').forEach(b => {
+          b.classList.remove('active', 'btn-primary');
+          b.classList.add('text-secondary', 'bg-transparent');
+        });
+        this.classList.add('active', 'btn-primary');
+        this.classList.remove('text-secondary', 'bg-transparent');
+
+        switchBillingCycle(this.dataset.cycle);
+      });
+    });
+
+    // Initialize cards on load
+    switchBillingCycle('monthly');
+
     document.querySelectorAll(".edit-package-btn").forEach(btn => {
       btn.addEventListener("click", function() {
         document.getElementById("edit_package_id").value = this.dataset.id;
         document.getElementById("edit_name").value = this.dataset.name;
-        document.getElementById("edit_price").value = this.dataset.price;
-        document.getElementById("edit_max_acre_support").value = this.dataset.maxAcre;
+        
+        const origPrice = parseFloat(this.dataset.originalPrice) || parseFloat(this.dataset.price) || 0;
+        const payPrice = parseFloat(this.dataset.price) || 0;
+        const discStr = this.dataset.discount || "";
+
+        document.getElementById("edit_original_price").value = origPrice > 0 ? origPrice.toFixed(2) : "";
+        document.getElementById("edit_price").value = payPrice > 0 ? payPrice.toFixed(2) : "";
+        document.getElementById("edit_discount").value = discStr;
+
+        // Parse discount number and type
+        const discNumInput = document.getElementById("edit_discount_num");
+        const discTypeSelect = document.getElementById("edit_discount_type");
+        if (discStr.includes('%')) {
+          if (discTypeSelect) discTypeSelect.value = "percent";
+          if (discNumInput) discNumInput.value = discStr.replace(/[^0-9.]/g, '');
+        } else if (discStr.includes('₹') || !isNaN(parseFloat(discStr))) {
+          if (discTypeSelect) discTypeSelect.value = "flat";
+          if (discNumInput) discNumInput.value = discStr.replace(/[^0-9.]/g, '');
+        } else {
+          if (discNumInput) discNumInput.value = "";
+        }
+
+        if (editPricingCalc) {
+          editPricingCalc.calculateFromDiscount();
+        }
+
+        var maxAcreRaw = (this.dataset.maxAcre || "").trim();
+        var acreVal = maxAcreRaw.toLowerCase() === "unlimited" ? "" : maxAcreRaw.replace(/[^0-9.]/g, "");
+        document.getElementById("edit_max_acre_support").value = acreVal;
         document.getElementById("edit_description").value = this.dataset.desc;
-        document.getElementById("edit_my_land").value = this.dataset.myland;
-        document.getElementById("edit_my_crop").value = this.dataset.mycrop;
-        document.getElementById("edit_my_users").value = this.dataset.myusers;
+        const isShowBadge = (this.dataset.showBadge === "true");
+        document.getElementById("edit_show_badge").checked = isShowBadge;
+        document.getElementById("edit_badge_text").value = this.dataset.badgeText || "POPULAR";
+
+        var landRaw = (this.dataset.myland || "").trim();
+        document.getElementById("edit_my_land").value = landRaw.toLowerCase() === "unlimited" ? "" : landRaw.replace(/[^0-9]/g, "");
+
+        var cropRaw = (this.dataset.mycrop || "").trim();
+        document.getElementById("edit_my_crop").value = cropRaw.toLowerCase() === "unlimited" ? "" : cropRaw.replace(/[^0-9]/g, "");
+
+        var usersRaw = (this.dataset.myusers || "").trim();
+        document.getElementById("edit_my_users").value = usersRaw.toLowerCase() === "unlimited" ? "" : usersRaw.replace(/[^0-9]/g, "");
 
         // Reset and populate modules
         document.querySelectorAll(".edit-module-checkbox").forEach(cb => cb.checked = false);
@@ -182,6 +574,26 @@
         }
       });
     });
+
+    const addShowBadge = document.getElementById("add_show_badge");
+    const addBadgeText = document.getElementById("add_badge_text");
+    if (addShowBadge && addBadgeText) {
+      addShowBadge.addEventListener("change", function() {
+        if (this.checked && !addBadgeText.value.trim()) {
+          addBadgeText.value = "POPULAR";
+        }
+      });
+    }
+
+    const editShowBadge = document.getElementById("edit_show_badge");
+    const editBadgeText = document.getElementById("edit_badge_text");
+    if (editShowBadge && editBadgeText) {
+      editShowBadge.addEventListener("change", function() {
+        if (this.checked && !editBadgeText.value.trim()) {
+          editBadgeText.value = "POPULAR";
+        }
+      });
+    }
 
     document.querySelectorAll(".delete-package-btn").forEach(btn => {
       btn.addEventListener("click", function() {
@@ -249,9 +661,9 @@
               pageLength: $(this).data('page-length') || 5,
               lengthMenu: [5, 10, 25, 50],
               responsive: true,
-              dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'>>" +
-                   "<'row'<'col-sm-12'tr>>" +
-                   "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end'p>>"
+              dom: "<'subscription-dt-top'l>" +
+                   "<'subscription-dt-table'tr>" +
+                   "<'subscription-dt-bottom'<'subscription-dt-info'i><'subscription-dt-pagination'p>>"
           });
           
           $(this).data('dt_table', dt_table);
@@ -270,6 +682,8 @@
           let val = $.fn.dataTable.util.escapeRegex($(this).val());
           let container = $(this).closest('.card').next('.card');
           let dt = container.find('.datatable').data('dt_table');
+          if (!dt) dt = $(this).closest('.card').find('.datatable').data('dt_table');
+          if (!dt) dt = $('.datatable').data('dt_table');
           if (dt) {
               if (val === 'all' || val === '') {
                   dt.column(4).search('').draw();
@@ -277,6 +691,20 @@
                   dt.column(4).search('^' + val + '$', true, false, true).draw();
               }
           }
+      });
+
+      $(document).on('click', '.status-filter-opt', function (e) {
+          e.preventDefault();
+          let val = $(this).data('val');
+          let label = $(this).find('.status-opt-text').text().trim();
+
+          $('#subStatusFilter').val(val).trigger('change');
+          $('#subStatusFilterLabel').text(label);
+
+          $('.status-filter-opt').removeClass('active');
+          $('.status-filter-opt .check-mark').addClass('d-none');
+          $(this).addClass('active');
+          $(this).find('.check-mark').removeClass('d-none');
       });
 
       // Auto-update Monthly Billing Amount based on Package selection
@@ -420,6 +848,35 @@
         background-color: #F8FAFC;
     }
 
+  .billing-switcher-wrapper {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s ease;
+  }
+  .billing-cycle-btn {
+    transition: all 0.2s ease;
+    border: none;
+    font-size: 13px;
+  }
+  .billing-cycle-btn.active {
+    background: #009966 !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 14px rgba(0, 153, 102, 0.25);
+  }
+  .billing-cycle-btn:hover:not(.active) {
+    background: #f1f5f9;
+    color: #0f172a;
+  }
+  .pkg-pricing-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    transition: all 0.25s ease;
+  }
+  .pkg-card:hover .pkg-pricing-box {
+    border-color: #cbd5e1;
+    background: #f1f5f9;
+  }
+
   .pkg-card {
     border: 1px solid #e5e7eb;
     border-radius: 16px;
@@ -432,7 +889,7 @@
   }
   .pkg-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.08); }
   .pkg-card.featured {
-    border: 2px solid #009966;
+    border: 2px solid #FBA600;
     position: relative;
   }
   .pkg-card-title {
@@ -447,18 +904,55 @@
     font-size: 12px;
     color: #6b7280;
     line-height: 1.5;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
+    min-height: 52px;
   }
   .pkg-price {
-    font-size: 32px;
+    font-size: 30px;
     font-weight: 800;
     color: #111827;
-    margin-bottom: 20px;
+    margin-bottom: 10px;
+    line-height: 1.2;
   }
   .pkg-price span {
     font-size: 13px;
     font-weight: 500;
     color: #9ca3af;
+  }
+  .pkg-alt-pricing {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #475569;
+    margin-bottom: 18px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .pkg-alt-pricing .alt-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .pkg-alt-pricing .alt-price {
+    font-weight: 700;
+    color: #0f172a;
+    font-size: 12.5px;
+  }
+  .pkg-alt-pricing .alt-unit {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .pkg-alt-pricing .alt-divider {
+    color: #cbd5e1;
+    font-size: 12px;
   }
   .pkg-section-label {
     font-size: 10px;
@@ -535,15 +1029,17 @@
     top: -14px;
     left: 50%;
     transform: translateX(-50%);
-    background: #009966;
+    background: #FBA600;
     color: white;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    padding: 4px 16px;
+    padding: 5px 20px;
     border-radius: 20px;
     white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(251, 166, 0, 0.35);
+    z-index: 2;
   }
   .pkg-icon {
     width: 20px;
@@ -604,30 +1100,140 @@
     </div>
 </div>
 
+<!-- ── Billing Cycle Switcher Tabs (Monthly / Quarterly / Yearly) ── -->
+<div class="d-flex justify-content-center my-4">
+  <div class="billing-switcher-wrapper bg-white p-1 rounded-pill shadow-sm border d-inline-flex align-items-center gap-1">
+    <button type="button" class="btn btn-sm rounded-pill px-4 py-2 fw-bold billing-cycle-btn active" data-cycle="monthly">
+      <i class="ri-calendar-line me-1"></i> Monthly
+    </button>
+    <button type="button" class="btn btn-sm rounded-pill px-4 py-2 fw-semibold text-secondary bg-transparent billing-cycle-btn" data-cycle="quarterly">
+      <i class="ri-calendar-2-line me-1"></i> Quarterly
+      <span class="badge bg-primary-subtle text-primary ms-1" style="font-size:10px;">3 Months</span>
+    </button>
+    <button type="button" class="btn btn-sm rounded-pill px-4 py-2 fw-semibold text-secondary bg-transparent billing-cycle-btn" data-cycle="yearly">
+      <i class="ri-calendar-check-line me-1"></i> Annual
+      <span class="badge bg-success-subtle text-success ms-1" style="font-size:10px;">12 Months (Best Value)</span>
+    </button>
+  </div>
+</div>
+
 <!-- ── Package Cards ── -->
 <div class="row g-4 mb-4">
   {% for package in packages %}
   <div class="col-lg-4">
-    <div class="pkg-card">
-      <div class="d-flex align-items-center gap-2 mb-2">
-        <i class="ri-stack-line text-primary fs-5"></i>
-        <p class="pkg-card-title mb-0">{{ package.name }}</p>
+    <div class="pkg-card position-relative{% if package.show_badge %} featured{% endif %}"
+         data-package-id="{{ package.id }}"
+         data-price-monthly="{{ package.price|floatformat:2 }}"
+         data-orig-monthly="{{ package.display_original_price|default:package.price|floatformat:2 }}"
+         data-save-monthly="{{ package.discount_amount|floatformat:2 }}"
+         data-price-quarterly="{{ package.price_quarterly|default:'' }}"
+         data-orig-quarterly="{{ package.display_original_quarterly|default:package.price_quarterly|default:'' }}"
+         data-save-quarterly="{{ package.discount_amount_quarterly|floatformat:2 }}"
+         data-price-yearly="{{ package.price_yearly|default:'' }}"
+         data-orig-yearly="{{ package.display_original_yearly|default:package.price_yearly|default:'' }}"
+         data-save-yearly="{{ package.discount_amount_yearly|floatformat:2 }}"
+         data-discount="{{ package.discount|default:'' }}"
+         data-active-monthly="{% if package.is_active_monthly %}true{% else %}false{% endif %}"
+         data-active-quarterly="{% if package.is_active_quarterly %}true{% else %}false{% endif %}"
+         data-active-yearly="{% if package.is_active_yearly %}true{% else %}false{% endif %}"
+         data-active-master="{% if package.is_active %}true{% else %}false{% endif %}">
+      {% if package.show_badge %}
+        <div class="popular-badge">{{ package.badge_text|default:"POPULAR" }}</div>
+      {% endif %}
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <div class="d-flex align-items-center gap-2">
+          <i class="ri-stack-line text-primary fs-5"></i>
+          <p class="pkg-card-title mb-0">{{ package.name }}</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge rounded-pill cycle-status-badge fs-8 px-2 py-1 bg-label-success text-success" id="status_badge_{{ package.id }}">
+            Active
+          </span>
+          <div class="form-check form-switch mb-0" title="Toggle Active / Inactive for current billing cycle">
+            <input class="form-check-input package-cycle-toggle"
+                   type="checkbox"
+                   role="switch"
+                   id="toggle_{{ package.id }}"
+                   data-package-id="{{ package.id }}"
+                   checked
+                   style="cursor: pointer; width: 2.2rem; height: 1.15rem;">
+          </div>
+        </div>
       </div>
       <p class="pkg-card-desc">{{ package.description }}</p>
-      <div class="pkg-price">₹{{ package.price }} <span>/ Month</span></div>
+
+      <!-- Dynamic Pricing Box (Shows Actual, Discount & Final Payable) -->
+      <div class="pkg-pricing-box p-3 rounded-4 bg-light-subtle border mb-3">
+        <!-- Top row: Actual Original Price & Discount Badge -->
+        <div class="d-flex align-items-center justify-content-between mb-1" style="min-height: 24px;">
+          <div class="pkg-actual-wrap" {% if not package.display_original_price %}style="visibility: hidden;"{% endif %}>
+            <span class="text-muted small">Actual:</span>
+            <del class="text-muted fw-bold ms-1">₹<span class="val-actual">{{ package.display_original_price|default:package.price|floatformat:2 }}</span></del>
+          </div>
+          {% if package.discount %}
+            <span class="badge bg-success text-white fw-bold shadow-xs px-2 py-1 val-discount-badge" style="font-size: 11px; border-radius: 6px;">
+              <i class="ri-discount-percent-line me-1"></i>{{ package.discount }}
+            </span>
+          {% endif %}
+        </div>
+
+        <!-- Middle row: Final Payable Amount -->
+        <div class="d-flex align-items-baseline gap-1">
+          <span class="fs-1 fw-bolder text-dark">₹<span class="val-payable">{{ package.price|floatformat:2 }}</span></span>
+          <span class="text-muted fw-semibold fs-7 val-unit">/ Month</span>
+        </div>
+
+        <!-- Bottom row: You Pay / You Save note -->
+        <div class="pkg-save-wrap mt-2 pt-2 border-top d-flex align-items-center justify-content-between" style="font-size: 11px;">
+          <span class="text-muted"><i class="ri-shield-check-line text-primary me-1"></i>Payable Amount</span>
+          <span class="text-success fw-bold val-save-text" {% if not package.display_original_price %}style="visibility: hidden;"{% endif %}>
+            <i class="ri-check-line"></i> Save ₹<span class="val-save">{{ package.discount_amount|floatformat:2 }}</span>
+          </span>
+        </div>
+      </div>
 
       <div class="pkg-section-label">
         <i class="ri-cpu-line"></i> Key Features:
       </div>
       <div class="pkg-device-tags">
+        {% if package.max_acre_support %}
+          {% if package.max_acre_support|lower == 'unlimited' %}
+            <span class="pkg-device-tag fw-semibold bg-success-subtle text-success border-success-subtle"><i class="ri-infinite-line me-1"></i>Unlimited Acre</span>
+          {% else %}
+            <span class="pkg-device-tag fw-semibold">{{ package.max_acre_support }} Acre</span>
+          {% endif %}
+        {% else %}
+          <span class="pkg-device-tag fw-semibold bg-success-subtle text-success border-success-subtle"><i class="ri-infinite-line me-1"></i>Unlimited Acre</span>
+        {% endif %}
+
         {% if package.my_land %}
-        <span class="pkg-device-tag fw-semibold">{{ package.my_land }} Land</span>
+          {% if package.my_land|lower == 'unlimited' %}
+            <span class="pkg-device-tag fw-semibold bg-success-subtle text-success border-success-subtle"><i class="ri-infinite-line me-1"></i>Unlimited Land</span>
+          {% else %}
+            <span class="pkg-device-tag fw-semibold">{{ package.my_land }} Land</span>
+          {% endif %}
+        {% else %}
+          <span class="pkg-device-tag fw-semibold bg-success-subtle text-success border-success-subtle"><i class="ri-infinite-line me-1"></i>Unlimited Land</span>
         {% endif %}
+
         {% if package.my_crop %}
-        <span class="pkg-device-tag fw-semibold">{{ package.my_crop }} Crop</span>
+          {% if package.my_crop|lower == 'unlimited' %}
+            <span class="pkg-device-tag fw-semibold bg-success-subtle text-success border-success-subtle"><i class="ri-infinite-line me-1"></i>Unlimited Crop</span>
+          {% else %}
+            <span class="pkg-device-tag fw-semibold">{{ package.my_crop }} Crop</span>
+          {% endif %}
+        {% else %}
+          <span class="pkg-device-tag fw-semibold bg-success-subtle text-success border-success-subtle"><i class="ri-infinite-line me-1"></i>Unlimited Crop</span>
         {% endif %}
+
         {% if package.my_users %}
-        <span class="pkg-device-tag fw-semibold">{{ package.my_users }} Manager</span>
+          {% if package.my_users|lower == 'unlimited' %}
+            <span class="pkg-device-tag fw-semibold bg-success-subtle text-success border-success-subtle"><i class="ri-infinite-line me-1"></i>Unlimited Manager</span>
+          {% else %}
+            <span class="pkg-device-tag fw-semibold">{{ package.my_users }} Manager</span>
+          {% endif %}
+        {% else %}
+          <span class="pkg-device-tag fw-semibold bg-success-subtle text-success border-success-subtle"><i class="ri-infinite-line me-1"></i>Unlimited Manager</span>
         {% endif %}
       </div>
 
@@ -636,7 +1242,11 @@
       </div>
       <div class="pkg-feature highlight">
         <i class="ri-checkbox-circle-line check"></i>
-        Max Acre Support: {{ package.max_acre_support }}
+        {% if package.max_acre_support|lower == 'unlimited' or not package.max_acre_support %}
+          Unlimited Acre Support
+        {% else %}
+          Max Acre Support: {{ package.max_acre_support }} Acres
+        {% endif %}
       </div>
       {% for feature in package.features %}
       <div class="pkg-feature"><i class="ri-checkbox-circle-line check"></i> {{ feature }}</div>
@@ -664,7 +1274,10 @@
       <div class="pkg-footer">
         <div class="d-flex align-items-center justify-content-end gap-2">
           <button class="btn btn-outline-secondary d-flex align-items-center gap-2 edit-package-btn" style="font-size:13px;" data-bs-toggle="modal" data-bs-target="#edit_package_modal"
-            data-id="{{ package.id }}" data-name="{{ package.name }}" data-price="{{ package.price }}" data-max-acre="{{ package.max_acre_support }}" data-desc="{{ package.description|default_if_none:'' }}" data-myland="{{ package.my_land|default_if_none:'' }}" data-mycrop="{{ package.my_crop|default_if_none:'' }}" data-myusers="{{ package.my_users|default_if_none:'' }}"
+            data-id="{{ package.id }}" data-name="{{ package.name }}" data-original-price="{{ package.original_price|default:'' }}" data-price="{{ package.price }}" data-price-quarterly="{{ package.price_quarterly|default:'' }}" data-price-yearly="{{ package.price_yearly|default:'' }}" data-max-acre="{{ package.max_acre_support }}" data-desc="{{ package.description|default_if_none:'' }}" data-myland="{{ package.my_land|default_if_none:'' }}" data-mycrop="{{ package.my_crop|default_if_none:'' }}" data-myusers="{{ package.my_users|default_if_none:'' }}"
+            data-discount="{{ package.discount|default:'' }}"
+            data-show-badge="{% if package.show_badge %}true{% else %}false{% endif %}"
+            data-badge-text="{{ package.badge_text|default:'POPULAR' }}"
             data-modules="{% for m in package.modules %}{{ m }}||{% endfor %}"
             data-features="{% for f in package.features %}{{ f }}||{% endfor %}">
             <i class="ri-pencil-line"></i> Edit
@@ -689,7 +1302,7 @@
 
 <!-- Add Package Modal -->
 <div class="modal fade" id="add_package_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
-  <div class="modal-dialog modal-dialog-centered modal-md">
+  <div class="modal-dialog modal-dialog-centered modal-lg" style="max-width: 850px;">
     <div class="modal-content">
       <form method="POST" action="{% url 'manage_package' %}">
         {% csrf_token %}
@@ -703,22 +1316,135 @@
 
         <div class="modal-body">
           <div class="row g-3">
-            <div class="col-md-12">
-              <label class="form-label">Package Name</label>
+            <div class="col-md-6">
+              <label class="form-label">Package Name *</label>
               <input type="text" name="name" class="form-control" placeholder="Enter Package Name" required>
             </div>
 
             <div class="col-md-6">
-              <label class="form-label">Price Per Month (in ₹)</label>
-              <input type="number" step="0.01" name="price" class="form-control" placeholder="Enter Price Per Month (in ₹)" required>
+              <label class="form-label">Max Acre Support <small class="text-muted fw-normal">(Leave empty for Unlimited)</small></label>
+              <input type="text" name="max_acre_support" class="form-control" placeholder="Leave empty for Unlimited">
             </div>
-            <div class="col-md-6">
-              <label class="form-label">Max Acre Support</label>
-              <input type="text" name="max_acre_support" class="form-control" placeholder="Enter Max Acre Support" required>
+
+            <!-- Package Pricing & Discount Calculation Section -->
+            <div class="col-md-12">
+              <div class="p-3 border rounded-3 bg-light-subtle">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <label class="form-label fw-bold mb-0 text-dark fs-7">
+                    <i class="ri-money-dollar-circle-line text-primary me-1"></i>Package Pricing & Discount Calculation
+                  </label>
+                  <span class="badge bg-primary-subtle text-primary border" style="font-size:11px;">
+                    <i class="ri-calculator-line me-1"></i>Actual - Discount = Payable Amount
+                  </span>
+                </div>
+
+                <div class="row g-2 mb-3">
+                  <div class="col-md-4">
+                    <label class="form-label fs-8 text-dark fw-semibold mb-1">Actual Monthly Price (₹) *</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-white border-end-0 text-muted">₹</span>
+                      <input type="number" step="0.01" name="original_price" id="add_original_price" class="form-control border-start-0 fw-bold" placeholder="e.g. 5000" required>
+                    </div>
+                    <small class="text-muted" style="font-size:11px;">Base price before discount</small>
+                  </div>
+
+                  <div class="col-md-4">
+                    <label class="form-label fs-8 text-dark fw-semibold mb-1">Discount (% or Flat ₹)</label>
+                    <div class="input-group">
+                      <input type="number" step="0.01" id="add_discount_num" class="form-control" placeholder="e.g. 20">
+                      <select class="form-select" id="add_discount_type" style="max-width: 85px;">
+                        <option value="percent" selected>% OFF</option>
+                        <option value="flat">₹ Flat</option>
+                      </select>
+                    </div>
+                    <input type="hidden" name="discount" id="add_discount" value="">
+                    <small class="text-muted" style="font-size:11px;">Deducted from actual price</small>
+                  </div>
+
+                  <div class="col-md-4">
+                    <label class="form-label fs-8 text-success fw-bold mb-1">Payable Monthly Price (₹) *</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-success bg-opacity-10 text-success border-end-0 border-success fw-bold">₹</span>
+                      <input type="number" step="0.01" name="price" id="add_price" class="form-control border-start-0 border-success fw-bold text-success fs-6" placeholder="Final payable" required>
+                    </div>
+                    <small class="text-muted" style="font-size:11px;">Amount farmer will pay monthly</small>
+                  </div>
+                </div>
+
+                <!-- Live Summary Calculation Box -->
+                <div class="p-2 mb-3 rounded-2 bg-white border d-flex align-items-center justify-content-between" id="add_pricing_summary_box">
+                  <div class="d-flex align-items-center gap-2 small">
+                    <i class="ri-information-line text-primary fs-5"></i>
+                    <span class="text-muted">Breakdown:</span>
+                    <span class="fw-semibold text-dark" id="add_summary_text">Enter prices to see discount breakdown</span>
+                  </div>
+                  <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1" id="add_summary_saving_badge" style="display: none;">
+                    Save ₹0.00 / mo
+                  </span>
+                </div>
+
+                <!-- Projections for Quarterly (3 Mo) & Annual (12 Mo) -->
+                <div class="row g-2">
+                  <div class="col-md-6">
+                    <div class="p-2 rounded border bg-white">
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fs-8 fw-semibold text-dark">Quarterly (3 Months Cycle)</span>
+                        <span class="badge bg-light text-secondary border" style="font-size:10px;">3 Months</span>
+                      </div>
+                      <div class="input-group input-group-sm mb-1">
+                        <span class="input-group-text bg-light text-muted">Payable ₹</span>
+                        <input type="number" step="0.01" name="price_quarterly" id="add_price_quarterly" class="form-control bg-light fw-bold" placeholder="Monthly × 3" readonly>
+                      </div>
+                      <div class="d-flex justify-content-between" style="font-size:11px;">
+                        <span class="text-muted">Actual: ₹<span id="add_actual_qtr">0.00</span></span>
+                        <span class="text-success fw-semibold">Save: ₹<span id="add_save_qtr">0.00</span></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <div class="p-2 rounded border bg-white">
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fs-8 fw-semibold text-dark">Annual (12 Months Cycle)</span>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:10px;">Best Value</span>
+                      </div>
+                      <div class="input-group input-group-sm mb-1">
+                        <span class="input-group-text bg-light text-muted">Payable ₹</span>
+                        <input type="number" step="0.01" name="price_yearly" id="add_price_yearly" class="form-control bg-light fw-bold" placeholder="Monthly × 12" readonly>
+                      </div>
+                      <div class="d-flex justify-content-between" style="font-size:11px;">
+                        <span class="text-muted">Actual: ₹<span id="add_actual_yr">0.00</span></span>
+                        <span class="text-success fw-semibold">Save: ₹<span id="add_save_yr">0.00</span></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
+
+            <!-- Popular / Featured Badge Settings -->
+            <div class="col-md-12">
+              <div class="p-3 border rounded-3 bg-white">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label mb-0 fw-semibold text-dark">
+                    <i class="ri-price-tag-3-line text-warning me-1"></i>Popular / Featured Card Badge
+                  </label>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="show_badge" id="add_show_badge" role="switch">
+                    <label class="form-check-label fs-8 fw-semibold text-dark ms-1" for="add_show_badge">Show Badge</label>
+                  </div>
+                </div>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-muted"><i class="ri-award-line"></i></span>
+                  <input type="text" name="badge_text" id="add_badge_text" class="form-control" placeholder="e.g. POPULAR, BEST VALUE" value="POPULAR">
+                </div>
+                <small class="text-muted" style="font-size:11px;">Displays a high-visibility badge at top of the card</small>
+              </div>
+            </div>
+
             <div class="col-md-12">
               <label class="form-label">Description</label>
-              <textarea name="description" class="form-control"></textarea>
+              <textarea name="description" class="form-control" rows="2"></textarea>
             </div>
           <div class="col-md-12">
             <label class="form-label">Unlock Software Modules</label>
@@ -749,16 +1475,16 @@
             <label class="form-label text-dark fs-7 mb-2">Key Features</label>
 
             <div class="mb-2">
-              <label class="form-label fs-8 text-muted mb-1">My Land</label>
-              <input type="text" name="my_land" class="form-control" placeholder="Enter My Land">
+              <label class="form-label fs-8 text-muted mb-1">My Land <span class="fw-normal text-muted">(Leave empty for Unlimited)</span></label>
+              <input type="text" name="my_land" class="form-control" placeholder="Leave empty for Unlimited">
             </div>
             <div class="mb-2">
-              <label class="form-label fs-8 text-muted mb-1">My Crop</label>
-              <input type="text" name="my_crop" class="form-control" placeholder="Enter My Crop">
+              <label class="form-label fs-8 text-muted mb-1">My Crop <span class="fw-normal text-muted">(Leave empty for Unlimited)</span></label>
+              <input type="text" name="my_crop" class="form-control" placeholder="Leave empty for Unlimited">
             </div>
             <div class="mb-0">
-              <label class="form-label fs-8 text-muted mb-1">My Users</label>
-              <input type="text" name="my_users" class="form-control" placeholder="Enter My Users">
+              <label class="form-label fs-8 text-muted mb-1">User Manager Limit <span class="fw-normal text-muted">(Leave empty for Unlimited Managers)</span></label>
+              <input type="text" name="my_users" class="form-control" placeholder="e.g. 4 (Leave empty for Unlimited Managers)">
             </div>
           </div>
         </div>
@@ -781,7 +1507,7 @@
 
 <!-- Edit Package Modal -->
 <div class="modal fade" id="edit_package_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
-  <div class="modal-dialog modal-dialog-centered modal-md">
+  <div class="modal-dialog modal-dialog-centered modal-lg" style="max-width: 850px;">
     <div class="modal-content">
       <form method="POST" action="{% url 'manage_package' %}">
         {% csrf_token %}
@@ -795,21 +1521,134 @@
         </div>
         <div class="modal-body">
           <div class="row g-3">
-            <div class="col-md-12">
-              <label class="form-label">Package Name</label>
+            <div class="col-md-6">
+              <label class="form-label">Package Name *</label>
               <input type="text" name="name" id="edit_name" class="form-control" placeholder="Enter Package Name" required>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Price Per Month (in ₹)</label>
-              <input type="number" step="0.01" name="price" id="edit_price" class="form-control" placeholder="Enter Price Per Month (in ₹)" required>
+              <label class="form-label">Max Acre Support <small class="text-muted fw-normal">(Leave empty for Unlimited)</small></label>
+              <input type="text" name="max_acre_support" id="edit_max_acre_support" class="form-control" placeholder="Leave empty for Unlimited">
             </div>
-            <div class="col-md-6">
-              <label class="form-label">Max Acre Support</label>
-              <input type="text" name="max_acre_support" id="edit_max_acre_support" class="form-control" placeholder="Enter Max Acre Support" required>
+
+            <!-- Package Pricing & Discount Calculation Section -->
+            <div class="col-md-12">
+              <div class="p-3 border rounded-3 bg-light-subtle">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <label class="form-label fw-bold mb-0 text-dark fs-7">
+                    <i class="ri-money-dollar-circle-line text-primary me-1"></i>Package Pricing & Discount Calculation
+                  </label>
+                  <span class="badge bg-primary-subtle text-primary border" style="font-size:11px;">
+                    <i class="ri-calculator-line me-1"></i>Actual - Discount = Payable Amount
+                  </span>
+                </div>
+
+                <div class="row g-2 mb-3">
+                  <div class="col-md-4">
+                    <label class="form-label fs-8 text-dark fw-semibold mb-1">Actual Monthly Price (₹) *</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-white border-end-0 text-muted">₹</span>
+                      <input type="number" step="0.01" name="original_price" id="edit_original_price" class="form-control border-start-0 fw-bold" placeholder="e.g. 5000" required>
+                    </div>
+                    <small class="text-muted" style="font-size:11px;">Base price before discount</small>
+                  </div>
+
+                  <div class="col-md-4">
+                    <label class="form-label fs-8 text-dark fw-semibold mb-1">Discount (% or Flat ₹)</label>
+                    <div class="input-group">
+                      <input type="number" step="0.01" id="edit_discount_num" class="form-control" placeholder="e.g. 20">
+                      <select class="form-select" id="edit_discount_type" style="max-width: 85px;">
+                        <option value="percent" selected>% OFF</option>
+                        <option value="flat">₹ Flat</option>
+                      </select>
+                    </div>
+                    <input type="hidden" name="discount" id="edit_discount" value="">
+                    <small class="text-muted" style="font-size:11px;">Deducted from actual price</small>
+                  </div>
+
+                  <div class="col-md-4">
+                    <label class="form-label fs-8 text-success fw-bold mb-1">Payable Monthly Price (₹) *</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-success bg-opacity-10 text-success border-end-0 border-success fw-bold">₹</span>
+                      <input type="number" step="0.01" name="price" id="edit_price" class="form-control border-start-0 border-success fw-bold text-success fs-6" placeholder="Final payable" required>
+                    </div>
+                    <small class="text-muted" style="font-size:11px;">Amount farmer will pay monthly</small>
+                  </div>
+                </div>
+
+                <!-- Live Summary Calculation Box -->
+                <div class="p-2 mb-3 rounded-2 bg-white border d-flex align-items-center justify-content-between" id="edit_pricing_summary_box">
+                  <div class="d-flex align-items-center gap-2 small">
+                    <i class="ri-information-line text-primary fs-5"></i>
+                    <span class="text-muted">Breakdown:</span>
+                    <span class="fw-semibold text-dark" id="edit_summary_text">Enter prices to see discount breakdown</span>
+                  </div>
+                  <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1" id="edit_summary_saving_badge" style="display: none;">
+                    Save ₹0.00 / mo
+                  </span>
+                </div>
+
+                <!-- Projections for Quarterly (3 Mo) & Annual (12 Mo) -->
+                <div class="row g-2">
+                  <div class="col-md-6">
+                    <div class="p-2 rounded border bg-white">
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fs-8 fw-semibold text-dark">Quarterly (3 Months Cycle)</span>
+                        <span class="badge bg-light text-secondary border" style="font-size:10px;">3 Months</span>
+                      </div>
+                      <div class="input-group input-group-sm mb-1">
+                        <span class="input-group-text bg-light text-muted">Payable ₹</span>
+                        <input type="number" step="0.01" name="price_quarterly" id="edit_price_quarterly" class="form-control bg-light fw-bold" placeholder="Monthly × 3" readonly>
+                      </div>
+                      <div class="d-flex justify-content-between" style="font-size:11px;">
+                        <span class="text-muted">Actual: ₹<span id="edit_actual_qtr">0.00</span></span>
+                        <span class="text-success fw-semibold">Save: ₹<span id="edit_save_qtr">0.00</span></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <div class="p-2 rounded border bg-white">
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fs-8 fw-semibold text-dark">Annual (12 Months Cycle)</span>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:10px;">Best Value</span>
+                      </div>
+                      <div class="input-group input-group-sm mb-1">
+                        <span class="input-group-text bg-light text-muted">Payable ₹</span>
+                        <input type="number" step="0.01" name="price_yearly" id="edit_price_yearly" class="form-control bg-light fw-bold" placeholder="Monthly × 12" readonly>
+                      </div>
+                      <div class="d-flex justify-content-between" style="font-size:11px;">
+                        <span class="text-muted">Actual: ₹<span id="edit_actual_yr">0.00</span></span>
+                        <span class="text-success fw-semibold">Save: ₹<span id="edit_save_yr">0.00</span></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
+
+            <!-- Popular / Featured Badge Settings -->
+            <div class="col-md-12">
+              <div class="p-3 border rounded-3 bg-white">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label mb-0 fw-semibold text-dark">
+                    <i class="ri-price-tag-3-line text-warning me-1"></i>Popular / Featured Card Badge
+                  </label>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="show_badge" id="edit_show_badge" role="switch">
+                    <label class="form-check-label fs-8 fw-semibold text-dark ms-1" for="edit_show_badge">Show Badge</label>
+                  </div>
+                </div>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-muted"><i class="ri-award-line"></i></span>
+                  <input type="text" name="badge_text" id="edit_badge_text" class="form-control" placeholder="e.g. POPULAR, BEST VALUE">
+                </div>
+                <small class="text-muted" style="font-size:11px;">Displays a high-visibility badge at top of the card</small>
+              </div>
+            </div>
+
             <div class="col-md-12">
               <label class="form-label">Description</label>
-              <textarea name="description" id="edit_description" class="form-control"></textarea>
+              <textarea name="description" id="edit_description" class="form-control" rows="2"></textarea>
             </div>
             <div class="col-md-12">
               <label class="form-label">Unlock Software Modules</label>
@@ -842,16 +1681,16 @@
               <label class="form-label text-dark fs-7 mb-2">Key Features</label>
 
               <div class="mb-2">
-                <label class="form-label fs-8 text-muted mb-1">My Land</label>
-                <input type="text" name="my_land" id="edit_my_land" class="form-control" placeholder="Enter My Land">
+                <label class="form-label fs-8 text-muted mb-1">My Land <span class="fw-normal text-muted">(Leave empty for Unlimited)</span></label>
+                <input type="text" name="my_land" id="edit_my_land" class="form-control" placeholder="Leave empty for Unlimited">
               </div>
               <div class="mb-2">
-                <label class="form-label fs-8 text-muted mb-1">My Crop</label>
-                <input type="text" name="my_crop" id="edit_my_crop" class="form-control" placeholder="Enter My Crop">
+                <label class="form-label fs-8 text-muted mb-1">My Crop <span class="fw-normal text-muted">(Leave empty for Unlimited)</span></label>
+                <input type="text" name="my_crop" id="edit_my_crop" class="form-control" placeholder="Leave empty for Unlimited">
               </div>
               <div class="mb-0">
-                <label class="form-label fs-8 text-muted mb-1">My Manager</label>
-                <input type="text" name="my_users" id="edit_my_users" class="form-control" placeholder="Enter My Manager">
+                <label class="form-label fs-8 text-muted mb-1">User Manager Limit <span class="fw-normal text-muted">(Leave empty for Unlimited Managers)</span></label>
+                <input type="text" name="my_users" id="edit_my_users" class="form-control" placeholder="e.g. 4 (Leave empty for Unlimited Managers)">
               </div>
             </div>
           </div>
@@ -962,7 +1801,7 @@
 </div>
 
 <!-- Table Card -->
-<div class="card border-0 shadow-sm rounded-4">
+<div class="card border-0 shadow-sm rounded-4 subscription-table-card">
     <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
         <!-- Collapsible Search -->
         <div class="d-flex align-items-center search-collapse-wrapper" id="sub_search_collapse_wrapper">
@@ -983,12 +1822,56 @@
           </div>
         </div>
 
-        <select class="form-select form-select-sm w-auto status-filter" id="subStatusFilter">
-            <option value="all">All Statuses</option>
-            <option value="Paid">Paid</option>
-            <option value="Pending">Pending</option>
-            <option value="Overdue">Overdue</option>
-        </select>
+        <!-- Themed Status Filter Dropdown -->
+        <input type="hidden" class="status-filter" id="subStatusFilter" value="all">
+        <div class="dropdown">
+          <button class="btn dropdown-toggle d-flex align-items-center gap-2 px-3 rounded-3 fw-semibold status-filter-btn" 
+                  type="button" 
+                  id="subStatusFilterBtn" 
+                  data-bs-toggle="dropdown" 
+                  aria-expanded="false">
+            <i class="ri-filter-3-line" style="color: #F69C55;"></i>
+            <span id="subStatusFilterLabel">All Statuses</span>
+          </button>
+          <ul class="dropdown-menu shadow-lg border-0 py-1 rounded-3" aria-labelledby="subStatusFilterBtn" style="min-width: 170px;">
+            <li>
+              <a class="dropdown-item status-filter-opt d-flex align-items-center justify-content-between active" href="javascript:void(0)" data-val="all">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #94a3b8;"></span>
+                  <span class="status-opt-text">All Statuses</span>
+                </span>
+                <i class="ri-check-line check-mark"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item status-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Paid">
+                <span class="d-flex align-items-center gap-2 text-success">
+                  <span class="rounded-circle bg-success" style="width: 8px; height: 8px;"></span>
+                  <span class="status-opt-text">Paid</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item status-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Pending">
+                <span class="d-flex align-items-center gap-2 text-warning">
+                  <span class="rounded-circle bg-warning" style="width: 8px; height: 8px;"></span>
+                  <span class="status-opt-text">Pending</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item status-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Overdue">
+                <span class="d-flex align-items-center gap-2 text-danger">
+                  <span class="rounded-circle bg-danger" style="width: 8px; height: 8px;"></span>
+                  <span class="status-opt-text">Overdue</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+          </ul>
+        </div>
     </div>
 
     <div class="table-responsive text-nowrap p-3">
@@ -1013,11 +1896,11 @@
                         </div>
                     </td>
                     <td>
-                        <label class="fs-8 fw-normal"><i class="ri-arrow-right-up-line me-1"></i>₹{{ sub.monthly_amount|default:0|floatformat:2 }} /mo</label>
+                        <label class="fs-8 fw-normal"><i class="ri-arrow-right-up-line me-1"></i>₹{{ sub.monthly_amount|default:0|floatformat:2 }} <span class="text-muted text-capitalize">/ {{ sub.billing_cycle|default:'mo' }}</span></label>
                     </td>
                     <td>
                         <div class="d-flex flex-column">
-                            <label class="fw-semibold text-black">Start: {{ sub.created_at|date:"Y-m-d" }}</label>
+                            <label class="fw-semibold text-black">Start: {{ sub.start_date|default:sub.created_at|date:"Y-m-d" }}</label>
                             <div class="d-flex align-items-center justify-content-start gap-2 fs-8">
                                 <small class="text-dark fw-normal">Next: {{ sub.end_date|date:"Y-m-d" }}</small>
                             </div>
@@ -1043,50 +1926,44 @@
                         </ul>
                       </div>
                     </td>
-                    <td data-search="{{ sub.payment_status|title }}">
-                      <div class="dropdown">
-                        <button class="btn {% if sub.payment_status == 'paid' %}btn-outline-primary{% elif sub.payment_status == 'pending' %}btn-outline-warning{% else %}btn-outline-danger{% endif %} dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="width: 100px;">
-                          {{ sub.payment_status|title }}
-                        </button>
-                        <ul class="dropdown-menu p-2">
-                          {% if sub.payment_status != 'paid' %}
-                          <li>
-                            <form method="POST" action="{% url 'manage_subscription' %}">
-                              {% csrf_token %}
-                              <input type="hidden" name="action" value="update_payment_status">
-                              <input type="hidden" name="subscription_id" value="{{ sub.id }}">
-                              <input type="hidden" name="payment_status" value="paid">
-                              <button type="submit" class="dropdown-item badge bg-label-primary text-primary rounded-3 mb-1 text-start" style="border: none; width: 100%;">Paid</button>
-                            </form>
-                          </li>
-                          {% endif %}
-                          {% if sub.payment_status != 'pending' %}
-                          <li>
-                            <form method="POST" action="{% url 'manage_subscription' %}">
-                              {% csrf_token %}
-                              <input type="hidden" name="action" value="update_payment_status">
-                              <input type="hidden" name="subscription_id" value="{{ sub.id }}">
-                              <input type="hidden" name="payment_status" value="pending">
-                              <button type="submit" class="dropdown-item badge bg-label-warning text-warning rounded-3 mb-1 text-start" style="border: none; width: 100%;">Pending</button>
-                            </form>
-                          </li>
-                          {% endif %}
-                          {% if sub.payment_status != 'overdue' %}
-                          <li>
-                            <form method="POST" action="{% url 'manage_subscription' %}">
-                              {% csrf_token %}
-                              <input type="hidden" name="action" value="update_payment_status">
-                              <input type="hidden" name="subscription_id" value="{{ sub.id }}">
-                              <input type="hidden" name="payment_status" value="overdue">
-                              <button type="submit" class="dropdown-item badge bg-label-danger text-danger rounded-3 text-start" style="border: none; width: 100%;">Overdue</button>
-                            </form>
-                          </li>
-                          {% endif %}
-                        </ul>
-                      </div>
+                    <td data-search="{% if sub.payment_status|lower == 'paid' or sub.payment_status|lower == 'success' or sub.payment_status|lower == 'active' %}Paid{% elif sub.payment_status|lower == 'pending' %}Pending{% elif sub.payment_status|lower == 'overdue' %}Overdue{% else %}{{ sub.payment_status|title }}{% endif %}">
+                      {% if sub.payment_status|lower == 'paid' or sub.payment_status|lower == 'success' or sub.payment_status|lower == 'active' %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill fs-7 fw-semibold d-inline-flex align-items-center gap-1">
+                          <i class="ri-checkbox-circle-fill"></i> Paid
+                        </span>
+                      {% elif sub.payment_status|lower == 'pending' %}
+                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-3 py-2 rounded-pill fs-7 fw-semibold d-inline-flex align-items-center gap-1">
+                          <i class="ri-time-fill"></i> Pending
+                        </span>
+                      {% elif sub.payment_status|lower == 'overdue' %}
+                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2 rounded-pill fs-7 fw-semibold d-inline-flex align-items-center gap-1">
+                          <i class="ri-error-warning-fill"></i> Overdue
+                        </span>
+                      {% else %}
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-3 py-2 rounded-pill fs-7 fw-semibold d-inline-flex align-items-center gap-1">
+                          <i class="ri-information-fill"></i> {{ sub.payment_status|title|default:'Pending' }}
+                        </span>
+                      {% endif %}
                     </td>
                     <td class="text-end">
                       <div class="d-flex justify-content-end me-2 gap-2">
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-success p-1"
+                            title="View / Download Invoice"
+                            data-invoice-id="INV-{{ sub.start_date|date:'Y'|default:'2026' }}-{{ sub.id|stringformat:'04d' }}"
+                            data-invoice-date="{% if sub.start_date %}{{ sub.start_date|date:'d-M-Y' }}{% elif sub.created_at %}{{ sub.created_at|date:'d-M-Y' }}{% else %}31-Oct-2026{% endif %}"
+                            data-farmer-name="{% if sub.farmer.user.get_full_name %}{{ sub.farmer.user.get_full_name }}{% elif sub.farmer.user.first_name %}{{ sub.farmer.user.first_name }}{% elif sub.farmer.user.username %}{{ sub.farmer.user.username }}{% elif sub.farmer.company_name %}{{ sub.farmer.company_name }}{% elif sub.farmer.mobile_number %}{{ sub.farmer.mobile_number }}{% else %}Farmer{% endif %}"
+                            data-farmer-phone="{% if sub.farmer.mobile_number %}{{ sub.farmer.mobile_number }}{% elif sub.farmer.user.username %}{{ sub.farmer.user.username }}{% else %}N/A{% endif %}"
+                            data-farmer-email="{% if sub.farmer.user.email %}{{ sub.farmer.user.email }}{% elif sub.farmer.email %}{{ sub.farmer.email }}{% else %}N/A{% endif %}"
+                            data-package-name="{{ sub.package.name|default:'Custom Plan' }}"
+                            data-amount="₹{{ sub.monthly_amount|floatformat:2 }}"
+                            data-billing-cycle="{{ sub.billing_cycle|title }}"
+                            data-status="{{ sub.payment_status|title }}"
+                            data-end-date="{% if sub.end_date %}{{ sub.end_date|date:'d-M-Y' }}{% else %}-{% endif %}"
+                            onclick="openAdminInvoiceModalFromBtn(this)">
+                            <i class="ri-file-download-line me-1"></i>Invoice
+                        </button>
                         <button
                             class="btn btn-sm btn-outline-primary view-profile-btn p-1"
                             data-bs-toggle="offcanvas"
@@ -1096,7 +1973,7 @@
                         </button>
                         <button class="btn btn-sm btn-outline-danger delete-btn p-1"
                                 data-id="{{ sub.id }}"
-                                data-name="{{ sub.farmer.name }}"
+                                data-name="{% if sub.farmer.user.get_full_name %}{{ sub.farmer.user.get_full_name }}{% elif sub.farmer.user.first_name %}{{ sub.farmer.user.first_name }}{% elif sub.farmer.user.username %}{{ sub.farmer.user.username }}{% elif sub.farmer.company_name %}{{ sub.farmer.company_name }}{% elif sub.farmer.mobile_number %}{{ sub.farmer.mobile_number }}{% else %}this farmer{% endif %}"
                                 data-bs-toggle="modal"
                                 data-bs-target="#delete_farmer_modal">
                             Delete
@@ -1135,7 +2012,7 @@
             <label class="form-label">Select Farmer Account</label>
             <select class="select3 form-select" name="farmer_id" required>
               {% for farmer in farmers %}
-              <option value="{{ farmer.id }}">{{ farmer.user.first_name|default:farmer.user.username }}</option>
+              <option value="{{ farmer.id }}">{% if farmer.user.first_name %}{{ farmer.user.first_name }}{% elif farmer.user.username %}{{ farmer.user.username }}{% elif farmer.mobile_number %}{{ farmer.mobile_number }}{% else %}Farmer #{{ farmer.id }}{% endif %}</option>
               {% endfor %}
             </select>
           </div>
@@ -1145,28 +2022,37 @@
             <select class="select3 form-select" name="package_id" id="packageSelect" required>
               <option value="">Select Package</option>
               {% for package in packages %}
-              <option value="{{ package.id }}" data-price="{{ package.price }}">{{ package.name }} - ₹{{ package.price }} /mo</option>
+              <option value="{{ package.id }}" data-price="{{ package.price }}" data-price-quarterly="{{ package.price_quarterly|default:'' }}" data-price-yearly="{{ package.price_yearly|default:'' }}">{{ package.name }} (₹{{ package.price }}/mo)</option>
               {% endfor %}
             </select>
           </div>
 
-          <!-- Monthly Billing -->
-          <div class="col-md-12">
-            <label class="form-label">Monthly Billing Amount (₹)</label>
+          <div class="col-md-6">
+            <label class="form-label">Billing Cycle</label>
+            <select class="form-select" name="billing_cycle" id="billingCycleSelect">
+              <option value="monthly" selected>Monthly (1 Month)</option>
+              <option value="quarterly">Quarterly (3 Months)</option>
+              <option value="yearly">Yearly (1 Year)</option>
+            </select>
+          </div>
+
+          <!-- Billing Amount -->
+          <div class="col-md-6">
+            <label class="form-label">Billing Amount (₹)</label>
             <input type="number" class="form-control" name="monthly_amount" id="monthlyBillingAmount" placeholder="0.00" step="0.01">
           </div>
 
           <div class="col-lg-6">
             <div class="mb-3" style="max-width: 300px;">
               <label for="startDate" class="form-label">Contract Start Date</label>
-              <input type="date" id="startDate" class="form-control">
+              <input type="date" id="startDate" name="start_date" class="form-control">
             </div>
           </div>
 
           <div class="col-lg-6">
             <div class="mb-3" style="max-width: 300px;">
               <label for="endDate" class="form-label">Next Renewal Date</label>
-              <input type="date" id="endDate" class="form-control">
+              <input type="date" id="endDate" name="end_date" class="form-control">
             </div>
           </div>
 
@@ -1438,6 +2324,102 @@
 {% endfor %}
 
 
-    </div>
-</div>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var pkgSelect = document.getElementById('packageSelect');
+    var cycleSelect = document.getElementById('billingCycleSelect');
+    var amountInput = document.getElementById('monthlyBillingAmount');
+    var startInput = document.getElementById('startDate');
+    var endInput = document.getElementById('endDate');
+
+    function updatePrice() {
+      if (!pkgSelect) return;
+      var selectedOpt = pkgSelect.options[pkgSelect.selectedIndex];
+      if (!selectedOpt || !selectedOpt.value) return;
+      var cycle = cycleSelect ? cycleSelect.value : 'monthly';
+      var mPrice = parseFloat(selectedOpt.getAttribute('data-price') || 0);
+      var qPrice = parseFloat(selectedOpt.getAttribute('data-price-quarterly') || (mPrice * 3));
+      var yPrice = parseFloat(selectedOpt.getAttribute('data-price-yearly') || (mPrice * 12));
+
+      if (amountInput) {
+        if (cycle === 'yearly') {
+          amountInput.value = yPrice.toFixed(2);
+        } else if (cycle === 'quarterly') {
+          amountInput.value = qPrice.toFixed(2);
+        } else {
+          amountInput.value = mPrice.toFixed(2);
+        }
+      }
+    }
+
+    function updateRenewalDate() {
+      if (!startInput || !endInput) return;
+      var startVal = startInput.value;
+      if (!startVal) return;
+      
+      var parts = startVal.split('-');
+      var startD;
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          startD = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else {
+          startD = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        }
+      } else {
+        startD = new Date(startVal);
+      }
+      if (isNaN(startD.getTime())) return;
+
+      var cycle = cycleSelect ? cycleSelect.value : 'monthly';
+      var endD = new Date(startD);
+
+      if (cycle === 'yearly') {
+        endD.setFullYear(endD.getFullYear() + 1);
+      } else if (cycle === 'quarterly') {
+        endD.setMonth(endD.getMonth() + 3);
+      } else {
+        endD.setMonth(endD.getMonth() + 1);
+      }
+
+      var y = endD.getFullYear();
+      var m = String(endD.getMonth() + 1).padStart(2, '0');
+      var d = String(endD.getDate()).padStart(2, '0');
+      endInput.value = y + '-' + m + '-' + d;
+    }
+
+    function initDates() {
+      var today = new Date();
+      var yyyy = today.getFullYear();
+      var mm = String(today.getMonth() + 1).padStart(2, '0');
+      var dd = String(today.getDate()).padStart(2, '0');
+      if (startInput && !startInput.value) {
+        startInput.value = yyyy + '-' + mm + '-' + dd;
+      }
+      updateRenewalDate();
+    }
+
+    initDates();
+
+    if (pkgSelect) {
+      $(pkgSelect).on('change', function () {
+        updatePrice();
+      });
+    }
+
+    if (cycleSelect) {
+      $(cycleSelect).on('change', function () {
+        updatePrice();
+        updateRenewalDate();
+      });
+    }
+
+    if (startInput) {
+      startInput.addEventListener('change', updateRenewalDate);
+      startInput.addEventListener('input', updateRenewalDate);
+    }
+  });
+</script>
+
+
+{% include "superadmin/subscription/invoice_modal.html" %}
 {% endblock content %}

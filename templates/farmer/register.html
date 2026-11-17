@@ -1,0 +1,1196 @@
+{% extends "farmer/auth_base.html" %}
+{% load static %}
+
+{% block title %}Farmer Registration | AgriOT WiFarm{% endblock %}
+
+{% block page_css %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+<style>
+  :root {
+    --brand-primary: #63771F;
+    --brand-dark: #4e5e18;
+    --brand-light: #eef2e6;
+    --brand-accent: #FBA600;
+  }
+
+  body {
+    background: #f8fafc;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1e293b;
+    min-height: 100vh;
+  }
+
+  .reg-navbar {
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 14px 0;
+  }
+
+  .stepper-wrapper {
+    display: flex;
+    justify-content: space-between;
+    position: relative;
+    margin-bottom: 30px;
+  }
+
+  .stepper-wrapper::before {
+    content: "";
+    position: absolute;
+    top: 22px;
+    left: 40px;
+    right: 40px;
+    height: 3px;
+    background: #e2e8f0;
+    z-index: 1;
+  }
+
+  .stepper-progress {
+    position: absolute;
+    top: 22px;
+    left: 40px;
+    height: 3px;
+    background: var(--brand-primary);
+    z-index: 2;
+    transition: width 0.4s ease;
+    width: 0%;
+  }
+
+  .stepper-item {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: transparent;
+    cursor: default;
+  }
+
+  .step-circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 3px solid #cbd5e1;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    transition: all 0.3s ease;
+  }
+
+  .stepper-item.active .step-circle {
+    border-color: var(--brand-primary);
+    background: var(--brand-primary);
+    color: #ffffff;
+    box-shadow: 0 0 0 4px rgba(99, 119, 31, 0.2);
+  }
+
+  .stepper-item.completed .step-circle {
+    border-color: var(--brand-primary);
+    background: var(--brand-primary);
+    color: #ffffff;
+  }
+
+  .step-label {
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+  }
+
+  .stepper-item.active .step-label {
+    color: var(--brand-primary);
+    font-weight: 700;
+  }
+
+  .stepper-item.completed .step-label {
+    color: #1e293b;
+  }
+
+  .card-reg {
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+    padding: 36px;
+  }
+
+  .form-label {
+    font-weight: 600;
+    font-size: 13.5px;
+    color: #334155;
+    margin-bottom: 6px;
+  }
+
+  .form-control, .form-select {
+    border-radius: 8px;
+    padding: 10px 14px;
+    border: 1px solid #cbd5e1;
+    font-size: 14.5px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .form-control:focus, .form-select:focus {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px rgba(99, 119, 31, 0.18);
+  }
+
+  .btn-brand {
+    background-color: var(--brand-primary);
+    color: #ffffff;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    padding: 11px 22px;
+    transition: background-color 0.2s, transform 0.1s;
+  }
+
+  .btn-brand:hover {
+    background-color: var(--brand-dark);
+    color: #ffffff;
+  }
+
+  .btn-brand:active {
+    transform: scale(0.98);
+  }
+
+  .otp-boxes {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  .otp-input {
+    width: 48px;
+    height: 54px;
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    border-radius: 8px;
+    border: 2px solid #cbd5e1;
+    transition: all 0.2s;
+  }
+
+  .otp-input:focus {
+    border-color: var(--brand-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 119, 31, 0.2);
+  }
+
+  /* Plan cards */
+  .pkg-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 26px 20px;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    transition: all 0.3s;
+    position: relative;
+  }
+
+  .pkg-card:hover {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+    transform: translateY(-4px);
+  }
+
+  .pkg-card.selected {
+    border: 2px solid var(--brand-primary);
+    box-shadow: 0 10px 25px rgba(99, 119, 31, 0.18);
+    background: #fbfdf9;
+  }
+
+  .badge-popular {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--brand-accent);
+    color: white;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    padding: 3px 14px;
+    border-radius: 20px;
+    box-shadow: 0 3px 10px rgba(251, 166, 0, 0.3);
+  }
+
+  .cycle-pill-btn {
+    border-radius: 50px;
+    padding: 7px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    transition: all 0.2s;
+  }
+
+  .cycle-pill-btn.active {
+    background: var(--brand-primary);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(99, 119, 31, 0.25);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Top Header -->
+<header class="reg-navbar">
+  <div class="container d-flex justify-content-between align-items-center">
+    <a href="{% url 'farmer-login' %}" class="d-flex align-items-center text-decoration-none">
+      <img src="{% static 'img/auth/agri_logo_3.png' %}" height="42" alt="AgriOT Logo" onerror="this.src='https://via.placeholder.com/140x40?text=AgriOT'">
+    </a>
+    <div class="d-flex align-items-center gap-3">
+      <span class="text-muted small d-none d-sm-inline">Already registered?</span>
+      <a href="{% url 'farmer-login' %}" class="btn btn-sm btn-outline-secondary px-3 fw-semibold">
+        <i class="ri-login-box-line me-1"></i>Farmer Login
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- Main Container -->
+<div class="container py-5" style="max-width: 980px;">
+
+  <!-- Step Wizard Stepper -->
+  <div class="stepper-wrapper">
+    <div class="stepper-progress" id="stepperProgressBar"></div>
+
+    <div class="stepper-item active" id="stepIndicator1">
+      <div class="step-circle"><i class="ri-smartphone-line"></i></div>
+      <div class="step-label">1. Mobile & OTP</div>
+    </div>
+
+    <div class="stepper-item" id="stepIndicator2">
+      <div class="step-circle"><i class="ri-user-smile-line"></i></div>
+      <div class="step-label">2. Basic Profile</div>
+    </div>
+
+    <div class="stepper-item" id="stepIndicator3">
+      <div class="step-circle"><i class="ri-vip-crown-line"></i></div>
+      <div class="step-label">3. Plan & Access</div>
+    </div>
+  </div>
+
+  <!-- CSRF Token -->
+  {% csrf_token %}
+
+  <!-- ========================================== -->
+  <!-- STEP 1: MOBILE & OTP VERIFICATION          -->
+  <!-- ========================================== -->
+  <div id="stepSection1" class="step-section">
+    <div class="card-reg mx-auto" style="max-width: 520px;">
+      <div class="text-center mb-4">
+        <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3" style="width: 56px; height: 56px; background: var(--brand-light); color: var(--brand-primary);">
+          <i class="ri-phone-lock-line fs-2"></i>
+        </div>
+        <h4 class="fw-bold mb-1">Verify Your Mobile Number</h4>
+        <p class="text-muted small">Enter your 10-digit mobile number to receive a verification OTP</p>
+      </div>
+
+      <!-- Phone Entry Box -->
+      <div id="phoneInputBox">
+        <div class="mb-4">
+          <label class="form-label" for="regMobileInput">Mobile Number <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <span class="input-group-text bg-light fw-bold text-muted border-end-0">+91</span>
+            <input type="tel" id="regMobileInput" class="form-control border-start-0" placeholder="e.g. 9876543210" maxlength="10" value="{{ prefill_mobile }}" autofocus>
+          </div>
+          <div class="form-text small">We'll send a 6-digit one-time password via SMS.</div>
+        </div>
+
+        <button type="button" id="btnSendOtp" class="btn btn-brand w-100 py-2">
+          <span id="btnSendOtpText">Send Verification Code</span>
+          <span id="btnSendOtpSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
+        </button>
+      </div>
+
+      <!-- OTP Verification Box (Initially Hidden) -->
+      <div id="otpInputBox" class="d-none">
+        <div class="alert alert-light border d-flex align-items-center justify-content-between p-2 mb-4 rounded-3">
+          <div class="d-flex align-items-center gap-2">
+            <i class="ri-smartphone-line text-success fs-5"></i>
+            <span class="small text-muted">Sent to: <strong id="displaySentMobile" class="text-dark">+91 XXXXXXXXXX</strong></span>
+          </div>
+          <button type="button" id="btnEditMobile" class="btn btn-sm btn-link text-decoration-none p-0" style="color: var(--brand-primary); font-size: 13px;">Change</button>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label d-block text-center mb-3">Enter 6-Digit OTP</label>
+          <div class="otp-boxes mb-2">
+            <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" autofocus>
+            <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*">
+            <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*">
+            <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*">
+            <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*">
+            <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*">
+          </div>
+          <input type="hidden" id="fullOtpValue">
+
+          <div class="text-center mt-3">
+            <span id="otpCountdownTimer" class="text-muted small">Resend OTP in 30s</span>
+            <a href="javascript:void(0);" id="btnResendOtp" class="d-none small fw-bold text-decoration-none" style="color: var(--brand-primary);">Resend OTP</a>
+          </div>
+        </div>
+
+        <button type="button" id="btnVerifyOtp" class="btn btn-brand w-100 py-2">
+          <span id="btnVerifyOtpText">Verify OTP & Continue</span>
+          <span id="btnVerifyOtpSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- STEP 2: BASIC FARMER PROFILE DATA          -->
+  <!-- ========================================== -->
+  <div id="stepSection2" class="step-section d-none">
+    <div class="card-reg">
+      <div class="d-flex align-items-center justify-content-between pb-3 mb-4 border-bottom flex-wrap gap-2">
+        <div>
+          <h4 class="fw-bold mb-1">Tell Us About Your Farm</h4>
+          <p class="text-muted small mb-0">Fill in your basic information to set up your farmer account.</p>
+        </div>
+        <div class="badge px-3 py-2 rounded-pill" style="background: #e7f5e8; color: #2e7d32; font-size: 13px;">
+          <i class="ri-checkbox-circle-fill me-1"></i>Verified: <span id="verifiedMobileDisplay">+91 ----------</span>
+        </div>
+      </div>
+
+      <form id="basicProfileForm">
+        <div class="row g-3">
+          <!-- Full Name -->
+          <div class="col-md-6">
+            <label class="form-label" for="regFullName">Full Name / Farmer Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="regFullName" placeholder="e.g. Ramesh Kumar" required>
+          </div>
+
+          <!-- Email -->
+          <div class="col-md-6">
+            <label class="form-label" for="regEmail">Email Address <span class="text-muted fw-normal">(Optional)</span></label>
+            <input type="email" class="form-control" id="regEmail" placeholder="e.g. ramesh@gmail.com">
+          </div>
+
+          <!-- Farmer Type -->
+          <div class="col-md-6">
+            <label class="form-label">Farmer Category <span class="text-danger">*</span></label>
+            <div class="d-flex gap-3 mt-1">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="farmerTypeRadio" id="typeIndividual" value="individual" checked>
+                <label class="form-check-label fw-semibold" for="typeIndividual">Individual Farmer</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="farmerTypeRadio" id="typeCompany" value="company">
+                <label class="form-check-label fw-semibold" for="typeCompany">Agri Company / Enterprise</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Company Name (Conditional) -->
+          <div class="col-md-6 d-none" id="companyNameWrap">
+            <label class="form-label" for="regCompanyName">Company / Farm Entity Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="regCompanyName" placeholder="e.g. Green Agro Farms Pvt Ltd">
+          </div>
+
+          <!-- State -->
+          <div class="col-md-4">
+            <label class="form-label" for="regState">State <span class="text-danger">*</span></label>
+            <select class="form-select" id="regState" required>
+              <option value="">Select State</option>
+              {% for state in states %}
+                <option value="{{ state.id }}" {% if forloop.first %}selected{% endif %}>{{ state.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- District -->
+          <div class="col-md-4">
+            <label class="form-label" for="regDistrict">District <span class="text-danger">*</span></label>
+            <select class="form-select" id="regDistrict" required>
+              <option value="">Select District</option>
+            </select>
+          </div>
+
+          <!-- Taluk -->
+          <div class="col-md-4">
+            <label class="form-label" for="regTaluk">Taluk</label>
+            <select class="form-select" id="regTaluk">
+              <option value="">Select Taluk</option>
+            </select>
+          </div>
+
+          <!-- Village / Town -->
+          <div class="col-md-6">
+            <label class="form-label" for="regVillage">Village / Town</label>
+            <input type="text" class="form-control" id="regVillage" placeholder="e.g. Sitharevu">
+          </div>
+
+          <!-- Pincode -->
+          <div class="col-md-6">
+            <label class="form-label" for="regPincode">Pincode <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="regPincode" placeholder="e.g. 624204" required maxlength="6" pattern="[0-9]{6}" inputmode="numeric">
+          </div>
+
+          <!-- Full Address -->
+          <div class="col-12">
+            <label class="form-label" for="regAddress">Farm / Residential Address</label>
+            <textarea class="form-control" id="regAddress" rows="2" placeholder="Door no, street, landmark..."></textarea>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-5 pt-3 border-top">
+          <button type="button" class="btn btn-outline-secondary px-4 fw-semibold" id="btnBackToStep1">
+            &larr; Back
+          </button>
+          <button type="button" class="btn btn-brand px-5 py-2" id="btnSaveProfile">
+            <span id="btnSaveProfileText">Continue to Subscription Plan &rarr;</span>
+            <span id="btnSaveProfileSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- STEP 3: SUBSCRIPTION PLAN & ACTIVATION    -->
+  <!-- ========================================== -->
+  <div id="stepSection3" class="step-section d-none">
+    <div class="text-center mb-4">
+      <h3 class="fw-bold mb-2">Select Your Subscription Plan</h3>
+      <p class="text-muted">Choose the package that fits your farm acreage and sensor automation needs.</p>
+
+      <!-- Billing Cycle Toggle Tabs -->
+      <div class="d-inline-flex p-1 rounded-pill bg-white border shadow-sm my-3">
+        <button type="button" class="cycle-pill-btn active" data-cycle="monthly">
+          <i class="ri-calendar-line me-1"></i>Monthly
+        </button>
+        <button type="button" class="cycle-pill-btn" data-cycle="quarterly">
+          <i class="ri-calendar-2-line me-1"></i>Quarterly <span class="badge bg-primary-subtle text-primary ms-1" style="font-size: 10px;">3 Mo</span>
+        </button>
+        <button type="button" class="cycle-pill-btn" data-cycle="yearly">
+          <i class="ri-calendar-check-line me-1"></i>Annual <span class="badge bg-success-subtle text-success ms-1" style="font-size: 10px;">Best Value</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Packages Grid -->
+    <div class="row g-4 justify-content-center" id="regPackagesContainer">
+      {% for package in packages %}
+        <div class="col-lg-4 col-md-6 pkg-card-col"
+             id="reg_pkg_col_{{ package.id }}"
+             data-active-monthly="{% if package.is_active_monthly %}true{% else %}false{% endif %}"
+             data-active-quarterly="{% if package.is_active_quarterly %}true{% else %}false{% endif %}"
+             data-active-yearly="{% if package.is_active_yearly %}true{% else %}false{% endif %}">
+          <div class="pkg-card {% if package.show_badge %}selected{% endif %}"
+               id="pkg_card_{{ package.id }}"
+               data-id="{{ package.id }}"
+               data-price-monthly="{{ package.price|floatformat:0 }}"
+               data-orig-monthly="{{ package.display_original_price|default:package.price|floatformat:0 }}"
+               data-save-monthly="{{ package.discount_amount|floatformat:0 }}"
+               data-price-quarterly="{{ package.price_quarterly|default:''|floatformat:0 }}"
+               data-orig-quarterly="{{ package.display_original_quarterly|default:package.price_quarterly|default:''|floatformat:0 }}"
+               data-save-quarterly="{{ package.discount_amount_quarterly|floatformat:0 }}"
+               data-price-yearly="{{ package.price_yearly|default:''|floatformat:0 }}"
+               data-orig-yearly="{{ package.display_original_yearly|default:package.price_yearly|default:''|floatformat:0 }}"
+               data-save-yearly="{{ package.discount_amount_yearly|floatformat:0 }}">
+
+            {% if package.show_badge %}
+              <div class="badge-popular">{{ package.badge_text|default:"POPULAR" }}</div>
+            {% endif %}
+
+            <h5 class="fw-bold mb-1 mt-1">{{ package.name }}</h5>
+            <p class="text-muted small mb-3" style="min-height: 40px;">{{ package.description|truncatewords:14 }}</p>
+
+            <!-- Price Wrap -->
+            <div class="mb-3 pb-3 border-bottom">
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <del class="text-muted small pkg-orig-price" style="display: none;">₹<span>0</span></del>
+                <span class="badge bg-success-subtle text-success small pkg-save-badge" style="display: none;">
+                  Save ₹<span>0</span>
+                </span>
+              </div>
+              <div class="d-flex align-items-baseline gap-1">
+                <span class="fs-2 fw-bold text-dark">₹<span class="pkg-payable-price">{{ package.price|floatformat:0 }}</span></span>
+                <span class="text-muted small pkg-unit-label">/month</span>
+              </div>
+            </div>
+
+            <!-- Features -->
+            <ul class="list-unstyled mb-4 flex-grow-1 small">
+              {% if package.max_acre_support %}
+                <li class="mb-2 d-flex align-items-center gap-2">
+                  <i class="ri-checkbox-circle-fill" style="color: var(--brand-primary);"></i>
+                  <span>Coverage: <strong>{% if package.max_acre_support|lower == 'unlimited' %}Unlimited{% else %}Up to {{ package.max_acre_support }}{% endif %} Acres</strong></span>
+                </li>
+              {% endif %}
+              {% if package.my_land %}
+                <li class="mb-2 d-flex align-items-center gap-2">
+                  <i class="ri-checkbox-circle-fill" style="color: var(--brand-primary);"></i>
+                  <span>Farm & Field Boundaries</span>
+                </li>
+              {% endif %}
+              {% if package.crop_details %}
+                <li class="mb-2 d-flex align-items-center gap-2">
+                  <i class="ri-checkbox-circle-fill" style="color: var(--brand-primary);"></i>
+                  <span>Crop Stage & Harvest Logs</span>
+                </li>
+              {% endif %}
+              {% if package.finance_management %}
+                <li class="mb-2 d-flex align-items-center gap-2">
+                  <i class="ri-checkbox-circle-fill" style="color: var(--brand-primary);"></i>
+                  <span>Financials & Sales Ledger</span>
+                </li>
+              {% endif %}
+              {% if package.inventory_management %}
+                <li class="mb-2 d-flex align-items-center gap-2">
+                  <i class="ri-checkbox-circle-fill" style="color: var(--brand-primary);"></i>
+                  <span>Stock & Inventory Tracker</span>
+                </li>
+              {% endif %}
+            </ul>
+
+            <button type="button" class="btn btn-brand w-100 py-2 btn-select-and-pay" data-package-id="{{ package.id }}" data-package-name="{{ package.name }}">
+              <span>Select & Activate Plan</span>
+            </button>
+          </div>
+        </div>
+      {% empty %}
+        <div class="col-12 text-center py-5">
+          <p class="text-muted">No subscription plans currently available.</p>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mt-5 pt-3 border-top">
+      <button type="button" class="btn btn-outline-secondary px-4 fw-semibold" id="btnBackToStep2">
+        &larr; Back to Profile
+      </button>
+    </div>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- STEP 4: SUCCESS MODAL / CELEBRATION CARD   -->
+  <!-- ========================================== -->
+  <div class="modal fade" id="activationSuccessModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 500px;">
+      <div class="modal-content text-center p-4 border-0 shadow-lg" style="border-radius: 20px;">
+        <div class="d-inline-flex align-items-center justify-content-center rounded-circle mx-auto mb-3" style="width: 72px; height: 72px; background: #e7f5e8; color: #2e7d32;">
+          <i class="ri-checkbox-circle-line fs-1"></i>
+        </div>
+        <h4 class="fw-bold mb-1">Registration Complete!</h4>
+        <p class="text-muted small mb-4">Your farmer account is active and subscription is verified.</p>
+
+        <div class="card border-0 bg-light p-3 text-start mb-4 rounded-3">
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted small">Farmer Name:</span>
+            <span class="fw-bold text-dark" id="successFarmerName">Loading...</span>
+          </div>
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted small">Registered Phone:</span>
+            <span class="fw-bold text-dark" id="successFarmerPhone">Loading...</span>
+          </div>
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted small">Active Plan:</span>
+            <span class="fw-bold" style="color: var(--brand-primary);" id="successPlanName">Loading...</span>
+          </div>
+          <div class="d-flex justify-content-between">
+            <span class="text-muted small">Billing Cycle:</span>
+            <span class="fw-bold text-dark" id="successBillingCycle">Monthly</span>
+          </div>
+        </div>
+
+        <a href="{% url 'farmer-profile' %}#basic_info" class="btn btn-brand w-100 py-3 fw-bold fs-6" id="btnGoToProfile">
+          <i class="ri-user-settings-line me-1"></i>Go to Farmer Profile
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+<script>
+  // State variables
+  let currentStep = 1;
+  let verifiedMobile = "";
+  let activeBillingCycle = "{{ prefill_cycle|default:'monthly' }}";
+  let prefillPackageId = "{{ prefill_package_id|default:'' }}";
+  let otpTimerInterval = null;
+
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+  function showToast(message, isError = false) {
+    Toastify({
+      text: message,
+      duration: 4000,
+      close: true,
+      gravity: "top",
+      position: "center",
+      backgroundColor: isError ? "#e05555" : "#63771F",
+    }).showToast();
+  }
+
+  // Stepper Transition Manager
+  function goToStep(step) {
+    currentStep = step;
+
+    // Progress bar width
+    const progressWidth = step === 1 ? '0%' : (step === 2 ? '50%' : '100%');
+    document.getElementById('stepperProgressBar').style.width = progressWidth;
+
+    // Indicators
+    [1, 2, 3].forEach(s => {
+      const el = document.getElementById(`stepIndicator${s}`);
+      el.classList.remove('active', 'completed');
+      if (s < step) el.classList.add('completed');
+      if (s === step) el.classList.add('active');
+    });
+
+    // Sections
+    document.getElementById('stepSection1').classList.toggle('d-none', step !== 1);
+    document.getElementById('stepSection2').classList.toggle('d-none', step !== 2);
+    document.getElementById('stepSection3').classList.toggle('d-none', step !== 3);
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // -------------------------------------------------------------
+  // STEP 1: MOBILE & OTP
+  // -------------------------------------------------------------
+  const btnSendOtp = document.getElementById('btnSendOtp');
+  const btnVerifyOtp = document.getElementById('btnVerifyOtp');
+  const btnResendOtp = document.getElementById('btnResendOtp');
+  const regMobileInput = document.getElementById('regMobileInput');
+  const otpInputs = document.querySelectorAll('.otp-input');
+
+  // Input sanitizer
+  regMobileInput.addEventListener('input', function() {
+    this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10);
+  });
+
+  // Send OTP
+  btnSendOtp.addEventListener('click', function() {
+    const mobile = regMobileInput.value.trim();
+    if (mobile.length !== 10) {
+      showToast("Please enter a valid 10-digit mobile number.", true);
+      return;
+    }
+
+    document.getElementById('btnSendOtpSpinner').classList.remove('d-none');
+    btnSendOtp.disabled = true;
+
+    const fd = new FormData();
+    fd.append('mobile', mobile);
+
+    fetch("{% url 'farmer-register-send-otp' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken },
+      body: fd
+    })
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('btnSendOtpSpinner').classList.add('d-none');
+      btnSendOtp.disabled = false;
+
+      if (data.status === 'success') {
+        showToast(data.message);
+        document.getElementById('displaySentMobile').textContent = `+91 ${mobile}`;
+        document.getElementById('phoneInputBox').classList.add('d-none');
+        document.getElementById('otpInputBox').classList.remove('d-none');
+        startOtpTimer();
+        otpInputs[0].focus();
+      } else {
+        showToast(data.message || "Failed to send OTP", true);
+        if (data.already_registered) {
+          setTimeout(() => {
+            window.location.href = "{% url 'farmer-login' %}";
+          }, 2000);
+        }
+      }
+    })
+    .catch(err => {
+      document.getElementById('btnSendOtpSpinner').classList.add('d-none');
+      btnSendOtp.disabled = false;
+      showToast("Connection error sending OTP.", true);
+    });
+  });
+
+  // Change phone number
+  document.getElementById('btnEditMobile').addEventListener('click', function() {
+    document.getElementById('otpInputBox').classList.add('d-none');
+    document.getElementById('phoneInputBox').classList.remove('d-none');
+    if (otpTimerInterval) clearInterval(otpTimerInterval);
+  });
+
+  // OTP inputs movement & paste
+  otpInputs.forEach((input, idx) => {
+    input.addEventListener('input', (e) => {
+      if (input.value && idx < otpInputs.length - 1) {
+        otpInputs[idx + 1].focus();
+      }
+      collectOtp();
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !input.value && idx > 0) {
+        otpInputs[idx - 1].focus();
+      }
+    });
+
+    input.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pasteData = (e.clipboardData || window.clipboardData).getData('text').trim();
+      const digits = pasteData.replace(/\D/g, '').slice(0, 6);
+      digits.split('').forEach((d, i) => {
+        if (otpInputs[i]) otpInputs[i].value = d;
+      });
+      collectOtp();
+      const nextIdx = Math.min(digits.length, otpInputs.length - 1);
+      otpInputs[nextIdx].focus();
+    });
+  });
+
+  function collectOtp() {
+    let full = "";
+    otpInputs.forEach(i => full += i.value);
+    document.getElementById('fullOtpValue').value = full;
+    return full;
+  }
+
+  // Timer
+  function startOtpTimer() {
+    let timeLeft = 30;
+    const timerEl = document.getElementById('otpCountdownTimer');
+    btnResendOtp.classList.add('d-none');
+    timerEl.classList.remove('d-none');
+    timerEl.textContent = `Resend OTP in ${timeLeft}s`;
+
+    if (otpTimerInterval) clearInterval(otpTimerInterval);
+    otpTimerInterval = setInterval(() => {
+      timeLeft--;
+      timerEl.textContent = `Resend OTP in ${timeLeft}s`;
+      if (timeLeft <= 0) {
+        clearInterval(otpTimerInterval);
+        timerEl.classList.add('d-none');
+        btnResendOtp.classList.remove('d-none');
+      }
+    }, 1000);
+  }
+
+  // Resend OTP
+  btnResendOtp.addEventListener('click', function() {
+    fetch("{% url 'farmer-register-resend-otp' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'success') {
+        showToast(data.message);
+        startOtpTimer();
+      } else {
+        showToast(data.message || "Failed to resend OTP", true);
+      }
+    })
+    .catch(() => showToast("Connection error resending OTP.", true));
+  });
+
+  // Verify OTP
+  btnVerifyOtp.addEventListener('click', function() {
+    const otp = collectOtp();
+    if (otp.length !== 6) {
+      showToast("Please enter the complete 6-digit OTP code.", true);
+      return;
+    }
+
+    document.getElementById('btnVerifyOtpSpinner').classList.remove('d-none');
+    btnVerifyOtp.disabled = true;
+
+    const fd = new FormData();
+    fd.append('otp', otp);
+
+    fetch("{% url 'farmer-register-verify-otp' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken },
+      body: fd
+    })
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('btnVerifyOtpSpinner').classList.add('d-none');
+      btnVerifyOtp.disabled = false;
+
+      if (data.status === 'success') {
+        showToast(data.message);
+        verifiedMobile = data.mobile;
+        document.getElementById('verifiedMobileDisplay').textContent = `+91 ${verifiedMobile}`;
+        goToStep(2);
+        loadDistrictsForCurrentState();
+      } else {
+        showToast(data.message || "Invalid OTP", true);
+      }
+    })
+    .catch(() => {
+      document.getElementById('btnVerifyOtpSpinner').classList.add('d-none');
+      btnVerifyOtp.disabled = false;
+      showToast("Connection error verifying OTP.", true);
+    });
+  });
+
+
+  // -------------------------------------------------------------
+  // STEP 2: PROFILE DATA & LOCATIONS
+  // -------------------------------------------------------------
+  const regState = document.getElementById('regState');
+  const regDistrict = document.getElementById('regDistrict');
+  const regTaluk = document.getElementById('regTaluk');
+
+  // Toggle company name
+  document.querySelectorAll('input[name="farmerTypeRadio"]').forEach(r => {
+    r.addEventListener('change', function() {
+      document.getElementById('companyNameWrap').classList.toggle('d-none', this.value !== 'company');
+    });
+  });
+
+  // Fetch Districts when State changes
+  function loadDistrictsForCurrentState() {
+    const stateId = regState.value;
+    regDistrict.innerHTML = '<option value="">Loading districts...</option>';
+    regTaluk.innerHTML = '<option value="">Select Taluk</option>';
+
+    if (!stateId) {
+      regDistrict.innerHTML = '<option value="">Select District</option>';
+      return;
+    }
+
+    fetch(`/farmer/farms/get_districts/?state_id=${stateId}`)
+      .then(r => r.json())
+      .then(data => {
+        regDistrict.innerHTML = '<option value="">Select District</option>';
+        if (data.districts && data.districts.length > 0) {
+          data.districts.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = d.name;
+            regDistrict.appendChild(opt);
+          });
+        }
+      })
+      .catch(() => {
+        regDistrict.innerHTML = '<option value="">Select District</option>';
+      });
+  }
+
+  regState.addEventListener('change', loadDistrictsForCurrentState);
+
+  // Fetch Taluks when District changes
+  regDistrict.addEventListener('change', function() {
+    const distId = this.value;
+    regTaluk.innerHTML = '<option value="">Loading taluks...</option>';
+
+    if (!distId) {
+      regTaluk.innerHTML = '<option value="">Select Taluk</option>';
+      return;
+    }
+
+    fetch(`/farmer/farms/get_taluks/?district_id=${distId}`)
+      .then(r => r.json())
+      .then(data => {
+        regTaluk.innerHTML = '<option value="">Select Taluk</option>';
+        if (data.taluks && data.taluks.length > 0) {
+          data.taluks.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name;
+            regTaluk.appendChild(opt);
+          });
+        }
+      })
+      .catch(() => {
+        regTaluk.innerHTML = '<option value="">Select Taluk</option>';
+      });
+  });
+
+  // Back to Step 1
+  document.getElementById('btnBackToStep1').addEventListener('click', () => goToStep(1));
+
+  // Save Profile & Continue to Step 3
+  document.getElementById('btnSaveProfile').addEventListener('click', function() {
+    const pinInput = document.getElementById('regPincode');
+    if (!pinInput.reportValidity()) return;
+    const fullName = document.getElementById('regFullName').value.trim();
+    if (!fullName) {
+      showToast("Full Name is required.", true);
+      document.getElementById('regFullName').focus();
+      return;
+    }
+
+    const stateId = regState.value;
+    const distId = regDistrict.value;
+    if (!stateId || !distId) {
+      showToast("Please select your State and District.", true);
+      return;
+    }
+
+    const farmerType = document.querySelector('input[name="farmerTypeRadio"]:checked').value;
+    const companyName = document.getElementById('regCompanyName').value.trim();
+    if (farmerType === 'company' && !companyName) {
+      showToast("Please enter your Company / Farm entity name.", true);
+      document.getElementById('regCompanyName').focus();
+      return;
+    }
+
+    const btn = this;
+    document.getElementById('btnSaveProfileSpinner').classList.remove('d-none');
+    btn.disabled = true;
+
+    const fd = new FormData();
+    fd.append('full_name', fullName);
+    fd.append('email', document.getElementById('regEmail').value.trim());
+    fd.append('farmer_type', farmerType);
+    fd.append('company_name', companyName);
+    fd.append('state_id', stateId);
+    fd.append('district_id', distId);
+    fd.append('taluk', regTaluk.value);
+    fd.append('village', document.getElementById('regVillage').value.trim());
+    fd.append('pincode', document.getElementById('regPincode').value.trim());
+    fd.append('address', document.getElementById('regAddress').value.trim());
+
+    fetch("{% url 'farmer-register-save-profile' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken },
+      body: fd
+    })
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('btnSaveProfileSpinner').classList.add('d-none');
+      btn.disabled = false;
+
+      if (data.status === 'success') {
+        showToast(data.message);
+        goToStep(3);
+        applyBillingCycle(activeBillingCycle);
+      } else {
+        showToast(data.message || "Failed to save profile.", true);
+      }
+    })
+    .catch(() => {
+      document.getElementById('btnSaveProfileSpinner').classList.add('d-none');
+      btn.disabled = false;
+      showToast("Connection error saving profile.", true);
+    });
+  });
+
+
+  // -------------------------------------------------------------
+  // STEP 3: SUBSCRIPTION PLAN & RAZORPAY PAYMENT
+  // -------------------------------------------------------------
+  document.getElementById('btnBackToStep2').addEventListener('click', () => goToStep(2));
+
+  // Billing Cycle Tabs
+  function applyBillingCycle(cycle) {
+    activeBillingCycle = cycle;
+
+    document.querySelectorAll('.cycle-pill-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.cycle === cycle);
+    });
+
+    document.querySelectorAll('.pkg-card-col').forEach(col => {
+      let isCycleActive = true;
+      if (cycle === 'yearly') isCycleActive = (col.dataset.activeYearly === 'true');
+      else if (cycle === 'quarterly') isCycleActive = (col.dataset.activeQuarterly === 'true');
+      else isCycleActive = (col.dataset.activeMonthly === 'true');
+
+      col.style.display = isCycleActive ? '' : 'none';
+
+      const card = col.querySelector('.pkg-card');
+      if (card) {
+        let price = '', orig = '', save = '', unit = '';
+        if (cycle === 'yearly') {
+          price = card.dataset.priceYearly;
+          orig = card.dataset.origYearly;
+          save = card.dataset.saveYearly;
+          unit = '/year';
+        } else if (cycle === 'quarterly') {
+          price = card.dataset.priceQuarterly;
+          orig = card.dataset.origQuarterly;
+          save = card.dataset.saveQuarterly;
+          unit = '/quarter';
+        } else {
+          price = card.dataset.priceMonthly;
+          orig = card.dataset.origMonthly;
+          save = card.dataset.saveMonthly;
+          unit = '/month';
+        }
+
+        const payableEl = card.querySelector('.pkg-payable-price');
+        const unitEl = card.querySelector('.pkg-unit-label');
+        const origEl = card.querySelector('.pkg-orig-price');
+        const saveEl = card.querySelector('.pkg-save-badge');
+
+        if (payableEl && price) payableEl.textContent = price;
+        if (unitEl) unitEl.textContent = unit;
+
+        const hasSave = parseFloat(save) > 0;
+        if (origEl) {
+          origEl.style.display = hasSave ? 'inline' : 'none';
+          if (hasSave && orig) origEl.querySelector('span').textContent = orig;
+        }
+        if (saveEl) {
+          saveEl.style.display = hasSave ? 'inline' : 'none';
+          if (hasSave && save) saveEl.querySelector('span').textContent = save;
+        }
+      }
+    });
+
+    // Auto-select if prefillPackageId
+    if (prefillPackageId) {
+      const targetCard = document.getElementById(`pkg_card_${prefillPackageId}`);
+      if (targetCard) {
+        document.querySelectorAll('.pkg-card').forEach(c => c.classList.remove('selected'));
+        targetCard.classList.add('selected');
+      }
+    }
+  }
+
+  document.querySelectorAll('.cycle-pill-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      applyBillingCycle(this.dataset.cycle);
+    });
+  });
+
+  // Handle Plan Selection & Razorpay Checkout
+  document.querySelectorAll('.btn-select-and-pay').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const packageId = this.dataset.packageId;
+      const packageName = this.dataset.packageName;
+
+      const originalBtnText = this.innerHTML;
+      this.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Preparing...`;
+      this.disabled = true;
+
+      const fd = new FormData();
+      fd.append('package_id', packageId);
+      fd.append('billing_cycle', activeBillingCycle);
+
+      fetch("{% url 'farmer-register-create-order' %}", {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken },
+        body: fd
+      })
+      .then(r => r.json())
+      .then(orderData => {
+        this.innerHTML = originalBtnText;
+        this.disabled = false;
+
+        if (orderData.status !== 'success') {
+          showToast(orderData.message || "Failed to create subscription order.", true);
+          return;
+        }
+
+        // Zero price / Free package bypass
+        if (orderData.amount === 0) {
+          verifyPaymentOnServer({
+            razorpay_payment_id: "pay_free_mock",
+            razorpay_order_id: orderData.order_id,
+            razorpay_signature: "free_tier_bypass"
+          }, orderData.package_id, orderData.mobile_number, activeBillingCycle);
+          return;
+        }
+
+        // Razorpay checkout modal
+        const options = {
+          "key": orderData.key_id,
+          "amount": orderData.amount,
+          "currency": "INR",
+          "name": "AgriOT WiFarm",
+          "description": `Subscription: ${orderData.package_name} (${activeBillingCycle})`,
+          "order_id": orderData.order_id,
+          "handler": function (rzpResponse) {
+            verifyPaymentOnServer(rzpResponse, orderData.package_id, orderData.mobile_number, activeBillingCycle);
+          },
+          "prefill": {
+            "name": orderData.fullname,
+            "contact": orderData.mobile_number
+          },
+          "theme": {
+            "color": "#63771F"
+          },
+          "modal": {
+            "ondismiss": function() {
+              const cancelFd = new FormData();
+              cancelFd.append('razorpay_order_id', orderData.order_id);
+              cancelFd.append('mobile_number', orderData.mobile_number);
+              cancelFd.append('payment_status', 'cancelled');
+              fetch("{% url 'farmer-verify-payment' %}", { method: 'POST', headers: { 'X-CSRFToken': csrfToken }, body: cancelFd }).catch(() => {});
+              showToast("Payment window closed. You can complete payment anytime.", false);
+            }
+          }
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function(resp) {
+          const failFd = new FormData();
+          failFd.append('razorpay_order_id', orderData.order_id);
+          failFd.append('mobile_number', orderData.mobile_number);
+          failFd.append('payment_status', 'failed');
+          fetch("{% url 'farmer-verify-payment' %}", { method: 'POST', headers: { 'X-CSRFToken': csrfToken }, body: failFd }).catch(() => {});
+          showToast("Payment failed: " + resp.error.description, true);
+        });
+        rzp.open();
+      })
+      .catch(err => {
+        this.innerHTML = originalBtnText;
+        this.disabled = false;
+        showToast("Error initiating payment gateway.", true);
+      });
+    });
+  });
+
+  // Verify payment on server & finish registration
+  function verifyPaymentOnServer(rzpResponse, packageId, mobileNumber, cycle) {
+    const fd = new FormData();
+    fd.append('razorpay_payment_id', rzpResponse.razorpay_payment_id);
+    fd.append('razorpay_order_id', rzpResponse.razorpay_order_id);
+    fd.append('razorpay_signature', rzpResponse.razorpay_signature);
+    fd.append('package_id', packageId);
+    fd.append('mobile_number', mobileNumber);
+    fd.append('billing_cycle', cycle);
+
+    fetch("{% url 'farmer-verify-payment' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken },
+      body: fd
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (res.status === 'success') {
+        document.getElementById('successFarmerName').textContent = res.data.fullname;
+        document.getElementById('successFarmerPhone').textContent = `+91 ${res.data.mobile_number}`;
+        document.getElementById('successPlanName').textContent = res.data.package_name;
+        document.getElementById('successBillingCycle').textContent = cycle.charAt(0).toUpperCase() + cycle.slice(1);
+
+        const successModal = new bootstrap.Modal(document.getElementById('activationSuccessModal'));
+        successModal.show();
+      } else {
+        showToast(res.message || "Payment verification failed.", true);
+      }
+    })
+    .catch(() => showToast("Error verifying payment with server.", true));
+  }
+
+  // Initial cycle setup
+  applyBillingCycle(activeBillingCycle);
+</script>
+{% endblock %}

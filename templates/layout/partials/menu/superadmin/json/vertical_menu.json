@@ -1,4 +1,4 @@
-{
+  {
   "menu": [
     {
       "name": "Dashboards",
@@ -246,6 +246,12 @@
           "icon": "ri ri-calendar-check-line",
           "slug": "maintenance-schedule",
           "url": "maintenance_schedule_settings"
+        },
+        {
+          "name": "Health Indicator",
+          "icon": "ri ri-heart-pulse-line",
+          "slug": "health-indicator",
+          "url": "health_indicator"
         }
       ]
     },
@@ -322,12 +328,55 @@
           "url": "guideline_category"
         },
         {
+          "name": "Document Type",
+          "icon": "ri ri-settings-line",
+          "slug": "document-type",
+          "url": "document_type"
+        },
+        {
           "name": "Document Category",
           "icon": "ri ri-settings-line",
           "slug": "document-category",
           "url": "document_category"
         }
       ]
+    },
+    {
+      "name": "Location Dropdowns",
+      "icon": "ri ri-map-pin-2-line",
+      "slug": "location-dropdowns",
+      "submenu": [
+        {
+          "name": "State",
+          "icon": "ri ri-map-2-line",
+          "slug": "state-settings",
+          "url": "state_settings"
+        },
+        {
+          "name": "City / District",
+          "icon": "ri ri-building-line",
+          "slug": "city-settings",
+          "url": "city_settings"
+        },
+        {
+          "name": "Taluk",
+          "icon": "ri ri-community-line",
+          "slug": "taluk-settings",
+          "url": "taluk_settings"
+        }
+      ]
+    },
+    {
+      "name": "Integrations",
+      "icon": "ri ri-plug-line",
+      "slug": "integrations",
+      "url": "payment_integrations"
+    },
+    {
+      "name": "Mail Settings",
+      "icon": "ri ri-mail-settings-line",
+      "slug": "mail-settings",
+      "url": "superadmin_mail_settings"
     }
   ]
 }

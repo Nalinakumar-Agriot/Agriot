@@ -34,6 +34,9 @@
 
 <script>
 $(document).ready(function () {
+    if ($.fn.dataTable) {
+        $.fn.dataTable.ext.errMode = 'none';
+    }
 
     $('.datatable').each(function () {
 
@@ -575,7 +578,7 @@ $(document).ready(function () {
               </div>
 
               <div class="col-md-6">
-                <label class="form-label">Priority Level</label>
+                <label class="form-label">Priority</label>
                 <select id="task_priority_input" class="select3 form-select">
                   <option value="High Priority">High Priority</option>
                   <option value="Medium Priority">Medium Priority</option>

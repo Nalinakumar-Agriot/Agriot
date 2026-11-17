@@ -34,12 +34,12 @@
 <style>
   .swal2-container { z-index: 20000 !important; }
   .modal[id^="quick_add_"] {
-      z-index: 10700 !important;
+      z-index: 10950 !important;
       background-color: rgba(15, 23, 42, 0.45) !important;
       backdrop-filter: blur(2px);
   }
   .modal[id^="quick_add_"] .modal-dialog {
-      z-index: 10701 !important;
+      z-index: 10955 !important;
   }
   .border.rounded {
       background: #f8f9fa;
@@ -77,6 +77,79 @@
   }
   .search-collapse-wrapper {
     position: relative;
+  }
+  .inventory-filter-toolbar,
+  .inventory-filter-controls {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .inventory-filter-controls > .select2-container,
+  .inventory-filter-controls > .form-select {
+    flex: 0 1 150px;
+    width: 150px !important;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .inventory-filter-controls .select2-selection--single {
+    height: 38px !important;
+  }
+  .inventory-filter-controls > .dropdown {
+    flex: 0 1 150px;
+    min-width: 0;
+  }
+  .inventory-filter-controls > .dropdown > .filter-toolbar-btn {
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.75rem;
+    white-space: nowrap;
+  }
+  .inventory-filter-toolbar .search-collapse-wrapper > button:first-child {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  /* Keep the Harvest Stock controls in one compact desktop row.  Without
+     these explicit flex sizes Bootstrap may shrink the control group to one
+     dropdown wide, leaving a large empty filter area. */
+  #harvest_stock .inventory-filter-toolbar {
+    flex-wrap: nowrap !important;
+    min-height: 62px;
+  }
+  #harvest_stock .search-collapse-wrapper,
+  #harvest_stock .inventory-filter-controls {
+    flex: 0 0 auto;
+    width: auto;
+  }
+  #harvest_stock .inventory-filter-controls {
+    flex-wrap: nowrap !important;
+  }
+  #tableWarehouse_wrapper > .bottom,
+  #tableHarvest_wrapper > .bottom {
+    padding: 0 1rem 1rem;
+  }
+  @media (max-width: 767.98px) {
+    #harvest_stock .inventory-filter-toolbar {
+      flex-wrap: wrap !important;
+    }
+    #harvest_stock .search-collapse-wrapper {
+      flex: 0 0 auto;
+    }
+    #harvest_stock .inventory-filter-controls {
+      flex: 1 1 100%;
+      width: 100%;
+      flex-wrap: wrap !important;
+    }
+    .inventory-filter-controls {
+      flex: 1 1 100%;
+      justify-content: flex-start !important;
+      margin-left: 0 !important;
+    }
+    .inventory-filter-controls > .select2-container,
+    .inventory-filter-controls > .form-select,
+    .inventory-filter-controls > .dropdown {
+      flex: 1 1 145px;
+    }
   }
   .search-input-group {
     width: 0;
@@ -167,7 +240,43 @@
   }
   .rental-status-pill:hover {
     filter: brightness(0.96);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  }
+  .filter-toolbar-btn {
+    height: 38px;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 13px;
+    border: 1px solid #d9dee3 !important;
+    color: #566a7f;
+    background-color: #fff;
+    transition: all 0.2s ease;
+  }
+  .filter-toolbar-btn:hover,
+  .filter-toolbar-btn:focus,
+  .filter-toolbar-btn.show {
+    background-color: #f8f9fa;
+    border-color: #f69c55 !important;
+    color: #f69c55 !important;
+    box-shadow: 0 0 0 0.15rem rgba(246, 156, 85, 0.2) !important;
+  }
+  .dropdown-menu .dropdown-item:hover {
+    background-color: #f8f9fa;
+    color: #F69C55;
+  }
+  .dropdown-menu .dropdown-item.active,
+  .dropdown-menu .dropdown-item.active:hover {
+    background-color: #fcebd9 !important;
+    color: #c0622e !important;
+    font-weight: 600;
+  }
+  #tableHarvest, #tableWarehouse, #tableVehicle {
+    width: 100% !important;
+  }
+  .dataTables_wrapper {
+    width: 100% !important;
+  }
+  #tableHarvest th, #tableWarehouse th, #tableVehicle th {
+    white-space: nowrap;
   }
 </style>
 {% endblock page_css %}
@@ -177,6 +286,10 @@
 
 <script>
 $(document).ready(function () {
+    if (window.jQuery && $.fn && $.fn.dataTable) {
+        $.fn.dataTable.ext.errMode = 'none';
+    }
+
     // Initialize DataTables
     var dtWarehouse = $('#tableWarehouse').DataTable({
         destroy: true,
@@ -184,6 +297,10 @@ $(document).ready(function () {
         lengthMenu: [5, 10, 25, 50],
         responsive: true,
         dom: 't<"bottom d-flex align-items-center justify-content-between mt-3"ip>',
+        language: {
+            emptyTable: "<div class='text-center text-muted py-5'>No warehouse inventory registered yet.</div>",
+            zeroRecords: "<div class='text-center text-muted py-4'>No matching inventory items found.</div>"
+        }
     });
 
     var dtVehicle = $('#tableVehicle').DataTable({
@@ -192,6 +309,10 @@ $(document).ready(function () {
         lengthMenu: [5, 10, 25, 50],
         responsive: true,
         dom: 't<"bottom d-flex align-items-center justify-content-between mt-3"ip>',
+        language: {
+            emptyTable: "<div class='text-center text-muted py-5'>No fleet or vehicles registered yet.</div>",
+            zeroRecords: "<div class='text-center text-muted py-4'>No matching vehicles found.</div>"
+        }
     });
 
     // Custom Search - Warehouse
@@ -203,6 +324,65 @@ $(document).ready(function () {
     $('#searchVehicle').on('keyup', function() {
         dtVehicle.search(this.value).draw();
     });
+
+    // Initialize Harvest DataTable
+    var dtHarvest = $('#tableHarvest').DataTable({
+        destroy: true,
+        pageLength: 10,
+        lengthMenu: [5, 10, 25, 50],
+        responsive: true,
+        columnDefs: [
+            { orderable: false, targets: [8], className: 'text-end' }
+        ],
+        dom: 't<"bottom d-flex align-items-center justify-content-between mt-3"ip>',
+        language: {
+            emptyTable: `<div class="d-flex flex-column align-items-center justify-content-center py-5">
+                    <div class="avatar avatar-lg mb-3" style="background: rgba(16,185,129,0.1); width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center;">
+                      <i class="ri-plant-line fs-2 text-success"></i>
+                    </div>
+                    <h6 class="fw-bold text-dark mb-1">No Harvest Stock Recorded Yet</h6>
+                    <p class="text-muted small mb-3" style="max-width: 400px;">
+                      When crops reach the harvest stage in Farm Management, their yield balances will appear here ready to sell or track wastage.
+                    </p>
+                    <a href="{% url 'farmer-farms' %}" class="btn btn-sm btn-outline-success">
+                      <i class="ri-external-link-line me-1"></i> Go to Farm Management
+                    </a>
+                  </div>`,
+            zeroRecords: "<div class='text-center text-muted py-4'>No matching harvest stock found.</div>"
+        }
+    });
+
+    // Custom Search - Harvest
+    $('#searchHarvest').on('keyup', function() {
+        if (dtHarvest) dtHarvest.search(this.value).draw();
+    });
+
+    // Custom Filters - Harvest
+    window.applyHvFarmFilter = function(val, text, el) {
+        document.getElementById('hvFarmFilterBtnText').innerText = text;
+        $('#hvFarmFilterBtn').closest('.dropdown').find('.dropdown-item').removeClass('active');
+        if (el) $(el).addClass('active');
+        if (dtHarvest) {
+            if (val === 'all') {
+                dtHarvest.column(1).search('').draw();
+            } else {
+                dtHarvest.column(1).search(val).draw();
+            }
+        }
+    };
+
+    window.applyHvStatusFilter = function(val, text, el) {
+        document.getElementById('hvStatusFilterBtnText').innerText = text;
+        $('#hvStatusFilterBtn').closest('.dropdown').find('.dropdown-item').removeClass('active');
+        if (el) $(el).addClass('active');
+        if (dtHarvest) {
+            if (val === 'all') {
+                dtHarvest.column(7).search('').draw();
+            } else {
+                dtHarvest.column(7).search(val).draw();
+            }
+        }
+    };
 
     // Populate whLabelFilter dynamically based on names present in column 0
     function populateLabelFilter() {
@@ -371,25 +551,150 @@ $(document).ready(function () {
         dtVehicle.draw();
     });
     
+    window.openAddMachineryModal = function(e) {
+        if (e && e.preventDefault) e.preventDefault();
+        var modalEl = document.getElementById('add_consumption_modal');
+        if (!modalEl) return;
+        if (modalEl.parentNode !== document.body) {
+            document.body.appendChild(modalEl);
+        }
+        var select = document.getElementById('add_inv_category_selector');
+        if (select) {
+            for (var i = 0; i < select.options.length; i++) {
+                var val = (select.options[i].value || '').toLowerCase();
+                if (val.includes('machin') || val.includes('vehicle') || val.includes('tool') || val.includes('fleet') || val.includes('equipment')) {
+                    select.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        if (typeof toggleFormFields === 'function') {
+            try {
+                toggleFormFields('add');
+            } catch (err) {
+                console.error('toggleFormFields error:', err);
+            }
+        }
+        if (window.bootstrap && bootstrap.Modal) {
+            var bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            bsModal.show();
+        } else if (window.jQuery) {
+            $(modalEl).modal('show');
+        }
+    };
+
+    window.openAddWarehouseModal = function(e) {
+        if (e && e.preventDefault) e.preventDefault();
+        var modalEl = document.getElementById('add_consumption_modal');
+        if (!modalEl) return;
+        if (modalEl.parentNode !== document.body) {
+            document.body.appendChild(modalEl);
+        }
+        var select = document.getElementById('add_inv_category_selector');
+        if (select) {
+            for (var i = 0; i < select.options.length; i++) {
+                var val = (select.options[i].value || '').toLowerCase();
+                if (val.includes('warehouse') || val === 'seeds' || val === 'fertilizer' || val === 'pesticide') {
+                    select.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        if (typeof toggleFormFields === 'function') {
+            try {
+                toggleFormFields('add');
+            } catch (err) {
+                console.error('toggleFormFields error:', err);
+            }
+        }
+        if (window.bootstrap && bootstrap.Modal) {
+            var bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            bsModal.show();
+        } else if (window.jQuery) {
+            $(modalEl).modal('show');
+        }
+    };
+
+    window.openAddStockLogModal = function(e) {
+        if (e && e.preventDefault) e.preventDefault();
+        var modalEl = document.getElementById('add_stock_log_modal');
+        if (!modalEl) return;
+        if (modalEl.parentNode !== document.body) {
+            document.body.appendChild(modalEl);
+        }
+        if (window.bootstrap && bootstrap.Modal) {
+            var bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            bsModal.show();
+        } else if (window.jQuery) {
+            $(modalEl).modal('show');
+        }
+    };
+
+    function updateHeaderForTab(target) {
+        var titleEl = document.getElementById('inventory_main_title');
+        var actionsEl = document.getElementById('inventory_main_actions');
+        if (!titleEl || !actionsEl) return;
+
+        if (target === '#harvest_stock') {
+            titleEl.innerHTML = '<i class="ri-plant-line text-success"></i> {% trans "Harvest Produce & Stock" %}';
+            actionsEl.innerHTML = `
+                <a href="{% url 'crop_loss_history' %}" target="_blank" class="btn btn-outline-danger d-flex align-items-center gap-2 px-3 shadow-sm rounded-pill">
+                    <i class="ri-history-line fs-5"></i> Loss History
+                </a>
+                <a href="{% url 'farmer-add-sale' %}" class="btn btn-success d-flex align-items-center gap-2 px-4 shadow-sm rounded-pill">
+                    <i class="ri-shopping-cart-2-line fs-5"></i> + Add Sale
+                </a>
+            `;
+        } else if (target === '#vehicle') {
+            titleEl.innerHTML = '<i class="ri-truck-line text-primary"></i> {% trans "Machinery & Tools" %}';
+            actionsEl.innerHTML = `
+                <button type="button" class="btn btn-primary d-flex align-items-center gap-2 px-4 shadow-sm" onclick="window.openAddMachineryModal(event)">
+                    <i class="ri-add-line fs-5"></i> {% trans "Add Vehicle / Tool" %}
+                </button>
+            `;
+        } else {
+            titleEl.innerHTML = '<i class="ri-pulse-line text-primary"></i> {% trans "Warehouse " %}';
+            actionsEl.innerHTML = `
+                <a href="{% url 'inventory_out_logs' %}" class="btn btn-outline-primary d-flex align-items-center gap-2 px-3 shadow-sm">
+                    <i class="ri-pie-chart-2-line fs-5"></i> Out / In
+                </a>
+                <button type="button" class="btn btn-outline-secondary d-flex align-items-center gap-2 px-3 shadow-sm" onclick="window.openAddStockLogModal(event)">
+                    <i class="ri-file-list-3-line fs-5"></i> Add Log
+                </button>
+                <button type="button" class="btn btn-primary d-flex align-items-center gap-2 px-4 shadow-sm" onclick="window.openAddWarehouseModal(event)">
+                    <i class="ri-add-line fs-5"></i> {% trans "Add Inventory" %}
+                </button>
+            `;
+        }
+    }
+
     // Restore tab
-    let activeTab = localStorage.getItem('inventory_active_tab');
+    let activeTab = (window.location.hash && document.querySelector(`button[data-bs-target="${window.location.hash}"]`))
+        ? window.location.hash
+        : localStorage.getItem('inventory_active_tab');
+
     if(activeTab) {
         let tabEl = document.querySelector(`button[data-bs-target="${activeTab}"]`);
         if(tabEl) {
             let tab = new bootstrap.Tab(tabEl);
             tab.show();
+            updateHeaderForTab(activeTab);
         }
     }
 
     // Save tab and adjust DataTables
     $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
         let target = $(e.target).attr('data-bs-target');
-        if(target === '#warehouse_stock' || target === '#vehicle') {
+        if(target === '#warehouse_stock' || target === '#vehicle' || target === '#harvest_stock') {
              localStorage.setItem('inventory_active_tab', target);
         }
+        updateHeaderForTab(target);
         $($.fn.dataTable.tables(true)).DataTable().columns.adjust();
         populateLabelFilter();
         populateVehicleLabelFilter();
+        if (target === '#harvest_stock' && dtHarvest) {
+            dtHarvest.columns.adjust();
+        }
     });
 });
 
@@ -445,6 +750,177 @@ function closeVhSearchBox() {
   }, 250);
 }
 
+// Search collapse triggers for Harvest Stock
+function toggleHvSearchBox() {
+  var group = document.getElementById('hv_search_input_group');
+  if (!group) return;
+  var isExpanded = group.classList.contains('expanded');
+  if (isExpanded) {
+    closeHvSearchBox();
+  } else {
+    group.classList.remove('d-none');
+    setTimeout(function () {
+      group.classList.add('expanded');
+      document.getElementById('searchHarvest').focus();
+    }, 10);
+  }
+}
+
+function closeHvSearchBox() {
+  var group = document.getElementById('hv_search_input_group');
+  var input = document.getElementById('searchHarvest');
+  if (!group || !input) return;
+  group.classList.remove('expanded');
+  input.value = '';
+  $(input).trigger('keyup');
+  setTimeout(function () {
+    group.classList.add('d-none');
+  }, 250);
+}
+
+// Harvest Stocks Grade Data Lookup
+var harvestStocksData = {
+  {% for item in harvest_stocks %}
+  "{{ item.id }}": {
+    "crop_name": "{{ item.crop_name|escapejs }}",
+    "crop_variety": "{{ item.crop_variety|escapejs }}",
+    "farm_name": "{{ item.farm_name|escapejs }}",
+    "farm_id": "{{ item.farm_id }}",
+    "unit": "{{ item.unit|escapejs }}",
+    "available_qty": {{ item.available_qty }},
+    "est_value": {{ item.est_value }},
+    "price_per_mt": {{ item.price_per_mt }},
+    "grade_splits": [
+      {% for gs in item.grade_splits %}
+      {
+        "grade": "{{ gs.grade|escapejs }}",
+        "yield": {{ gs.yield }},
+        "price": {{ gs.price }},
+        "amount": {{ gs.amount }},
+        "unit": "{{ gs.unit|escapejs }}"
+      }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    ]
+  }{% if not forloop.last %},{% endif %}
+  {% endfor %}
+};
+
+window.openCropGradesModal = function(splitId) {
+  var data = harvestStocksData[String(splitId)];
+  if (!data) return;
+
+  var cropTitleEl = document.getElementById('grade_modal_crop_title');
+  var farmTitleEl = document.getElementById('grade_modal_farm_title');
+  var totalStockEl = document.getElementById('grade_modal_total_stock');
+  var totalValEl = document.getElementById('grade_modal_total_val');
+
+  if (cropTitleEl) cropTitleEl.textContent = data.crop_name + (data.crop_variety ? ' (' + data.crop_variety + ')' : '');
+  if (farmTitleEl) farmTitleEl.textContent = data.farm_name;
+  if (totalStockEl) totalStockEl.textContent = Number(data.available_qty).toFixed(2) + ' ' + data.unit;
+  if (totalValEl) totalValEl.textContent = '₹ ' + Number(data.est_value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  var tbody = document.getElementById('grade_modal_table_body');
+  if (tbody) {
+    var html = '';
+    var splits = data.grade_splits || [];
+    if (splits.length === 0) {
+      html = '<tr><td colspan="6" class="text-center py-4 text-muted">No grade breakdown available for this harvest.</td></tr>';
+    } else {
+      splits.forEach(function(gs) {
+        var sellUrl = "{% url 'farmer-add-sale' %}?farm_id=" + encodeURIComponent(data.farm_id) + "&crop=" + encodeURIComponent(data.crop_name) + "&grade=" + encodeURIComponent(gs.grade);
+        html += `
+        <tr class="align-middle">
+          <td class="ps-3 py-3">
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1.5 fw-bold fs-6">
+              ${gs.grade}
+            </span>
+          </td>
+          <td class="py-3">
+            <span class="fw-bold fs-6 text-dark">${Number(gs.yield).toFixed(2)}</span>
+            <small class="text-muted ms-1">${gs.unit}</small>
+          </td>
+          <td class="py-3">
+            <span class="fw-semibold text-secondary">₹ ${Number(gs.price).toFixed(2)}</span>
+            <small class="text-muted">/ ${gs.unit}</small>
+          </td>
+          <td class="py-3">
+            <span class="fw-bold text-success fs-6">₹ ${Number(gs.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </td>
+          <td class="py-3">
+            <span class="badge rounded-pill bg-success-subtle text-success border border-success px-2.5 py-1 small fw-semibold">
+              <i class="ri-checkbox-circle-fill me-1"></i> Ready to Sell
+            </span>
+          </td>
+          <td class="text-end pe-3 py-3">
+            <a href="${sellUrl}" class="btn btn-sm btn-success d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-3 shadow-sm fw-semibold">
+              <i class="ri-shopping-cart-2-line"></i>
+              <span>Sell ${gs.grade}</span>
+            </a>
+          </td>
+        </tr>`;
+      });
+    }
+    tbody.innerHTML = html;
+  }
+
+  var modalEl = document.getElementById('crop_grades_view_modal');
+  if (modalEl) {
+    if (modalEl.parentNode !== document.body) {
+      document.body.appendChild(modalEl);
+    }
+    var bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    bsModal.show();
+  }
+};
+
+// Loss Modal Helpers
+window.openRecordLossModal = function(splitId, cropName, farmName, availableStock, estRate, unit) {
+  var splitInput = document.getElementById('loss_split_id');
+  var rateInput = document.getElementById('loss_est_rate');
+  var cropNameEl = document.getElementById('loss_modal_crop_name');
+  var farmNameEl = document.getElementById('loss_modal_farm_name');
+  var availStockEl = document.getElementById('loss_modal_available_stock');
+  var unitLabel = document.getElementById('loss_unit_label');
+  var maxQtyText = document.getElementById('loss_max_qty_text');
+  var qtyInput = document.getElementById('loss_quantity_input');
+  var valInput = document.getElementById('loss_est_value_input');
+
+  if (splitInput) splitInput.value = splitId;
+  if (rateInput) rateInput.value = estRate || 0;
+  if (cropNameEl) cropNameEl.textContent = cropName;
+  if (farmNameEl) farmNameEl.innerHTML = '<i class="ri-map-pin-line me-1"></i>' + farmName;
+  if (availStockEl) availStockEl.textContent = availableStock + ' ' + unit;
+  if (unitLabel) unitLabel.textContent = unit;
+  if (maxQtyText) maxQtyText.textContent = availableStock + ' ' + unit;
+  if (qtyInput) {
+    qtyInput.max = availableStock;
+    qtyInput.value = '';
+  }
+  if (valInput) valInput.value = '';
+
+  var modalEl = document.getElementById('record_crop_loss_modal');
+  if (modalEl && modalEl.parentNode !== document.body) {
+    document.body.appendChild(modalEl);
+  }
+  var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  modal.show();
+};
+
+window.calcLossValue = function() {
+  var qty = parseFloat(document.getElementById('loss_quantity_input').value) || 0;
+  var rate = parseFloat(document.getElementById('loss_est_rate').value) || 0;
+  var valInput = document.getElementById('loss_est_value_input');
+  if (qty > 0 && rate > 0) {
+    valInput.value = (qty * rate).toFixed(2);
+  } else {
+    valInput.value = '';
+  }
+};
+
+window.openLossHistoryForCrop = function(cropName) {
+  window.open("{% url 'crop_loss_history' %}?crop=" + encodeURIComponent(cropName || ''), '_blank');
+};
+
 document.addEventListener('click', function (e) {
   var whWrapper = document.getElementById('wh_search_collapse_wrapper');
   var whGroup = document.getElementById('wh_search_input_group');
@@ -456,6 +932,12 @@ document.addEventListener('click', function (e) {
   var vhGroup = document.getElementById('vh_search_input_group');
   if (vhWrapper && vhGroup && !vhWrapper.contains(e.target) && vhGroup.classList.contains('expanded')) {
     closeVhSearchBox();
+  }
+
+  var hvWrapper = document.getElementById('hv_search_collapse_wrapper');
+  var hvGroup = document.getElementById('hv_search_input_group');
+  if (hvWrapper && hvGroup && !hvWrapper.contains(e.target) && hvGroup.classList.contains('expanded')) {
+    closeHvSearchBox();
   }
 });
 
@@ -601,27 +1083,41 @@ function openStockLogOffcanvas(itemId, itemName) {
             html += '<div class="d-flex flex-column gap-2">';
             data.logs.forEach(function(log) {
                 var isIn = log.action === 'add';
-                var color = isIn ? '#16a34a' : '#dc2626';
-                var bg = isIn ? '#f0fdf4' : '#fff5f5';
-                var border = isIn ? '#86efac' : '#fca5a5';
-                var icon = isIn ? 'ri-arrow-down-circle-fill' : 'ri-arrow-up-circle-fill';
-                var label = isIn ? 'IN' : 'OUT';
-                html += '<div class="rounded-3 p-3" style="background:' + bg + '; border:1px solid ' + border + ';">'
+                var isCons = log.is_consumption || log.farm_name || log.crop_name;
+                var color = isIn ? '#16a34a' : (isCons ? '#d97706' : '#dc2626');
+                var bg = isIn ? '#f0fdf4' : (isCons ? '#fffbeb' : '#fff5f5');
+                var border = isIn ? '#86efac' : (isCons ? '#fde68a' : '#fca5a5');
+                var icon = isIn ? 'ri-arrow-down-circle-fill' : (isCons ? 'ri-plant-line' : 'ri-arrow-up-circle-fill');
+                var label = isIn ? 'IN (RESTOCK)' : (isCons ? 'CONSUMPTION' : 'OUT (USAGE)');
+                
+                html += '<div class="rounded-3 p-3 shadow-xs" style="background:' + bg + '; border:1px solid ' + border + ';">'
                     + '<div class="d-flex align-items-start gap-3">'
-                    + '<i class="' + icon + ' mt-1" style="font-size:20px; color:' + color + ';"></i>'
+                    + '<i class="' + icon + ' mt-1" style="font-size:22px; color:' + color + ';"></i>'
                     + '<div class="flex-grow-1">'
                     + '<div class="d-flex justify-content-between align-items-center mb-1">'
-                    + '<span class="badge fw-bold px-2" style="background:' + color + '; font-size:11px;">' + label + '</span>'
-                    + '<small class="text-muted">' + log.log_date + '</small>'
+                    + '<span class="badge fw-bold px-2 py-1 text-white" style="background:' + color + '; font-size:11px; border-radius:6px;">' + label + '</span>'
+                    + '<small class="text-muted fw-medium">' + (log.log_date || '') + '</small>'
                     + '</div>'
                     + '<div class="fw-bold" style="color:' + color + '; font-size:16px;">'
                     + (isIn ? '+' : '−') + log.quantity + ' ' + log.unit
                     + '</div>'
-                    + '<div class="small text-muted mt-1">'
-                    + log.qty_before + ' → <strong>' + log.qty_after + '</strong> ' + log.unit
-                    + '</div>'
-                    + (log.notes ? '<div class="small text-secondary mt-1"><i class="ri-sticky-note-line me-1"></i>' + log.notes + '</div>' : '')
-                    + '</div></div></div>';
+                    + (log.qty_before !== '—' ? '<div class="small text-muted mt-1">' + log.qty_before + ' → <strong class="text-dark">' + log.qty_after + '</strong> ' + log.unit + '</div>' : '');
+
+                if (log.farm_name || log.crop_name) {
+                    html += '<div class="d-flex flex-wrap gap-1 mt-2 pt-2 border-top" style="border-color: ' + border + ' !important;">';
+                    if (log.farm_name) {
+                        html += '<span class="badge bg-white text-dark border px-2 py-1" style="font-size:11px;"><i class="ri-map-pin-line text-success me-1"></i>Farm: <strong>' + log.farm_name + '</strong></span>';
+                    }
+                    if (log.crop_name) {
+                        html += '<span class="badge bg-white text-dark border px-2 py-1" style="font-size:11px;"><i class="ri-plant-line text-primary me-1"></i>Crop: <strong>' + log.crop_name + '</strong></span>';
+                    }
+                    html += '</div>';
+                }
+
+                if (log.notes && (!log.farm_name || !log.notes.startsWith('Used in Farm:'))) {
+                    html += '<div class="small text-secondary mt-1"><i class="ri-file-text-line me-1"></i>' + log.notes + '</div>';
+                }
+                html += '</div></div></div>';
             });
             html += '</div>';
             body.innerHTML = html;
@@ -637,15 +1133,21 @@ function openStockLogOffcanvas(itemId, itemName) {
 <div class="mb-3">
   <ul class="nav nav-pills gap-2" role="tablist">
     <li class="nav-item" role="tab">
-      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#warehouse_stock" type="button" role="tab">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#warehouse_stock" type="button" role="tab" id="warehouse_stock_tab_btn">
         <i class="ri-home-6-line me-2"></i>
         Warehouse Stock ({{ warehouse.count }})
       </button>
     </li>
     <li class="nav-item" role="tab">
-      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#vehicle" type="button" role="tab">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#vehicle" type="button" role="tab" id="vehicle_tab_btn">
         <i class="ri-truck-line me-2"></i>
         Machinery / Tools ({{ vehicles.count }})
+      </button>
+    </li>
+    <li class="nav-item" role="tab">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#harvest_stock" type="button" role="tab" id="harvest_stock_tab_btn">
+        <i class="ri-plant-line me-2"></i>
+        Harvest Stock ({{ harvest_stocks|length }})
       </button>
     </li>
   </ul>
@@ -655,21 +1157,21 @@ function openStockLogOffcanvas(itemId, itemName) {
 <div class="card mb-3 border-0 shadow-sm rounded-4">
     <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
         <div>
-            <h4 class="mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+            <h4 class="mb-1 fw-bold text-dark d-flex align-items-center gap-2" id="inventory_main_title">
                 <i class="ri-pulse-line text-primary"></i>
                 {% trans "Warehouse " %}
             </h4>
         </div>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap" id="inventory_main_actions">
             <a href="{% url 'inventory_out_logs' %}" class="btn btn-outline-primary d-flex align-items-center gap-2 px-3 shadow-sm">
                 <i class="ri-pie-chart-2-line fs-5"></i>
                 Out / In
             </a>
-            <button type="button" class="btn btn-outline-secondary d-flex align-items-center gap-2 px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#add_stock_log_modal">
+            <button type="button" class="btn btn-outline-secondary d-flex align-items-center gap-2 px-3 shadow-sm" onclick="window.openAddStockLogModal(event)">
                 <i class="ri-file-list-3-line fs-5"></i>
                 Add Log
             </button>
-            <button type="button" class="btn btn-primary d-flex align-items-center gap-2 px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#add_consumption_modal">
+            <button type="button" class="btn btn-primary d-flex align-items-center gap-2 px-4 shadow-sm" onclick="window.openAddWarehouseModal(event)">
                 <i class="ri-add-line fs-5"></i>
                 {% trans "Add Inventory" %}
             </button>
@@ -719,7 +1221,7 @@ function openStockLogOffcanvas(itemId, itemName) {
             <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
               <div class="card-body d-flex align-items-center gap-3 p-3">
                 <div class="avatar avatar-md flex-shrink-0" style="background:rgba(16,185,129,0.12); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
-                  <i class="ri-money-rupee-circle-line fs-3" style="color:#10b981;"></i>
+                  <i class="ri-wallet-3-line fs-3" style="color:#10b981;"></i>
                 </div>
                 <div>
                   <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Total Value</small>
@@ -749,7 +1251,7 @@ function openStockLogOffcanvas(itemId, itemName) {
 
         <!-- Filters & Table for Warehouse -->
         <div class="card border-0 shadow-sm rounded-4">
-          <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+          <div class="inventory-filter-toolbar card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
             <!-- Collapsible Search -->
             <div class="d-flex align-items-center search-collapse-wrapper" id="wh_search_collapse_wrapper">
               <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="wh_search_toggle_btn" onclick="toggleWhSearchBox()">
@@ -770,7 +1272,7 @@ function openStockLogOffcanvas(itemId, itemName) {
             </div>
 
             <!-- Right filters -->
-            <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+            <div class="inventory-filter-controls d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
               <!-- Label Filter -->
               <select id="whLabelFilter" class="form-select w-auto">
                 <option value="all">All Items</option>
@@ -839,7 +1341,9 @@ function openStockLogOffcanvas(itemId, itemName) {
                       </div>
                       <div class="d-flex flex-column">
                       <label class="text-dark fw-semibold fs-6 mb-0">{{ item.item_name }}</label>
-                      <small class="text-muted" style="font-size: 0.7rem;">ID Reference: inv-{{ item.id }}</small>
+                      {% if item.vendor %}
+                      <small class="text-primary fw-medium" style="font-size: 0.72rem;"><i class="ri-store-2-line me-1"></i>{{ item.vendor.vendor_name }}</small>
+                      {% endif %}
                       </div>
                   </div>
                   </td>
@@ -891,12 +1395,15 @@ function openStockLogOffcanvas(itemId, itemName) {
                         data-status="{{ item.status }}"
                         data-price="{{ item.unit_price|default:0 }}"
                         data-totalprice="{{ item.total_price|floatformat:2|default:'' }}"
+                        data-vendorid="{{ item.vendor_id|default:'' }}"
+                        data-vendorname="{{ item.vendor.vendor_name|default:'' }}"
                         title="View Details"
                         onclick="window.openViewWarehouseModal(this)">
                         <i class="ri-eye-line"></i>
                       </button>
                       <button type="button" class="btn btn-sm btn-icon btn-outline-secondary edit-inventory-btn"
                         data-id="{{ item.id }}"
+                        data-farmid="{{ item.farm_id|default:'' }}"
                         data-name="{{ item.item_name }}"
                         data-category="{{ item.category }}"
                         data-quantity="{{ item.quantity }}"
@@ -904,6 +1411,8 @@ function openStockLogOffcanvas(itemId, itemName) {
                         data-safety="{{ item.safety_stock }}"
                         data-location="{{ item.location }}"
                         data-status="{{ item.status }}"
+                        data-vendorid="{{ item.vendor_id|default:'' }}"
+                        data-vendorname="{{ item.vendor.vendor_name|default:'' }}"
                         data-plate="{{ item.license_plate|default:'' }}"
                         data-servicedate="{{ item.last_service_date|date:'Y-m-d'|default:'' }}"
                         data-nextservicedate="{{ item.next_service_date|date:'Y-m-d'|default:'' }}"
@@ -939,11 +1448,6 @@ function openStockLogOffcanvas(itemId, itemName) {
                   </td>
               </tr>
               {% empty %}
-              <tr>
-                  <td colspan="9" class="text-center text-muted py-5">
-                    No warehouse inventory registered yet.
-                  </td>
-              </tr>
               {% endfor %}
               </tbody>
             </table>
@@ -1022,7 +1526,7 @@ function openStockLogOffcanvas(itemId, itemName) {
 
         <!-- Filters & Table for Vehicles & Tools -->
         <div class="card border-0 shadow-sm rounded-4">
-          <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+          <div class="inventory-filter-toolbar card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
             <!-- Collapsible Search -->
             <div class="d-flex align-items-center search-collapse-wrapper" id="vh_search_collapse_wrapper">
               <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="vh_search_toggle_btn" onclick="toggleVhSearchBox()">
@@ -1043,7 +1547,7 @@ function openStockLogOffcanvas(itemId, itemName) {
             </div>
 
             <!-- Right filters -->
-            <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+            <div class="inventory-filter-controls d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
               <!-- Label Filter -->
               <select id="vhLabelFilter" class="form-select w-auto">
                 <option value="all">All Items</option>
@@ -1129,13 +1633,18 @@ function openStockLogOffcanvas(itemId, itemName) {
                         <input type="checkbox"
                                id="rental_toggle_{{ item.id }}"
                                data-id="{{ item.id }}"
+                               data-name="{{ item.item_name|escape }}"
+                               data-price="{{ item.rental_price|default:'' }}"
+                               data-unit="{{ item.rental_unit|default:'Per Day' }}"
+                               data-category="{{ item.category|escape }}"
+                               data-plate="{{ item.license_plate|default:'' }}"
                                {% if item.rental_available %}checked{% endif %}
-                               onchange="toggleFarmerRentalSwitch({{ item.id }}, this.checked)">
+                               onchange="handleRentalSwitchChange({{ item.id }}, this.checked)">
                         <span class="rental-slider"></span>
                       </label>
                       <span id="rental_switch_label_{{ item.id }}">
                         {% if item.rental_available %}
-                          <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1 d-inline-flex align-items-center gap-1" style="font-size: 11px; font-weight: 600;">
+                          <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1 d-inline-flex align-items-center gap-1 cursor-pointer" onclick="handleRentalSwitchChange({{ item.id }}, true)" style="font-size: 11px; font-weight: 600;" title="Click to edit rental rate">
                             <i class="ri-checkbox-circle-fill"></i> Rental ON
                           </span>
                         {% else %}
@@ -1144,6 +1653,9 @@ function openStockLogOffcanvas(itemId, itemName) {
                           </span>
                         {% endif %}
                       </span>
+                    </div>
+                    <div class="mt-1 small text-success fw-semibold {% if not item.rental_available or not item.rental_price %}d-none{% endif %}" id="rental_price_display_{{ item.id }}" style="font-size: 11px;">
+                      {% if item.rental_price %}₹{{ item.rental_price }} <span class="text-muted fw-normal">/ {{ item.rental_unit|default:'Per Day' }}</span>{% endif %}
                     </div>
                   </td>
 
@@ -1231,6 +1743,7 @@ function openStockLogOffcanvas(itemId, itemName) {
                       </button>
                       <button type="button" class="btn btn-sm btn-icon btn-outline-secondary edit-inventory-btn"
                         data-id="{{ item.id }}"
+                        data-farmid="{{ item.farm_id|default:'' }}"
                         data-name="{{ item.item_name }}"
                         data-category="{{ item.category }}"
                         data-quantity="{{ item.quantity }}"
@@ -1274,10 +1787,304 @@ function openStockLogOffcanvas(itemId, itemName) {
                   </td>
               </tr>
               {% empty %}
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+    </div>
+
+    <!-- Harvest Stock & Produce Pane -->
+    <div class="tab-pane fade" id="harvest_stock">
+        <!-- Stats Cards for Harvest Produce -->
+        <div class="row g-3 mb-4">
+          <!-- Harvest SKUs -->
+          <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="avatar avatar-md flex-shrink-0" style="background:rgba(16,185,129,0.12); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+                  <i class="ri-plant-line fs-3" style="color:#10b981;"></i>
+                </div>
+                <div>
+                  <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Harvested Produce</small>
+                  <div class="fw-bold fs-5 text-dark mb-0">{{ harvest_stocks|length }} Crops</div>
+                  <small class="text-muted" style="font-size:11px;">registered harvest batches</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Available Stock (Tons) -->
+          <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="avatar avatar-md flex-shrink-0" style="background:rgba(13,110,253,0.10); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+                  <i class="ri-scales-3-line fs-3" style="color:#0d6efd;"></i>
+                </div>
+                <div>
+                  <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Available Stock</small>
+                  <div class="fw-bold fs-5 mb-0" style="color:#0d6efd;">{{ total_harvest_stock_tons|floatformat:2 }} Tons</div>
+                  <small class="text-muted" style="font-size:11px;">ready for sale / market</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Total Harvest Valuation -->
+          <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="avatar avatar-md flex-shrink-0" style="background:rgba(25,135,84,0.10); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+                  <i class="ri-money-rupee-circle-line fs-3" style="color:#198754;"></i>
+                </div>
+                <div>
+                  <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Est. Harvest Value</small>
+                  <div class="fw-bold fs-5 text-success mb-0">₹{{ total_harvest_val|floatformat:2 }}</div>
+                  <small class="text-muted" style="font-size:11px;">produce market worth</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recorded Loss / Waste -->
+          <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="avatar avatar-md flex-shrink-0" style="background:rgba(220,53,69,0.12); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
+                  <i class="ri-delete-bin-line fs-3" style="color:#dc3545;"></i>
+                </div>
+                <div>
+                  <small class="text-muted text-uppercase fw-semibold d-block" style="font-size:10px; letter-spacing:.5px;">Crop Loss & Waste</small>
+                  <div class="fw-bold fs-5 text-danger mb-0">{{ total_harvest_loss_tons|floatformat:2 }} Tons</div>
+                  <small class="text-muted" style="font-size:11px;">spoilage & damage logs</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filters & Table for Harvest Stock -->
+        <div class="card border-0 shadow-sm rounded-4">
+          <div class="inventory-filter-toolbar card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+            <!-- Collapsible Search -->
+            <div class="d-flex align-items-center search-collapse-wrapper" id="hv_search_collapse_wrapper">
+              <button type="button" class="btn filter-toolbar-btn d-flex align-items-center justify-content-center p-0" id="hv_search_toggle_btn" onclick="toggleHvSearchBox()" style="width: 38px; height: 38px;">
+                <i class="ri-search-line fs-5"></i>
+              </button>
+              <div class="input-group search-input-group d-none" id="hv_search_input_group" style="height: 38px;">
+                <span class="input-group-text bg-white border-end-0">
+                  <i class="ri-search-line text-muted"></i>
+                </span>
+                <input type="text"
+                    id="searchHarvest"
+                    class="form-control border-start-0"
+                    style="height: 38px; font-size: 13px;"
+                    placeholder="Search crop, farm land...">
+                <button class="btn btn-outline-secondary border-start-0" type="button" id="hv_search_close_btn" onclick="closeHvSearchBox()" style="height: 38px;">
+                  <i class="ri-close-line"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Right filters -->
+            <div class="inventory-filter-controls d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+              <!-- Farm Filter -->
+              <div class="dropdown">
+                <button class="btn filter-toolbar-btn dropdown-toggle d-flex align-items-center gap-1.5 px-3" type="button" data-bs-toggle="dropdown" id="hvFarmFilterBtn">
+                  <span id="hvFarmFilterBtnText">All Farms</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1" style="max-height: 280px; overflow-y: auto; border-radius: 8px;">
+                  <li><a class="dropdown-item active" href="javascript:void(0);" onclick="applyHvFarmFilter('all', 'All Farms', this)">All Farms</a></li>
+                  {% for farm in farms %}
+                  <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyHvFarmFilter('{{ farm.land_name|escapejs }}', '{{ farm.land_name|escapejs }}', this)">📍 {{ farm.land_name }}</a></li>
+                  {% endfor %}
+                </ul>
+              </div>
+
+              <!-- Status Filter -->
+              <div class="dropdown">
+                <button class="btn filter-toolbar-btn dropdown-toggle d-flex align-items-center gap-1.5 px-3" type="button" data-bs-toggle="dropdown" id="hvStatusFilterBtn">
+                  <span id="hvStatusFilterBtnText">All Statuses</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1" style="max-height: 280px; overflow-y: auto; border-radius: 8px;">
+                  <li><a class="dropdown-item active" href="javascript:void(0);" onclick="applyHvStatusFilter('all', 'All Statuses', this)">All Statuses</a></li>
+                  <option-divider></option-divider>
+                  <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyHvStatusFilter('In Stock', 'In Stock', this)">In Stock</a></li>
+                  <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyHvStatusFilter('Low Stock', 'Low Stock', this)">Low Stock</a></li>
+                  <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyHvStatusFilter('Sold Out', 'Sold Out', this)">Sold Out</a></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-responsive text-nowrap p-0" style="min-height: 180px;">
+            <table class="table table-hover align-middle mb-0" id="tableHarvest">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3 text-uppercase text-secondary" style="font-size:11px; font-weight:600; letter-spacing:0.5px;">CROP / PRODUCE</th>
+                  <th class="text-uppercase text-secondary" style="font-size:11px; font-weight:600; letter-spacing:0.5px;">FARM LAND</th>
+                  <th class="text-uppercase text-secondary" style="font-size:11px; font-weight:600; letter-spacing:0.5px;">HARVESTED YIELD</th>
+                  <th class="text-uppercase text-secondary" style="font-size:11px; font-weight:600; letter-spacing:0.5px;">SOLD QTY</th>
+                  <th class="text-uppercase text-secondary" style="font-size:11px; font-weight:600; letter-spacing:0.5px;">LOSS / WASTE</th>
+                  <th class="text-uppercase text-secondary" style="font-size:11px; font-weight:600; letter-spacing:0.5px;">AVAILABLE STOCK</th>
+                  <th class="text-uppercase text-secondary" style="font-size:11px; font-weight:600; letter-spacing:0.5px;">EST. VALUE (₹)</th>
+                  <th class="text-uppercase text-secondary" style="font-size:11px; font-weight:600; letter-spacing:0.5px;">STATUS</th>
+                  <th class="text-end text-uppercase text-secondary pe-3" style="font-size:11px; font-weight:600; letter-spacing:0.5px;">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+              {% for item in harvest_stocks %}
               <tr>
-                  <td colspan="8" class="text-center text-muted py-5">
-                    No fleet or vehicles registered yet.
-                  </td>
+                <td class="ps-3">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="avatar avatar-sm flex-shrink-0" style="background: rgba(16,185,129,0.12); border-radius: 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                      <i class="ri-plant-fill fs-5" style="color: #10b981;"></i>
+                    </div>
+                    <div>
+                      <div class="fw-bold text-dark">{{ item.crop_name }}</div>
+                      <small class="text-muted" style="font-size: 11px;">
+                        <span class="badge bg-light text-secondary border">Batch #{{ item.id }}</span>
+                        {% if item.crop_variety %}• {{ item.crop_variety }}{% endif %}
+                        {% if item.updated_at %}• {{ item.updated_at|date:"d M Y" }}{% endif %}
+                      </small>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="d-flex align-items-center gap-1.5 text-dark fw-medium" style="white-space: nowrap;">
+                    <i class="ri-map-pin-2-fill text-danger fs-6 flex-shrink-0"></i>
+                    <span>{{ item.farm_name }}</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="fw-semibold text-secondary" style="white-space: nowrap;">{{ item.initial_yield }} {{ item.unit }}</span>
+                </td>
+                <td>
+                  {% if item.sold_qty > 0 %}
+                    <span class="badge bg-label-info fw-semibold text-info" style="background:#e0f2fe; color:#0284c7; white-space: nowrap;">{{ item.sold_qty }} {{ item.unit }}</span>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if item.loss_qty > 0 %}
+                    <a href="{% url 'crop_loss_history' %}?crop={{ item.crop_name|urlencode }}&farm={{ item.farm_name|urlencode }}" target="_blank" class="btn btn-sm p-0 text-danger border-0 bg-transparent text-decoration-underline fw-semibold" title="View loss records for this crop" style="white-space: nowrap;">
+                      {{ item.loss_qty }} {{ item.unit }}
+                    </a>
+                  {% else %}
+                    <span class="text-muted" style="white-space: nowrap;">0 {{ item.unit }}</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="fw-bold fs-6 {% if item.available_qty > 0 %}text-success{% else %}text-muted{% endif %}" style="white-space: nowrap;">
+                    {{ item.available_qty }} {{ item.unit }}
+                  </div>
+                  {% if item.grade_splits and item.grade_splits|length > 1 %}
+                    <div class="mt-0.5">
+                      <span class="badge bg-light text-secondary border cursor-pointer" onclick="openCropGradesModal({{ item.id }})" style="font-size: 10px; font-weight: 500; cursor: pointer;" title="Click to view grade breakdown">
+                        <i class="ri-scales-3-line text-primary me-0.5"></i>{{ item.grade_splits|length }} Grades Available
+                      </span>
+                    </div>
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="fw-bold text-dark fs-6" style="white-space: nowrap;">₹{{ item.est_value|floatformat:2 }}</div>
+                  {% if item.price_per_mt > 0 %}
+                    <small class="text-muted d-block" style="font-size:11px; white-space: nowrap;">@ ₹{{ item.price_per_mt }}/{{ item.unit }}</small>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if 'In Stock' in item.status %}
+                    <span class="badge rounded-pill" style="background:#ecfdf5; color:#059669; border:1px solid #a7f3d0; padding:6px 12px; font-weight:600; white-space: nowrap;">
+                      <span class="status-dot rounded-circle" style="width:6px; height:6px; display:inline-block; background:#059669; margin-right:4px;"></span> {{ item.status }}
+                    </span>
+                  {% elif 'Low Stock' in item.status or 'Partial' in item.status %}
+                    <span class="badge rounded-pill" style="background:#fffbeb; color:#d97706; border:1px solid #fde68a; padding:6px 12px; font-weight:600; white-space: nowrap;">
+                      <span class="status-dot rounded-circle" style="width:6px; height:6px; display:inline-block; background:#d97706; margin-right:4px;"></span> {{ item.status }}
+                    </span>
+                  {% else %}
+                    <span class="badge rounded-pill" style="background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; padding:6px 12px; font-weight:600; white-space: nowrap;">
+                      <span class="status-dot rounded-circle" style="width:6px; height:6px; display:inline-block; background:#94a3b8; margin-right:4px;"></span> {{ item.status }}
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="text-end pe-3" style="white-space: nowrap;">
+                  <div class="d-inline-flex align-items-center justify-content-end" style="gap: 6px;">
+                    <!-- Option 1: View Grades Button -->
+                    {% if item.grade_splits and item.grade_splits|length > 1 %}
+                    <button type="button"
+                            class="btn btn-sm btn-outline-primary d-inline-flex align-items-center justify-content-center gap-1 px-2.5 py-1 rounded-3 shadow-none"
+                            onclick="openCropGradesModal({{ item.id }})"
+                            title="View Grade Breakdown"
+                            style="font-size: 12px; height: 32px; font-weight: 500;">
+                      <i class="ri-eye-line fs-6"></i>
+                      <span>View</span>
+                    </button>
+                    {% endif %}
+
+                    <!-- Option 2: Sale Button -->
+                    {% if item.available_qty > 0 %}
+                      {% if item.grade_splits and item.grade_splits|length > 1 %}
+                        <div class="dropdown d-inline-block">
+                          <button type="button"
+                                  class="btn btn-sm btn-success d-inline-flex align-items-center justify-content-center gap-1 px-2.5 py-1 rounded-3 shadow-none dropdown-toggle"
+                                  data-bs-toggle="dropdown"
+                                  aria-expanded="false"
+                                  title="Sell by Grade"
+                                  style="font-size: 12px; height: 32px; font-weight: 600;">
+                            <i class="ri-shopping-cart-2-line fs-6"></i>
+                            <span>Sale</span>
+                          </button>
+                          <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-4 p-2" style="min-width: 240px; z-index: 1060;">
+                            <li class="dropdown-header text-uppercase text-secondary px-2.5 py-1 fw-bold" style="font-size: 10px; letter-spacing: 0.5px;">
+                              <i class="ri-scales-3-line me-1 text-primary"></i> Select Grade to Sell
+                            </li>
+                            {% for gs in item.grade_splits %}
+                            <li>
+                              <a class="dropdown-item rounded-3 py-2 px-2.5 small d-flex justify-content-between align-items-center mb-1"
+                                 href="{% url 'farmer-add-sale' %}?farm_id={{ item.farm_id }}&crop={{ item.crop_name|urlencode }}&grade={{ gs.grade|urlencode }}">
+                                <span>
+                                  <strong class="text-dark">{{ gs.grade }}</strong>
+                                  <small class="text-muted ms-1">({{ gs.yield }} {{ gs.unit }})</small>
+                                </span>
+                                <span class="badge bg-success-subtle text-success fw-bold ms-2">@ ₹{{ gs.price }}</span>
+                              </a>
+                            </li>
+                            {% endfor %}
+                          </ul>
+                        </div>
+                      {% else %}
+                        <a href="{% url 'farmer-add-sale' %}?farm_id={{ item.farm_id }}&crop={{ item.crop_name|urlencode }}{% if item.grade_splits %}&grade={{ item.grade_splits.0.grade|urlencode }}{% endif %}"
+                           class="btn btn-sm btn-success d-inline-flex align-items-center justify-content-center gap-1 px-2.5 py-1 rounded-3 shadow-none"
+                           title="Sell this harvested stock"
+                           style="font-size: 12px; height: 32px; font-weight: 600;">
+                          <i class="ri-shopping-cart-2-line fs-6"></i>
+                          <span>Sale</span>
+                        </a>
+                      {% endif %}
+                    {% else %}
+                      <button class="btn btn-sm btn-light border text-muted d-inline-flex align-items-center justify-content-center gap-1 px-2.5 py-1 rounded-3"
+                              disabled
+                              title="Stock Depleted"
+                              style="font-size: 12px; height: 32px;">
+                        <i class="ri-check-line fs-6"></i>
+                        <span>Sold</span>
+                      </button>
+                    {% endif %}
+
+                    <!-- Option 3: Loss / Waste Button -->
+                    {% if item.available_qty > 0 %}
+                    <button type="button"
+                            class="btn btn-sm btn-outline-danger d-inline-flex align-items-center justify-content-center gap-1 px-2.5 py-1 rounded-3 shadow-none"
+                            onclick="openRecordLossModal({{ item.id }}, '{{ item.crop_name|escapejs }}', '{{ item.farm_name|escapejs }}', {{ item.available_qty }}, {{ item.price_per_mt }}, '{{ item.unit|escapejs }}')"
+                            title="Record Crop Spoilage / Wastage"
+                            style="font-size: 12px; height: 32px; font-weight: 500;">
+                      <i class="ri-delete-bin-line fs-6"></i>
+                      <span>Loss</span>
+                    </button>
+                    {% endif %}
+                  </div>
+                </td>
               </tr>
               {% endfor %}
               </tbody>
@@ -1285,8 +2092,83 @@ function openStockLogOffcanvas(itemId, itemName) {
           </div>
         </div>
     </div>
-</<!-- Add Inventory Modal -->
-<div class="modal fade" id="add_consumption_modal" tabindex="-1" aria-hidden="true">
+</div>
+
+<!-- Crop Grades View Modal -->
+<div class="modal fade" id="crop_grades_view_modal" tabindex="-1" aria-hidden="true" style="z-index: 10600 !important;">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <!-- Modal Header -->
+      <div class="modal-header border-bottom py-3 px-4 bg-light bg-opacity-50">
+        <div class="d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0" style="background: rgba(16,185,129,0.12); border-radius: 12px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+            <i class="ri-plant-fill fs-4 text-success"></i>
+          </div>
+          <div>
+            <h5 class="modal-title fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+              <span id="grade_modal_crop_title">Crop Produce</span>
+            </h5>
+            <small class="text-muted d-flex align-items-center gap-1 mt-0.5">
+              <i class="ri-map-pin-2-fill text-danger"></i>
+              <span id="grade_modal_farm_title">Farm Land</span>
+              <span class="mx-1">•</span>
+              <span>Harvest Grade Splits & Batches</span>
+            </small>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="modal-body p-4">
+        <!-- Summary Stat Cards -->
+        <div class="row g-3 mb-4">
+          <div class="col-sm-6">
+            <div class="card border border-light-subtle rounded-3 bg-light bg-opacity-25 p-3 h-100 shadow-none">
+              <small class="text-muted text-uppercase fw-bold" style="font-size: 10px; letter-spacing: 0.5px;">Total Available Stock</small>
+              <div class="fw-bold fs-4 text-primary mt-1" id="grade_modal_total_stock">0.00 Tons</div>
+              <small class="text-muted" style="font-size: 11px;">Sum across all ready grade splits</small>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="card border border-light-subtle rounded-3 bg-light bg-opacity-25 p-3 h-100 shadow-none">
+              <small class="text-muted text-uppercase fw-bold" style="font-size: 10px; letter-spacing: 0.5px;">Total Estimated Value</small>
+              <div class="fw-bold fs-4 text-success mt-1" id="grade_modal_total_val">₹ 0.00</div>
+              <small class="text-muted" style="font-size: 11px;">Sum of grade batch valuations</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grade Splits Table -->
+        <div class="table-responsive rounded-3 border">
+          <table class="table align-middle table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th class="ps-3 text-uppercase text-secondary" style="font-size: 11px; font-weight: 600; letter-spacing: 0.5px;">Quality Grade</th>
+                <th class="text-uppercase text-secondary" style="font-size: 11px; font-weight: 600; letter-spacing: 0.5px;">Available Stock</th>
+                <th class="text-uppercase text-secondary" style="font-size: 11px; font-weight: 600; letter-spacing: 0.5px;">Rate / Unit</th>
+                <th class="text-uppercase text-secondary" style="font-size: 11px; font-weight: 600; letter-spacing: 0.5px;">Total Valuation</th>
+                <th class="text-uppercase text-secondary" style="font-size: 11px; font-weight: 600; letter-spacing: 0.5px;">Status</th>
+                <th class="text-end pe-3 text-uppercase text-secondary" style="font-size: 11px; font-weight: 600; letter-spacing: 0.5px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="grade_modal_table_body">
+              <!-- Dynamically populated via openCropGradesModal -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="modal-footer border-top-0 pt-0 pb-3 px-4 d-flex justify-content-end">
+        <button type="button" class="btn btn-light px-4 rounded-3 fw-semibold" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Inventory Modal -->
+<div class="modal fade" id="add_consumption_modal" tabindex="-1" aria-hidden="true" style="z-index: 10600 !important;">
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content border-0 shadow">
 
@@ -1326,6 +2208,7 @@ function openStockLogOffcanvas(itemId, itemName) {
                 {% for it in inventory_types %}
                 <option value="{{ it.name }}" {% if it.name == 'Fertilizer' %}selected{% endif %}>{{ it.name }}</option>
                 {% endfor %}
+                {% if not has_fuel_type %}<option value="Fuel">Fuel</option>{% endif %}
               </select>
             </div>
 
@@ -1343,16 +2226,19 @@ function openStockLogOffcanvas(itemId, itemName) {
               </div>
               <select name="unit" id="add_unit_select" class="form-select">
                 <option value="Units">Units</option>
+                <option value="Liters">Liters</option>
                 {% for u in units %}
+                {% if u.name|lower != 'liters' %}
                 <option value="{{ u.name }}">{{ u.name }}</option>
+                {% endif %}
                 {% endfor %}
               </select>
             </div>
 
-            <!-- 5. Qty (Warehouse only) -->
-            <div class="col-md-6 add-warehouse-only">
+            <!-- Quantity is shared by warehouse stock and machinery. -->
+            <div class="col-md-6">
               <label class="form-label fw-semibold">Qty</label>
-              <input type="number" name="quantity" id="add_qty_input" class="form-control qty-input-calc add-calc" value="1" min="0" oninput="window.calculateTotalPrice('add')" onchange="window.calculateTotalPrice('add')">
+              <input type="number" name="quantity" id="add_qty_input" class="form-control qty-input-calc add-calc" value="1" min="0" step="0.01" oninput="window.calculateTotalPrice('add')" onchange="window.calculateTotalPrice('add')">
             </div>
 
             <!-- 6. Safety Stock (Warehouse only) -->
@@ -1470,6 +2356,16 @@ function openStockLogOffcanvas(itemId, itemName) {
               </select>
             </div>
 
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Farm Land</label>
+              <select name="farm_id" id="add_farm_select" class="form-select">
+                <option value="">General / Shared Warehouse</option>
+                {% for farm in farms %}
+                <option value="{{ farm.id }}">{{ farm.land_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
             <!-- Status Dropdown (Machinery & Tools only) -->
             <div class="col-md-6 add-machinery-tools-only d-none">
               <label class="form-label fw-semibold">Status</label>
@@ -1481,6 +2377,38 @@ function openStockLogOffcanvas(itemId, itemName) {
                 <option value="Idle">Idle</option>
                 <option value="Needs Repair">Needs Repair</option>
               </select>
+            </div>
+
+            <!-- Vendor Selection (Dropdown + Quick Add) -->
+            <div class="col-md-6" id="add_vendor_select_group">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0">Select Vendor</label>
+                <a href="javascript:void(0)" class="fw-semibold small text-decoration-none" style="color: #f69c55 !important;" onclick="window.openQuickVendorModal()">+ Quick Add</a>
+              </div>
+              <select name="vendor_id" id="add_vendor_select" class="form-select">
+                <option value="" selected>-- Select Vendor (Optional) --</option>
+                {% for v in vendors %}
+                <option value="{{ v.id }}">{{ v.vendor_name }}{% if v.business_name and v.business_name != v.vendor_name %} ({{ v.business_name }}){% elif v.shop_name %} ({{ v.shop_name }}){% endif %}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Record in Expenses (Checkbox + Amount Preview) -->
+            <div class="col-12 mt-2">
+              <div class="p-3 border rounded-3 bg-light" style="border: 1px dashed #d9dee3 !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="record_as_expense" id="add_record_as_expense" onchange="window.toggleExpenseNotice('add')" style="cursor: pointer;">
+                    <label class="form-check-label fw-semibold text-dark" for="add_record_as_expense">
+                      <i class="ri-money-dollar-circle-line me-1 text-success"></i>Record in Expenses
+                    </label>
+                  </div>
+                  <span class="badge bg-success-subtle text-success fw-bold px-2 py-1 d-none" id="add_expense_badge">Auto-Expense Active</span>
+                </div>
+                <small id="add_expense_hint" class="text-muted d-block mt-1" style="font-size: 11px;">
+                  When checked, the purchase amount (<span id="add_expense_preview" class="fw-bold text-dark">₹0.00</span>) will automatically be logged into your Expenses transaction records.
+                </small>
+              </div>
             </div>
 
             <!-- Available for Rental (Machinery & Tools only) -->
@@ -1526,7 +2454,7 @@ function openStockLogOffcanvas(itemId, itemName) {
 </div>
 
 <!-- View Inventory Detail Modal -->
-<div class="modal fade" id="view_inventory_modal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="view_inventory_modal" tabindex="-1" aria-hidden="true" style="z-index: 10600 !important;">
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content border-0 shadow-lg">
 
@@ -1614,6 +2542,7 @@ function openStockLogOffcanvas(itemId, itemName) {
                 {% for it in inventory_types %}
                 <option value="{{ it.name }}">{{ it.name }}</option>
                 {% endfor %}
+                {% if not has_fuel_type %}<option value="Fuel">Fuel</option>{% endif %}
               </select>
             </div>
 
@@ -1631,16 +2560,19 @@ function openStockLogOffcanvas(itemId, itemName) {
               </div>
               <select name="unit" id="edit_unit_select" class="form-select">
                 <option value="Units">Units</option>
+                <option value="Liters">Liters</option>
                 {% for u in units %}
+                {% if u.name|lower != 'liters' %}
                 <option value="{{ u.name }}">{{ u.name }}</option>
+                {% endif %}
                 {% endfor %}
               </select>
             </div>
 
-            <!-- 5. Qty (Warehouse only) -->
-            <div class="col-md-6 edit-warehouse-only">
+            <!-- Quantity is shared by warehouse stock and machinery. -->
+            <div class="col-md-6">
               <label class="form-label fw-semibold">Qty</label>
-              <input type="number" name="quantity" id="edit_qty_input" class="form-control qty-input-calc edit-calc" min="0" oninput="window.calculateTotalPrice('edit')" onchange="window.calculateTotalPrice('edit')">
+              <input type="number" min="0" step="0.01" name="quantity" id="edit_qty_input" class="form-control qty-input-calc edit-calc" oninput="window.calculateTotalPrice('edit')" onchange="window.calculateTotalPrice('edit')">
             </div>
 
             <!-- 6. Safety Stock (Warehouse only) -->
@@ -1767,6 +2699,16 @@ function openStockLogOffcanvas(itemId, itemName) {
               </select>
             </div>
 
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Farm Land</label>
+              <select name="farm_id" id="edit_farm_select" class="form-select">
+                <option value="">General / Shared Warehouse</option>
+                {% for farm in farms %}
+                <option value="{{ farm.id }}">{{ farm.land_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
             <!-- Status Dropdown (Machinery & Tools only) -->
             <div class="col-md-6 edit-machinery-tools-only d-none">
               <label class="form-label fw-semibold">Status</label>
@@ -1780,6 +2722,20 @@ function openStockLogOffcanvas(itemId, itemName) {
                 <option value="In Stock">In Stock</option>
                 <option value="Low Stock">Low Stock</option>
                 <option value="Out of Stock">Out of Stock</option>
+              </select>
+            </div>
+
+            <!-- Vendor Selection for Edit (Dropdown + Quick Add) -->
+            <div class="col-md-6" id="edit_vendor_select_group">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold mb-0">Select Vendor</label>
+                <a href="javascript:void(0)" class="fw-semibold small text-decoration-none" style="color: #f69c55 !important;" onclick="window.openQuickVendorModal()">+ Quick Add</a>
+              </div>
+              <select name="vendor_id" id="edit_vendor_select" class="form-select">
+                <option value="">-- No Vendor / Unassigned --</option>
+                {% for v in vendors %}
+                <option value="{{ v.id }}">{{ v.vendor_name }}{% if v.business_name and v.business_name != v.vendor_name %} ({{ v.business_name }}){% elif v.shop_name %} ({{ v.shop_name }}){% endif %}</option>
+                {% endfor %}
               </select>
             </div>
 
@@ -1871,7 +2827,7 @@ function openStockLogOffcanvas(itemId, itemName) {
 </div>
 
 <!-- Add Stock Log Modal -->
-<div class="modal fade" id="add_stock_log_modal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
+<div class="modal fade" id="add_stock_log_modal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false" style="z-index: 10600 !important;">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow-lg rounded-4">
       <div class="modal-header border-0 pb-2" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7); border-radius:1rem 1rem 0 0;">
@@ -1910,7 +2866,7 @@ function openStockLogOffcanvas(itemId, itemName) {
             <div class="col-md-6">
               <label class="form-label fw-semibold">Qty <span class="text-danger">*</span></label>
               <div class="input-group">
-                <input type="number" name="quantity" id="log_qty_input" class="form-control" min="0.01" step="any" placeholder="e.g. 5" required
+                <input type="number" min="0" name="quantity" id="log_qty_input" class="form-control" min="0.01" step="any" placeholder="e.g. 5" required
                   oninput="checkStockLimit()">
                 <span class="input-group-text text-muted" id="log_unit_display">Units</span>
               </div>
@@ -1966,7 +2922,7 @@ function openStockLogOffcanvas(itemId, itemName) {
 </div>
 
 <!-- Quick Add Unit Modal -->
-<div class="modal fade" id="quick_add_unit_modal" tabindex="-1" style="z-index: 10700 !important;" data-bs-backdrop="false">
+<div class="modal fade" id="quick_add_unit_modal" tabindex="-1" style="z-index: 10950 !important;" data-bs-backdrop="false">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
     <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
       <div class="modal-header bg-light py-2.5 px-3 border-bottom">
@@ -1974,9 +2930,14 @@ function openStockLogOffcanvas(itemId, itemName) {
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body p-3">
-        <div class="mb-3">
+        <div class="mb-2">
           <label class="form-label small fw-medium">Unit Name <span class="text-danger">*</span></label>
-          <input type="text" id="quick_unit_name" class="form-control form-control-sm" placeholder="e.g. Bags, Box, Kg">
+          <input type="text" id="quick_unit_name" class="form-control form-control-sm" placeholder="e.g. Bags, Box, Kilogram">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-medium">Unit Code / Slug</label>
+          <input type="text" id="quick_unit_slug" class="form-control form-control-sm" placeholder="e.g. bag, box, kg">
+          <small class="text-muted" style="font-size: 11px;">Optional short code or symbol</small>
         </div>
         <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold mb-3" onclick="submitQuickUnit()">
           <i class="ri-add-line me-1"></i> Save Unit
@@ -1998,7 +2959,7 @@ function openStockLogOffcanvas(itemId, itemName) {
 </div>
 
 <!-- Quick Add Storage Location Modal -->
-<div class="modal fade" id="quick_add_location_modal" tabindex="-1" style="z-index: 10700 !important;" data-bs-backdrop="false">
+<div class="modal fade" id="quick_add_location_modal" tabindex="-1" style="z-index: 10950 !important;" data-bs-backdrop="false">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
     <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
       <div class="modal-header bg-light py-2.5 px-3 border-bottom">
@@ -2027,10 +2988,72 @@ function openStockLogOffcanvas(itemId, itemName) {
       </div>
     </div>
   </div>
+<!-- Rental Configuration Modal -->
+<div class="modal fade" id="rental_config_modal" tabindex="-1" style="z-index: 10960 !important;" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header py-3 px-4 border-bottom" style="background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);">
+        <div class="d-flex align-items-center gap-2">
+          <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; background: #dcfce7; color: #16a34a;">
+            <i class="ri-truck-line fs-5"></i>
+          </div>
+          <div>
+            <h6 class="modal-title fw-bold mb-0 text-dark">List Equipment for Rental</h6>
+            <small class="text-muted" style="font-size: 11px;">Make available to marketplace & admin</small>
+          </div>
+        </div>
+        <button type="button" class="btn-close" onclick="cancelRentalConfig()"></button>
+      </div>
+      <div class="modal-body p-4">
+        <input type="hidden" id="rental_modal_item_id">
+
+        <div class="bg-light rounded-3 p-3 mb-3 border">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-primary-subtle text-primary border rounded-pill px-2 py-0.5" id="rental_modal_category" style="font-size: 10.5px;">Machinery</span>
+            <span class="text-muted small" id="rental_modal_plate"></span>
+          </div>
+          <h6 class="fw-bold text-dark mb-0 fs-6" id="rental_modal_item_name">Equipment Name</h6>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small fw-semibold text-dark">Rental Rate (₹) <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <span class="input-group-text bg-white fw-bold text-muted">₹</span>
+            <input type="number" id="rental_modal_price" class="form-control fw-bold fs-6" placeholder="e.g. 1500" step="0.01" min="0" required>
+          </div>
+          <small class="text-muted" style="font-size: 11px;">Enter the amount charged to rent this machinery/tool.</small>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small fw-semibold text-dark">Rental Billing Basis / Frequency <span class="text-danger">*</span></label>
+          <select id="rental_modal_unit" class="form-select form-select-sm py-2">
+            <option value="Per Day" selected>Per Day (Daily)</option>
+            <option value="Per Hour">Per Hour (Hourly)</option>
+            <option value="Per Week">Per Week (Weekly)</option>
+            <option value="Per Month">Per Month (Monthly)</option>
+            <option value="Per Acre">Per Acre (Area based)</option>
+          </select>
+        </div>
+
+        <div class="alert alert-info border-0 rounded-3 p-2.5 d-flex align-items-start gap-2 mb-0" style="background: #eff6ff; font-size: 11.5px; color: #1e40af;">
+          <i class="ri-information-line fs-6 mt-0.5 flex-shrink-0"></i>
+          <div>
+            Once listed, this machinery will be visible to <strong>all farmers, farm managers & the admin portal</strong> in the Rental Marketplace. Your own listing will be marked with an <span class="badge bg-primary text-white rounded-pill px-1.5 py-0.2">Own</span> badge.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2.5 px-4 bg-light d-flex justify-content-between">
+        <button type="button" class="btn btn-sm btn-outline-secondary px-3" onclick="cancelRentalConfig()">Cancel</button>
+        <button type="button" class="btn btn-sm btn-success px-4 fw-semibold d-inline-flex align-items-center gap-1.5 shadow-sm" id="btn_save_rental_config" onclick="submitRentalConfig()">
+          <i class="ri-checkbox-circle-line"></i> Confirm & Turn Rental ON
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Quick Add Category Modal -->
-<div class="modal fade" id="quick_add_category_modal" tabindex="-1" style="z-index: 10700 !important;" data-bs-backdrop="false">
+<div class="modal fade" id="quick_add_category_modal" tabindex="-1" style="z-index: 10950 !important;" data-bs-backdrop="false">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
     <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
       <div class="modal-header bg-light py-2.5 px-3 border-bottom">
@@ -2079,7 +3102,7 @@ function openStockLogOffcanvas(itemId, itemName) {
 </div>
 
 <!-- Quick Add Inventory Type Modal -->
-<div class="modal fade" id="quick_add_inventory_type_modal" tabindex="-1" style="z-index: 10700 !important;" data-bs-backdrop="false">
+<div class="modal fade" id="quick_add_inventory_type_modal" tabindex="-1" style="z-index: 10950 !important;" data-bs-backdrop="false">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
     <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
       <div class="modal-header bg-light py-2.5 px-3 border-bottom">
@@ -2110,6 +3133,196 @@ function openStockLogOffcanvas(itemId, itemName) {
   </div>
 </div>
 
+<!-- Quick Add Vendor Modal -->
+<div class="modal fade" id="quick_add_vendor_modal" tabindex="-1" style="z-index: 10950 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header bg-light py-2.5 px-3 border-bottom">
+        <h6 class="modal-title fw-bold mb-0 text-dark"><i class="ri-user-add-line me-1 text-primary"></i>Quick Add Vendor</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="mb-2">
+          <label class="form-label small fw-medium">Vendor Name <span class="text-danger">*</span></label>
+          <input type="text" id="quick_vendor_name" class="form-control form-control-sm" placeholder="e.g. Balan Agro Agencies">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-medium">Business / Shop Name</label>
+          <input type="text" id="quick_vendor_business" class="form-control form-control-sm" placeholder="e.g. Balan Traders">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-medium">Contact Mobile</label>
+          <input type="tel" maxlength="13" id="quick_vendor_mobile" class="form-control form-control-sm" placeholder="+91 9876543210" oninput="this.value = this.value.replace(/[^0-9+]/g, '').slice(0, 13);">
+        </div>
+        <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold" onclick="window.submitQuickVendor()">
+          <i class="ri-check-line me-1"></i> Save Vendor
+        </button>
+      </div>
+      <div class="modal-footer border-top py-2 px-3 bg-light d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Record Crop Loss / Wastage -->
+<div class="modal fade" id="record_crop_loss_modal" tabindex="-1" aria-hidden="true" style="z-index: 10600 !important;">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <div class="modal-header bg-light border-bottom-0 rounded-top-4 py-3">
+        <h5 class="modal-title fw-bold text-danger d-flex align-items-center gap-2">
+          <i class="ri-delete-bin-line"></i> Record Crop Loss / Wastage
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="POST" action="{% url 'record_crop_loss' %}" id="cropLossForm">
+        {% csrf_token %}
+        <input type="hidden" name="split_id" id="loss_split_id" value="">
+        <input type="hidden" name="est_rate" id="loss_est_rate" value="0">
+        <div class="modal-body p-4">
+          <!-- Crop Summary Box -->
+          <div class="p-3 mb-3 rounded-3" style="background: #fef2f2; border: 1px solid #fecaca;">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <div class="fw-bold text-dark fs-6" id="loss_modal_crop_name">Crop Name</div>
+                <small class="text-muted" id="loss_modal_farm_name"><i class="ri-map-pin-line me-1"></i>Farm Name</small>
+              </div>
+              <div class="text-end">
+                <small class="text-muted d-block" style="font-size:11px;">Current Available Stock</small>
+                <span class="badge bg-danger fs-6 fw-bold" id="loss_modal_available_stock">0 Tons</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <!-- Loss Date -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Loss Date <span class="text-danger">*</span></label>
+              <input type="date" name="loss_date" id="loss_date_input" class="form-control" required value="{% now 'Y-m-d' %}">
+            </div>
+
+            <!-- Loss Quantity -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Loss Quantity (<span id="loss_unit_label">Tons</span>) <span class="text-danger">*</span></label>
+              <input type="number" step="0.01" min="0.01" name="loss_quantity" id="loss_quantity_input" class="form-control" placeholder="e.g. 0.50" required oninput="calcLossValue()">
+              <small class="text-muted" style="font-size: 11px;">Max allowable: <span id="loss_max_qty_text">0</span></small>
+            </div>
+
+            <!-- Loss Reason -->
+            <div class="col-md-12">
+              <label class="form-label fw-semibold">Reason for Loss <span class="text-danger">*</span></label>
+              <select name="loss_reason" id="loss_reason_select" class="form-select" required>
+                <option value="" disabled selected>Select a reason...</option>
+                <option value="Spoilage / Rotting">Spoilage / Rotting (Decayed / Overripe)</option>
+                <option value="Pest / Insect Damage">Pest / Insect Damage</option>
+                <option value="Weather / Moisture Damage">Weather / Moisture / Rain Damage</option>
+                <option value="Handling / Transit Loss">Handling / Transit / Transportation Loss</option>
+                <option value="Storage Degradation">Storage Degradation / Rodent Damage</option>
+                <option value="Expired / Unsold Discard">Expired / Unsold Market Discard</option>
+                <option value="Other">Other Wastage</option>
+              </select>
+            </div>
+
+            <!-- Estimated Loss Value (₹) -->
+            <div class="col-md-12">
+              <label class="form-label fw-semibold">Estimated Loss Value (₹)</label>
+              <div class="input-group">
+                <span class="input-group-text bg-light">₹</span>
+                <input type="number" step="0.01" name="estimated_loss_value" id="loss_est_value_input" class="form-control" placeholder="0.00">
+              </div>
+              <small class="text-muted" style="font-size: 11px;">Auto-calculated based on estimated market price (editable).</small>
+            </div>
+
+            <!-- Notes -->
+            <div class="col-md-12">
+              <label class="form-label fw-semibold">Notes / Remarks</label>
+              <textarea name="notes" rows="2" class="form-control" placeholder="Details about how the produce loss occurred..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-top-0 rounded-bottom-4 py-3">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger d-inline-flex align-items-center gap-2">
+            <i class="ri-delete-bin-line"></i> Confirm & Deduct Stock
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Crop Loss History -->
+<div class="modal fade" id="crop_loss_history_modal" tabindex="-1" aria-hidden="true" style="z-index: 10600 !important;">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <div class="modal-header bg-light border-bottom-0 rounded-top-4 py-3">
+        <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2">
+          <i class="ri-history-line text-danger"></i> Crop Loss & Wastage History
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-3">
+        {% if all_crop_losses %}
+        <div class="table-responsive" style="max-height: 480px;">
+          <table class="table table-hover align-middle mb-0" id="tableCropLossHistory">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th class="ps-3" style="font-size:11px; text-transform:uppercase;">Date</th>
+                <th style="font-size:11px; text-transform:uppercase;">Crop & Farm</th>
+                <th style="font-size:11px; text-transform:uppercase;">Qty Lost</th>
+                <th style="font-size:11px; text-transform:uppercase;">Reason</th>
+                <th style="font-size:11px; text-transform:uppercase;">Est. Value</th>
+                <th class="pe-3" style="font-size:11px; text-transform:uppercase;">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for loss in all_crop_losses %}
+              <tr>
+                <td class="ps-3 fw-medium text-nowrap">{{ loss.loss_date|date:"d M Y" }}</td>
+                <td>
+                  <div class="fw-bold text-dark">{{ loss.split.crop.name|default:loss.split.crop_category|default:"Crop Produce" }}</div>
+                  <small class="text-muted"><i class="ri-map-pin-line me-1"></i>{{ loss.split.farm.land_name|default:"Farm" }}</small>
+                </td>
+                <td>
+                  <span class="badge fw-bold" style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; font-size:12px;">
+                    -{{ loss.loss_quantity }} {{ loss.unit }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge bg-light text-secondary border">{{ loss.loss_reason }}</span>
+                </td>
+                <td class="fw-semibold text-danger">
+                  {% if loss.estimated_loss_value %}
+                    ₹{{ loss.estimated_loss_value|floatformat:2 }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td class="pe-3 small text-muted" style="max-width:200px;">
+                  {{ loss.notes|default:"—" }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+          <div class="avatar avatar-md mx-auto mb-3" style="background:rgba(25,135,84,0.1); width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center;">
+            <i class="ri-shield-check-line fs-2 text-success"></i>
+          </div>
+          <h6 class="fw-bold text-dark">No Crop Loss Logged</h6>
+          <p class="text-muted small mb-0">Great job! No harvested produce has been reported lost or damaged.</p>
+        </div>
+        {% endif %}
+      </div>
+      <div class="modal-footer bg-light border-top-0 rounded-bottom-4 py-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 var dbCategoryLayouts = {{ category_layouts_json|safe|default:"{}" }};
 
@@ -2128,15 +3341,37 @@ window.toggleFormFields = function(prefix) {
     $('.' + prefix + '-tools-only').addClass('d-none');
     $('.' + prefix + '-machinery-tools-only').addClass('d-none');
     
-    if (category === 'Machinery') {
+    // Resolve layout dynamically from dbCategoryLayouts or localStorage or defaults
+    var layout = 'Warehouse';
+    if (dbCategoryLayouts && dbCategoryLayouts[category]) {
+        layout = dbCategoryLayouts[category];
+    } else {
+        var localLayouts = {};
+        try {
+            localLayouts = JSON.parse(localStorage.getItem('category_layouts') || '{}');
+        } catch (e) {
+            localLayouts = {};
+        }
+        if (localLayouts && localLayouts[category]) {
+            layout = localLayouts[category];
+        } else if (category === 'Machinery' || category === 'Vehicles & Fleet') {
+            layout = 'Machinery';
+        } else if (category === 'Tools' || category === 'Tool & Implements') {
+            layout = 'Tools';
+        }
+    }
+    
+    $('#' + prefix + '_qty_input').closest('.col-md-6').toggleClass('d-none', layout === 'Tools');
+    $('#' + prefix + '_qty_input').attr('step', layout === 'Machinery' ? '1' : '0.01');
+    if (layout === 'Machinery') {
         $('.' + prefix + '-machinery-only').removeClass('d-none');
         $('.' + prefix + '-machinery-tools-only').removeClass('d-none');
         
         // Set values for category
-        $('#' + prefix + '_category_hidden').val('Vehicles & Fleet');
+        $('#' + prefix + '_category_hidden').val(category);
         
         // Disable warehouse-only inputs
-        $('#' + prefix + '_qty_input').prop('disabled', true);
+        $('#' + prefix + '_qty_input').prop('disabled', false);
         $('#' + prefix + '_unit_select').prop('disabled', true);
         $('#' + prefix + '_safety_stock_input').prop('disabled', true);
         $('#' + prefix + '_price_input').prop('disabled', true);
@@ -2158,12 +3393,12 @@ window.toggleFormFields = function(prefix) {
         $('#' + prefix + '_name_input').attr('placeholder', 'e.g. John Deere Tractor, Mahindra Bolero');
         window.toggleAddRentalPrice(prefix);
         $('#' + prefix + '_location_label').text('Storage Location');
-    } else if (category === 'Tools') {
+    } else if (layout === 'Tools') {
         $('.' + prefix + '-tools-only').removeClass('d-none');
         $('.' + prefix + '-machinery-tools-only').removeClass('d-none');
         
         // Set values for category
-        $('#' + prefix + '_category_hidden').val('Tool & Implements');
+        $('#' + prefix + '_category_hidden').val(category);
         
         // Disable warehouse-only inputs
         $('#' + prefix + '_qty_input').prop('disabled', true);
@@ -2187,7 +3422,7 @@ window.toggleFormFields = function(prefix) {
         window.toggleAddRentalPrice(prefix);
         $('#' + prefix + '_location_label').text('Storage Location');
     } else {
-        // Warehouse stock or custom category
+        // Warehouse stock or custom warehouse category
         $('.' + prefix + '-warehouse-only').removeClass('d-none');
         
         // Enable warehouse-only inputs
@@ -2206,7 +3441,7 @@ window.toggleFormFields = function(prefix) {
         $('#' + prefix + '_rental_unit').prop('disabled', true);
         
         // Update category hidden input
-        if (category === 'Warehouse') {
+        if (category === 'Warehouse' || category === 'Warehouse Stock') {
             $('#' + prefix + '_category_hidden').val($('#' + prefix + '_wh_type_select').val());
             $('.' + prefix + '-warehouse-only').each(function() {
                 if ($(this).find('#' + prefix + '_wh_type_select').length > 0) {
@@ -2253,16 +3488,154 @@ window.toggleAddRentalPrice = function(prefix) {
 };
 
 window.calculateTotalPrice = function(prefix) {
-    var qtyEl = document.getElementById(prefix + '_qty_input');
-    var priceEl = document.getElementById(prefix + '_price_input');
-    var displayEl = document.getElementById(prefix + '_total_price_display');
-    
-    if (qtyEl && priceEl && displayEl) {
-        var qty = parseFloat(qtyEl.value || 0);
-        var unitPrice = parseFloat(priceEl.value || 0);
-        var totalPrice = qty * unitPrice;
-        displayEl.value = '₹' + totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    var category = $('#' + prefix + '_inv_category_selector').val();
+    var layout = 'Warehouse';
+    if (dbCategoryLayouts && dbCategoryLayouts[category]) {
+        layout = dbCategoryLayouts[category];
+    } else {
+        var localLayouts = {};
+        try {
+            localLayouts = JSON.parse(localStorage.getItem('category_layouts') || '{}');
+        } catch (e) {
+            localLayouts = {};
+        }
+        if (localLayouts && localLayouts[category]) {
+            layout = localLayouts[category];
+        } else if (category === 'Machinery' || category === 'Vehicles & Fleet') {
+            layout = 'Machinery';
+        } else if (category === 'Tools' || category === 'Tool & Implements') {
+            layout = 'Tools';
+        }
     }
+
+    var total = 0;
+    if (layout === 'Machinery') {
+        total = parseFloat($('#' + prefix + '_machinery_price').val() || 0);
+    } else if (layout === 'Tools') {
+        total = parseFloat($('#' + prefix + '_tools_price').val() || 0);
+    } else {
+        var qty = parseFloat($('#' + prefix + '_qty_input').val() || 0);
+        var unitPrice = parseFloat($('#' + prefix + '_price_input').val() || 0);
+        total = qty * unitPrice;
+        var displayEl = document.getElementById(prefix + '_total_price_display');
+        if (displayEl) {
+            displayEl.value = '₹' + total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+    }
+
+    var formatted = '₹' + total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    var prevEl = document.getElementById(prefix + '_expense_preview');
+    if (prevEl) {
+        prevEl.textContent = formatted;
+    }
+};
+
+window.toggleVendorField = function(prefix) {
+    // Vendor is now a direct dropdown - no toggle required
+};
+
+window.toggleExpenseNotice = function(prefix) {
+    var isChecked = $('#' + prefix + '_record_as_expense').is(':checked');
+    if (isChecked) {
+        $('#' + prefix + '_expense_badge').removeClass('d-none');
+    } else {
+        $('#' + prefix + '_expense_badge').addClass('d-none');
+    }
+};
+
+window.openQuickVendorModal = function() {
+    var nameEl = document.getElementById('quick_vendor_name');
+    var busEl = document.getElementById('quick_vendor_business');
+    var mobEl = document.getElementById('quick_vendor_mobile');
+    if (nameEl) nameEl.value = '';
+    if (busEl) busEl.value = '';
+    if (mobEl) mobEl.value = '';
+    var modalEl = document.getElementById('quick_add_vendor_modal');
+    if (modalEl) {
+        if (modalEl.parentNode !== document.body) {
+            document.body.appendChild(modalEl);
+        }
+        var bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        bsModal.show();
+    }
+};
+
+window.submitQuickVendor = function() {
+    var name = (document.getElementById('quick_vendor_name') || {}).value || '';
+    name = name.trim();
+    var business = (document.getElementById('quick_vendor_business') || {}).value || '';
+    business = business.trim();
+    var mobile = (document.getElementById('quick_vendor_mobile') || {}).value || '';
+    mobile = mobile.trim();
+
+    if (!name) {
+        if (typeof Toastify !== 'undefined') {
+            Toastify({ text: 'Please enter a vendor name.', duration: 3000, gravity: 'top', position: 'right', style: { background: '#dc3545' } }).showToast();
+        } else {
+            alert('Please enter a vendor name.');
+        }
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('vendor_name', name);
+    formData.append('business_name', business);
+    formData.append('mobile_number', mobile);
+
+    fetch("{% url 'quick_add_vendor' %}", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            var label = data.vendor_name + (data.business_name && data.business_name !== data.vendor_name ? ' (' + data.business_name + ')' : '');
+            ['#add_vendor_select', '#edit_vendor_select'].forEach(function(selQuery) {
+                var sel = document.querySelector(selQuery);
+                if (sel) {
+                    var exists = Array.from(sel.options).find(function(o) { return String(o.value) === String(data.id); });
+                    if (!exists) {
+                        var opt = document.createElement('option');
+                        opt.value = data.id;
+                        opt.textContent = label;
+                        sel.appendChild(opt);
+                    }
+                    sel.value = data.id;
+                }
+            });
+
+            // Ensure newly added vendor is selected
+            ['add', 'edit'].forEach(function(p) {
+                $('#' + p + '_vendor_select').val(data.id);
+            });
+
+            var modalEl = document.getElementById('quick_add_vendor_modal');
+            if (modalEl) {
+                var bsModal = bootstrap.Modal.getInstance(modalEl);
+                if (bsModal) bsModal.hide();
+            }
+
+            if (typeof Toastify !== 'undefined') {
+                Toastify({
+                    text: "Vendor '" + data.vendor_name + "' added and selected!",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "right",
+                    style: { background: "#28a745" }
+                }).showToast();
+            }
+        } else {
+            alert('Error: ' + (data.error || 'Failed to add vendor.'));
+        }
+    })
+    .catch(function(e) {
+        console.error(e);
+        alert('An error occurred while adding vendor.');
+    });
 };
 
 window.changeInventoryStatus = function(itemId, newStatus) {
@@ -2298,6 +3671,8 @@ window.changeInventoryStatus = function(itemId, newStatus) {
 
 window.openQuickUnitModal = function() {
     document.getElementById('quick_unit_name').value = '';
+    var slugEl = document.getElementById('quick_unit_slug');
+    if (slugEl) slugEl.value = '';
     var myModal = new bootstrap.Modal(document.getElementById('quick_add_unit_modal'));
     myModal.show();
 };
@@ -2315,10 +3690,16 @@ window.submitQuickUnit = function() {
         return;
     }
 
+    var slugEl = document.getElementById('quick_unit_slug');
+    var slug = slugEl ? slugEl.value.trim() : '';
+
     var formData = new FormData();
     formData.append('name', name);
+    if (slug) {
+        formData.append('slug', slug);
+    }
 
-    fetch("/farmer/expenses/quick_add_expense_unit/", {
+    fetch("{% url 'quick_add_expense_unit' %}", {
         method: 'POST',
         body: formData,
         headers: {
@@ -2361,7 +3742,7 @@ window.submitQuickLocation = function() {
     var formData = new FormData();
     formData.append('name', name);
 
-    fetch("/farmer/inventory/quick_add_location/", {
+    fetch("{% url 'quick_add_location' %}", {
         method: 'POST',
         body: formData,
         headers: {
@@ -2410,7 +3791,7 @@ window.submitQuickInventoryType = function() {
     var formData = new FormData();
     formData.append('name', name);
 
-    fetch("/farmer/inventory/quick_add_inventory_type/", {
+    fetch("{% url 'quick_add_inventory_type' %}", {
         method: 'POST',
         body: formData,
         headers: {
@@ -2474,7 +3855,7 @@ window.submitQuickCategory = function() {
     formData.append('name', name);
     formData.append('layout_type', choice);
 
-    fetch("/farmer/inventory/quick_add_category/", {
+    fetch("{% url 'quick_add_category' %}", {
         method: 'POST',
         body: formData,
         headers: {
@@ -2534,9 +3915,16 @@ window.loadQuickMasterItemsList = function(itemType, containerId, countBadgeId, 
                 var html = '<div class="d-flex flex-column gap-1">';
                 data.items.forEach(function(item) {
                     var safeName = (item.name || '').replace(/"/g, '&quot;');
+                    if (itemType === 'inventory_category' && item.layout_type) {
+                        dbCategoryLayouts[item.name] = item.layout_type;
+                    }
+                    var subtitleHtml = item.subtitle ? '<span class="text-muted ms-1 small" style="font-size: 11px;">(' + (item.subtitle || '').replace(/"/g, '&quot;') + ')</span>' : '';
                     html += '<div class="d-flex align-items-center justify-content-between p-1.5 px-2 bg-white rounded border shadow-xs" id="master_item_' + itemType + '_' + item.id + '" style="font-size: 12px;">' +
-                        '<span class="text-dark fw-medium text-truncate me-2" title="' + safeName + '">' + safeName + '</span>' +
-                        '<button type="button" class="btn btn-sm btn-outline-danger p-0 px-1 rounded d-inline-flex align-items-center justify-content-center" style="height: 22px; min-width: 22px;" title="Delete this option" onclick="deleteQuickMasterItem(\'' + itemType + '\', ' + item.id + ', \'' + safeName + '\', \'' + containerId + '\', \'' + (countBadgeId || '') + '\', ' + JSON.stringify(selectSelectors || []).replace(/"/g, '&quot;') + ')">' +
+                        '<div class="text-truncate me-2">' +
+                            '<span class="text-dark fw-medium" title="' + safeName + '">' + safeName + '</span>' +
+                            subtitleHtml +
+                        '</div>' +
+                        '<button type="button" class="btn btn-sm btn-outline-danger p-0 px-1 rounded d-inline-flex align-items-center justify-content-center flex-shrink-0" style="height: 22px; min-width: 22px;" title="Delete this option" onclick="deleteQuickMasterItem(\'' + itemType + '\', ' + item.id + ', \'' + safeName + '\', \'' + containerId + '\', \'' + (countBadgeId || '') + '\', ' + JSON.stringify(selectSelectors || []).replace(/"/g, '&quot;') + ')">' +
                             '<i class="ri-delete-bin-line" style="font-size: 11px;"></i>' +
                         '</button>' +
                     '</div>';
@@ -2578,10 +3966,6 @@ window.confirmQuickDelete = function(itemName, callback) {
                 callback();
             }
         });
-    } else {
-        if (confirm('Are you sure you want to delete "' + itemName + '"?')) {
-            callback();
-        }
     }
 };
 
@@ -2648,7 +4032,10 @@ window.deleteQuickMasterItem = function(itemType, itemId, itemName, containerId,
 window.openQuickUnitModal = function() {
     document.getElementById('quick_unit_name').value = '';
     var modalEl = document.getElementById('quick_add_unit_modal');
-    var myModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    if (modalEl && modalEl.parentNode !== document.body) {
+        document.body.appendChild(modalEl);
+    }
+    var myModal = bootstrap.Modal.getOrCreateInstance(modalEl);
     myModal.show();
     window.loadQuickMasterItemsList('unit', 'quick_unit_items_list', 'quick_unit_count_badge', ['#add_unit_select', '#edit_unit_select', 'select[name="unit"]']);
 };
@@ -2656,7 +4043,10 @@ window.openQuickUnitModal = function() {
 window.openQuickLocationModal = function() {
     document.getElementById('quick_location_name').value = '';
     var modalEl = document.getElementById('quick_add_location_modal');
-    var myModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    if (modalEl && modalEl.parentNode !== document.body) {
+        document.body.appendChild(modalEl);
+    }
+    var myModal = bootstrap.Modal.getOrCreateInstance(modalEl);
     myModal.show();
     window.loadQuickMasterItemsList('storage_location', 'quick_location_items_list', 'quick_location_count_badge', ['#add_location_select', '#edit_location_select', 'select[name="location"]']);
 };
@@ -2664,7 +4054,10 @@ window.openQuickLocationModal = function() {
 window.openQuickCategoryModal = function() {
     document.getElementById('quick_category_name').value = '';
     var modalEl = document.getElementById('quick_add_category_modal');
-    var myModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    if (modalEl && modalEl.parentNode !== document.body) {
+        document.body.appendChild(modalEl);
+    }
+    var myModal = bootstrap.Modal.getOrCreateInstance(modalEl);
     myModal.show();
     window.loadQuickMasterItemsList('inventory_category', 'quick_category_items_list', 'quick_category_count_badge', ['#add_inv_category_selector', '#edit_inv_category_selector', 'select[name="category"]']);
 };
@@ -2672,7 +4065,10 @@ window.openQuickCategoryModal = function() {
 window.openQuickInventoryTypeModal = function() {
     document.getElementById('quick_inventory_type_name').value = '';
     var modalEl = document.getElementById('quick_add_inventory_type_modal');
-    var myModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    if (modalEl && modalEl.parentNode !== document.body) {
+        document.body.appendChild(modalEl);
+    }
+    var myModal = bootstrap.Modal.getOrCreateInstance(modalEl);
     myModal.show();
     window.loadQuickMasterItemsList('inventory_type', 'quick_inventory_type_items_list', 'quick_inventory_type_count_badge', ['#add_wh_type_select', '#edit_wh_type_select', 'select[name="product_type"]']);
 };
@@ -2687,7 +4083,7 @@ window.submitQuickUnit = function() {
     var formData = new FormData();
     formData.append('name', name);
 
-    fetch("/farmer/expenses/quick_add_expense_unit/", {
+    fetch("{% url 'quick_add_expense_unit' %}", {
         method: 'POST',
         body: formData,
         headers: {
@@ -2731,7 +4127,7 @@ window.submitQuickLocation = function() {
     var formData = new FormData();
     formData.append('name', name);
 
-    fetch("/farmer/inventory/quick_add_location/", {
+    fetch("{% url 'quick_add_location' %}", {
         method: 'POST',
         body: formData,
         headers: {
@@ -2781,7 +4177,7 @@ window.submitQuickInventoryType = function() {
     var formData = new FormData();
     formData.append('name', name);
 
-    fetch("/farmer/inventory/quick_add_product_type/", {
+    fetch("{% url 'quick_add_inventory_type' %}", {
         method: 'POST',
         body: formData,
         headers: {
@@ -2845,6 +4241,7 @@ window.openEditInventoryModal = function(btn) {
     var rentalUnit = $btn.attr('data-rentalunit') || 'Per Day';
     var price = $btn.attr('data-price');
     var rental = $btn.attr('data-rental');
+    var farmId = $btn.attr('data-farmid') || '';
 
     currentEditItem.id = id;
     currentEditItem.name = name;
@@ -2874,7 +4271,7 @@ window.openEditInventoryModal = function(btn) {
         }
     }
 
-    $('#edit_inv_category_selector').val(mappedCategory);
+    $('#edit_inv_category_selector').val(mappedCategory).trigger('change.select2');
     toggleFormFields('edit');
 
     // Populate common fields
@@ -2882,12 +4279,13 @@ window.openEditInventoryModal = function(btn) {
     $('#edit_qty_input').val(qty);
     $('#edit_price_input').val(price);
     $('#edit_description').val($btn.attr('data-description') || '');
+    $('#edit_farm_select').val(farmId).trigger('change.select2');
     
     // Select option or add if missing
     if (location && $('#edit_location_select option[value="' + location + '"]').length === 0) {
         $('#edit_location_select').append(`<option value="${location}">${location}</option>`);
     }
-    $('#edit_location_select').val(location);
+    $('#edit_location_select').val(location).trigger('change.select2');
 
     var resolvedLayout = 'Warehouse';
     if (mappedCategory === 'Machinery') {
@@ -2912,7 +4310,7 @@ window.openEditInventoryModal = function(btn) {
 
     if (resolvedLayout === 'Warehouse') {
         if (mappedCategory === 'Warehouse') {
-            $('#edit_wh_type_select').val(category);
+            $('#edit_wh_type_select').val(category).trigger('change.select2');
             $('#edit_category_hidden').val(category);
         } else {
             $('#edit_category_hidden').val(mappedCategory);
@@ -2921,7 +4319,7 @@ window.openEditInventoryModal = function(btn) {
         if (unit && $('#edit_unit_select option[value="' + unit + '"]').length === 0) {
             $('#edit_unit_select').append(`<option value="${unit}">${unit}</option>`);
         }
-        $('#edit_unit_select').val(unit);
+        $('#edit_unit_select').val(unit).trigger('change.select2');
         $('#edit_safety_stock_input').val(safety);
         $('#edit_status_select').val(status);
     } else if (resolvedLayout === 'Machinery') {
@@ -2958,7 +4356,7 @@ window.openEditInventoryModal = function(btn) {
         $('#edit_tools_price').val(price);
         $('#edit_rental_price').val($btn.attr('data-rentalprice') || '0');
         if (rentalUnit) {
-            $('#edit_rental_unit').val(rentalUnit);
+            $('#edit_rental_unit').val(rentalUnit).trigger('change.select2');
         }
         window.toggleAddRentalPrice('edit');
     } else if (resolvedLayout === 'Tools') {
@@ -2972,10 +4370,15 @@ window.openEditInventoryModal = function(btn) {
         $('#edit_tools_price').val(price);
         $('#edit_rental_price').val($btn.attr('data-rentalprice') || '0');
         if (rentalUnit) {
-            $('#edit_rental_unit').val(rentalUnit);
+            $('#edit_rental_unit').val(rentalUnit).trigger('change.select2');
         }
         window.toggleAddRentalPrice('edit');
     }
+
+    var vendorId = $btn.attr('data-vendorid') || '';
+    // Notify Select2/native change listeners after assigning edit values so
+    // the visible dropdown label is refreshed along with the underlying select.
+    $('#edit_vendor_select').val(vendorId || '').trigger('change.select2');
 
     window.calculateTotalPrice('edit');
 
@@ -3061,8 +4464,8 @@ function initInventoryPage() {
             window.openDeleteInventoryModal(this);
         });
         
-        $(document).on('input change keyup', '.qty-input-calc, .price-input-calc', function() {
-            var prefix = $(this).hasClass('add-calc') ? 'add' : 'edit';
+        $(document).on('input change keyup', '.qty-input-calc, .price-input-calc, #add_machinery_price, #add_tools_price, #edit_machinery_price, #edit_tools_price', function() {
+            var prefix = $(this).attr('id') && $(this).attr('id').startsWith('edit') ? 'edit' : 'add';
             window.calculateTotalPrice(prefix);
         });
 
@@ -3073,8 +4476,19 @@ function initInventoryPage() {
             window.toggleAddRentalPrice('edit');
         });
         
-        // Initialize Add form defaults on load
-        toggleFormFields('add');
+        // Move all modals directly under document.body to prevent clipping & backdrop stacking issues
+        $('.modal').each(function() {
+            if (this.parentNode !== document.body) {
+                document.body.appendChild(this);
+            }
+        });
+
+        // Initialize Add form defaults on load safely
+        try {
+            toggleFormFields('add');
+        } catch (e) {
+            console.warn('Initial toggleFormFields notice:', e);
+        }
     } else {
         setTimeout(initInventoryPage, 50);
     }
@@ -3174,6 +4588,11 @@ window.openViewInventoryModal = function(btn) {
         html += infoCard('ri-hand-coin-line', 'Available for Rental', '<span class="badge bg-danger-subtle text-danger border">Not Listed</span>');
     }
 
+    var vendorName = $btn.attr('data-vendorname') || '';
+    if (vendorName) {
+        html += infoCard('ri-store-2-line', 'Vendor / Supplier', vendorName);
+    }
+
     if (!html) {
         html = '<div class="col-12 text-center text-muted py-3">No additional details available.</div>';
     }
@@ -3190,7 +4609,11 @@ window.openViewInventoryModal = function(btn) {
         }, 300);
     });
 
-    var modal = new bootstrap.Modal(document.getElementById('view_inventory_modal'));
+    var modalEl = document.getElementById('view_inventory_modal');
+    if (modalEl && modalEl.parentNode !== document.body) {
+        document.body.appendChild(modalEl);
+    }
+    var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
 };
 
@@ -3247,6 +4670,10 @@ window.openViewWarehouseModal = function(btn) {
     if (totalPrice && totalPrice !== '') {
         html += infoCard('ri-money-rupee-circle-line', 'Total Stock Value', '<span style="color:#6366f1;font-size:1.1em;">&#8377;' + parseFloat(totalPrice).toLocaleString('en-IN', {minimumFractionDigits:2}) + '</span>');
     }
+    var vendorName = $btn.attr('data-vendorname') || '';
+    if (vendorName) {
+        html += infoCard('ri-store-2-line', 'Vendor / Supplier', vendorName);
+    }
 
     $('#view_modal_body').html(html);
 
@@ -3260,15 +4687,103 @@ window.openViewWarehouseModal = function(btn) {
         }, 300);
     });
 
-    var modal = new bootstrap.Modal(document.getElementById('view_inventory_modal'));
+    var modalEl = document.getElementById('view_inventory_modal');
+    if (modalEl && modalEl.parentNode !== document.body) {
+        document.body.appendChild(modalEl);
+    }
+    var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
 };
 
 // ---- FARMER RENTAL TOGGLE & STATUS HANDLERS ----
-window.toggleFarmerRentalSwitch = function(itemId, isChecked) {
+let pendingRentalItemId = null;
+
+window.handleRentalSwitchChange = function(itemId, isChecked) {
+    if (isChecked) {
+        pendingRentalItemId = itemId;
+        const sw = document.getElementById('rental_toggle_' + itemId);
+        const itemName = sw ? sw.getAttribute('data-name') : 'Equipment';
+        const price = sw ? sw.getAttribute('data-price') : '';
+        const unit = sw ? sw.getAttribute('data-unit') : 'Per Day';
+        const cat = sw ? sw.getAttribute('data-category') : 'Machinery';
+        const plate = sw ? sw.getAttribute('data-plate') : '';
+
+        document.getElementById('rental_modal_item_id').value = itemId;
+        document.getElementById('rental_modal_item_name').textContent = itemName;
+        document.getElementById('rental_modal_category').textContent = cat || 'Machinery';
+        document.getElementById('rental_modal_plate').textContent = plate ? ('🎫 ' + plate) : '';
+        document.getElementById('rental_modal_price').value = price || '';
+        document.getElementById('rental_modal_unit').value = unit || 'Per Day';
+
+        const modalEl = document.getElementById('rental_config_modal');
+        if (modalEl && modalEl.parentNode !== document.body) {
+            document.body.appendChild(modalEl);
+        }
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+        setTimeout(() => document.getElementById('rental_modal_price').focus(), 400);
+    } else {
+        window.toggleFarmerRentalSwitch(itemId, false, null, null);
+    }
+};
+
+window.cancelRentalConfig = function() {
+    if (pendingRentalItemId) {
+        const sw = document.getElementById('rental_toggle_' + pendingRentalItemId);
+        if (sw) {
+            const labelEl = document.getElementById('rental_switch_label_' + pendingRentalItemId);
+            const wasOn = labelEl && labelEl.innerText.includes('Rental ON');
+            sw.checked = wasOn;
+        }
+        pendingRentalItemId = null;
+    }
+    const modalEl = document.getElementById('rental_config_modal');
+    const modalInstance = bootstrap.Modal.getInstance(modalEl);
+    if (modalInstance) modalInstance.hide();
+};
+
+window.submitRentalConfig = function() {
+    const itemId = document.getElementById('rental_modal_item_id').value;
+    const priceVal = document.getElementById('rental_modal_price').value.trim();
+    const unitVal = document.getElementById('rental_modal_unit').value;
+
+    if (!priceVal || parseFloat(priceVal) <= 0) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Rental Price Required',
+                text: 'Please enter a valid rental rate greater than 0.'
+            });
+        } else {
+            alert('Please enter a valid rental rate greater than 0.');
+        }
+        document.getElementById('rental_modal_price').focus();
+        return;
+    }
+
+    const saveBtn = document.getElementById('btn_save_rental_config');
+    const originalText = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+    window.toggleFarmerRentalSwitch(itemId, true, priceVal, unitVal, function(success) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalText;
+        if (success) {
+            const modalEl = document.getElementById('rental_config_modal');
+            const modalInstance = bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) modalInstance.hide();
+            pendingRentalItemId = null;
+        }
+    });
+};
+
+window.toggleFarmerRentalSwitch = function(itemId, isChecked, price, unit, callback) {
     var formData = new FormData();
     formData.append('item_id', itemId);
     formData.append('rental_available', isChecked ? 'true' : 'false');
+    if (price !== null && price !== undefined) formData.append('rental_price', price);
+    if (unit !== null && unit !== undefined) formData.append('rental_unit', unit);
 
     fetch("{% url 'toggle_inventory_rental' %}", {
         method: 'POST',
@@ -3281,13 +4796,28 @@ window.toggleFarmerRentalSwitch = function(itemId, isChecked) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
+            var sw = document.getElementById('rental_toggle_' + itemId);
+            if (sw) {
+                sw.checked = data.rental_available;
+                if (data.rental_price) sw.setAttribute('data-price', data.rental_price);
+                if (data.rental_unit) sw.setAttribute('data-unit', data.rental_unit);
+            }
+
             var labelEl = document.getElementById('rental_switch_label_' + itemId);
             var statusBtn = document.getElementById('rental_status_btn_' + itemId);
+            var priceDisplay = document.getElementById('rental_price_display_' + itemId);
 
             if (data.rental_available) {
-                if (labelEl) labelEl.innerHTML = '<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1 d-inline-flex align-items-center gap-1" style="font-size: 11px; font-weight: 600;"><i class="ri-checkbox-circle-fill"></i> Rental ON</span>';
+                if (labelEl) labelEl.innerHTML = '<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1 d-inline-flex align-items-center gap-1 cursor-pointer" onclick="handleRentalSwitchChange(' + itemId + ', true)" style="font-size: 11px; font-weight: 600;" title="Click to edit rental rate"><i class="ri-checkbox-circle-fill"></i> Rental ON</span>';
+                if (priceDisplay && data.rental_price) {
+                    priceDisplay.innerHTML = '₹' + data.rental_price + ' <span class="text-muted fw-normal">/ ' + (data.rental_unit || 'Per Day') + '</span>';
+                    priceDisplay.classList.remove('d-none');
+                }
             } else {
                 if (labelEl) labelEl.innerHTML = '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-2.5 py-1 d-inline-flex align-items-center gap-1" style="font-size: 11px; font-weight: 500;"><i class="ri-close-circle-line"></i> Rental OFF</span>';
+                if (priceDisplay) {
+                    priceDisplay.classList.add('d-none');
+                }
             }
 
             if (statusBtn && data.status) {
@@ -3303,10 +4833,12 @@ window.toggleFarmerRentalSwitch = function(itemId, isChecked) {
                     style: { background: "#10b981" },
                 }).showToast();
             }
+            if (callback) callback(true);
         } else {
             alert('Error: ' + (data.error || 'Failed to update rental status'));
             var sw = document.getElementById('rental_toggle_' + itemId);
             if (sw) sw.checked = !isChecked;
+            if (callback) callback(false);
         }
     })
     .catch(err => {
@@ -3314,6 +4846,7 @@ window.toggleFarmerRentalSwitch = function(itemId, isChecked) {
         alert('Network error while updating rental status.');
         var sw = document.getElementById('rental_toggle_' + itemId);
         if (sw) sw.checked = !isChecked;
+        if (callback) callback(false);
     });
 };
 

@@ -21,6 +21,9 @@
 {{ block.super }}
 <script>
 $(document).ready(function () {
+    if ($.fn.dataTable) {
+        $.fn.dataTable.ext.errMode = 'none';
+    }
     // Initialize by ID — keeps theme from double-initing this table
     var table = $('#docTableFarmer').DataTable({
         pageLength: 10,
@@ -83,22 +86,24 @@ function copyShareLink(shareUrl) {
 
 <!-- Search & Filter Card -->
 <div class="card mb-3">
-    <div class="card-body p-2 d-flex gap-2 flex-wrap">
-        <div class="input-group flex-grow-1">
+    <div class="card-body p-2 farmer-filter-toolbar">
+        <div class="input-group farmer-filter-search">
             <span class="input-group-text bg-white"><i class="ri-search-line"></i></span>
             <input type="text" id="docSearch" class="form-control" placeholder="Search my documents by title, notes...">
         </div>
-        <select id="categoryFilter" class="form-select w-auto">
-            <option value="">All Categories</option>
-            {% regroup doc_categories by document_type as type_list %}
-            {% for type in type_list %}
-            <optgroup label="{{ type.grouper }}">
-                {% for cat in type.list %}
-                <option value="{{ cat.name }}">{{ cat.name }}</option>
+        <div class="farmer-filter-controls">
+            <select id="categoryFilter" class="form-select">
+                <option value="">All Categories</option>
+                {% regroup doc_categories by document_type as type_list %}
+                {% for type in type_list %}
+                <optgroup label="{{ type.grouper }}">
+                    {% for cat in type.list %}
+                    <option value="{{ cat.name }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </optgroup>
                 {% endfor %}
-            </optgroup>
-            {% endfor %}
-        </select>
+            </select>
+        </div>
     </div>
 </div>
 

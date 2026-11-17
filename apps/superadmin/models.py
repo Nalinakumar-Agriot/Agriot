@@ -58,6 +58,7 @@ class GeneralSetting(models.Model):
     country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True)
     state = models.ForeignKey(State, on_delete=models.SET_NULL, null=True, blank=True)
     city = models.ForeignKey(City, on_delete=models.SET_NULL, null=True, blank=True)
+    taluk = models.ForeignKey(Taluk, on_delete=models.SET_NULL, null=True, blank=True)
 
     street = models.CharField(max_length=255, default="Kovil Street")
     door_no = models.CharField(max_length=50, default="45A")
@@ -65,15 +66,48 @@ class GeneralSetting(models.Model):
     gst_number = models.CharField(max_length=100, blank=True, null=True)
     cin = models.CharField(max_length=100, blank=True, null=True)
     weather_api_key = models.CharField(max_length=255, blank=True, null=True)
+    razorpay_key_id = models.CharField(max_length=255, default="rzp_test_Trc3reEy8k4YoJ", blank=True, null=True)
+    razorpay_key_secret = models.CharField(max_length=255, default="0ofru9WKnCbUgDoiCkH5mAlY", blank=True, null=True)
+    razorpay_enabled = models.BooleanField(default=True)
+    razorpay_auto_renew = models.BooleanField(default=True)
+    razorpay_webhook_secret = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):
         return str(self.title)
 
 
+class SMTPSettings(models.Model):
+    objects = models.Manager()
+    DoesNotExist = models.ObjectDoesNotExist
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='smtp_settings')
+    is_default = models.BooleanField(default=False)
+    email_host = models.CharField(max_length=255, default="smtp.gmail.com")
+    email_port = models.IntegerField(default=587)
+    email_host_user = models.CharField(max_length=255, blank=True, null=True)
+    email_host_password = models.CharField(max_length=255, blank=True, null=True)
+    email_use_tls = models.BooleanField(default=True)
+    email_use_ssl = models.BooleanField(default=False)
+    from_email = models.CharField(max_length=255, blank=True, null=True)
+    from_name = models.CharField(max_length=255, default="AgriOT")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        if self.is_default or not self.user:
+            return f"System Global SMTP ({self.email_host_user or 'Not Configured'})"
+        return f"Farmer SMTP ({self.user.username} - {self.email_host_user or 'Not Configured'})"
+
+
+from django.utils import timezone
+
 class Package(models.Model):
     objects = models.Manager()
     name = models.CharField(max_length=255)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.DecimalField(max_digits=10, decimal_places=2) # Monthly payable price (after discount)
+    original_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True) # Actual original monthly price before discount
+    price_quarterly = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    price_yearly = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     max_acre_support = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
     modules = models.JSONField(default=list)
@@ -81,8 +115,57 @@ class Package(models.Model):
     my_land = models.CharField(max_length=255, blank=True, null=True)
     my_crop = models.CharField(max_length=255, blank=True, null=True)
     my_users = models.CharField(max_length=255, blank=True, null=True)
+    discount = models.CharField(max_length=100, blank=True, null=True)
+    show_badge = models.BooleanField(default=False)
+    badge_text = models.CharField(max_length=50, blank=True, default="POPULAR")
+    is_active = models.BooleanField(default=True)
+    is_active_monthly = models.BooleanField(default=True)
+    is_active_quarterly = models.BooleanField(default=True)
+    is_active_yearly = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def display_original_price(self):
+        if self.original_price and float(self.original_price) > float(self.price):
+            return self.original_price
+        return None
+
+    @property
+    def display_original_quarterly(self):
+        if self.display_original_price:
+            return round(float(self.display_original_price) * 3, 2)
+        return None
+
+    @property
+    def display_original_yearly(self):
+        if self.display_original_price:
+            return round(float(self.display_original_price) * 12, 2)
+        return None
+
+    @property
+    def discount_amount(self):
+        if self.display_original_price:
+            return round(float(self.display_original_price) - float(self.price), 2)
+        return 0.0
+
+    @property
+    def discount_amount_quarterly(self):
+        return round(self.discount_amount * 3, 2)
+
+    @property
+    def discount_amount_yearly(self):
+        return round(self.discount_amount * 12, 2)
+
+    def save(self, *args, **kwargs):
+        if self.price is not None:
+            try:
+                base = float(self.price)
+                self.price_quarterly = round(base * 3, 2)
+                self.price_yearly = round(base * 12, 2)
+            except (ValueError, TypeError):
+                pass
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return str(self.name)
@@ -94,13 +177,43 @@ class Subscription(models.Model):
     farmer = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='subscriptions')
     package = models.ForeignKey(Package, on_delete=models.SET_NULL, null=True)
     monthly_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    credit_applied = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    billing_cycle = models.CharField(max_length=50, default="monthly")
     auto_renew = models.BooleanField(default=True)
     payment_status = models.CharField(max_length=50, default="pending")
     subscription_status = models.CharField(max_length=50, default="active")
-    start_date = models.DateField(auto_now_add=True)
+    razorpay_order_id = models.CharField(max_length=120, blank=True, null=True)
+    razorpay_payment_id = models.CharField(max_length=120, blank=True, null=True)
+    razorpay_signature = models.CharField(max_length=255, blank=True, null=True)
+    scheduled_package = models.ForeignKey(Package, on_delete=models.SET_NULL, null=True, blank=True, related_name='scheduled_subscriptions')
+    scheduled_billing_cycle = models.CharField(max_length=50, blank=True, null=True)
+    start_date = models.DateField(default=timezone.now)
     end_date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def normalized_billing_cycle(self):
+        c = str(self.billing_cycle or "monthly").strip().lower()
+        if c in ("quarterly", "quarter"):
+            return "quarterly"
+        if c in ("yearly", "annual", "year"):
+            return "yearly"
+        return "monthly"
+
+    @property
+    def billing_cycle_label(self):
+        c = self.normalized_billing_cycle
+        if c == "quarterly":
+            return "Quarterly"
+        if c == "yearly":
+            return "Annual"
+        return "Monthly"
+
+    @property
+    def effective_amount_paid(self):
+        return self.amount_paid if self.amount_paid is not None else self.monthly_amount
 
     def __str__(self):
         return f"Subscription for {self.farmer.user.first_name}"
@@ -257,6 +370,16 @@ class MaintenanceSchedule(models.Model):
     def __str__(self):
         return str(self.name)
 
+class HealthIndicator(models.Model):
+    objects = models.Manager()
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return str(self.name)
+
 class CropType(models.Model):
     objects = models.Manager()
     name = models.CharField(max_length=255)
@@ -354,6 +477,16 @@ class Guideline(models.Model):
     def __str__(self):
         return str(self.title)
 
+class DocumentType(models.Model):
+    objects = models.Manager()
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return str(self.name)
+
 class DocumentCategory(models.Model):
     objects = models.Manager()
     DOCUMENT_TYPES = (
@@ -361,7 +494,7 @@ class DocumentCategory(models.Model):
         ('My Expenses', 'My Expenses'),
         ('My Inventory', 'My Inventory'),
     )
-    document_type = models.CharField(max_length=50, choices=DOCUMENT_TYPES)
+    document_type = models.CharField(max_length=100, default='My Land')
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)

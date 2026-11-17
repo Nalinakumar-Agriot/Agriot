@@ -16,6 +16,17 @@
   .row {
     margin: 0 !important; /* 🔥 fix bootstrap overflow */
   }
+
+  .form-floating input.form-control {
+    height: 52px;
+    font-size: 15px;
+    border-radius: 8px;
+  }
+
+  .form-floating input.form-control:focus {
+    border-color: #F79D4E;
+    box-shadow: 0 0 0 0.25rem rgba(247, 157, 78, 0.25);
+  }
 </style>
 {% endblock %}
 {% block content %}
@@ -29,16 +40,16 @@
           <img src="{% static 'img/auth/agri_logo_3.png' %}" width="350"
               onerror="this.src='https://via.placeholder.com/120'">
         </div>
-        <p class="mb-4 text-center">Enter your mobile number and password</p>
+        <p class="mb-4 text-center text-muted">Enter your mobile number to receive OTP</p>
 
         <form method="POST" action="{% url 'farmer-login' %}">
           {% csrf_token %}
 
           <!-- Mobile -->
           <div class="form-floating mb-4">
-            <input type="text" class="form-control" name="mobile" placeholder="Enter Mobile Number" maxlength="10" required>
-            <label>Mobile Number</label>
-            {% if error %}
+            <input type="tel" name="mobile" id="mobile_input" class="form-control" placeholder="e.g. 9876543210 or +14155552671" value="{{ unregistered_mobile|default:'' }}" minlength="7" maxlength="16" required oninput="let v = this.value.replace(/[^0-9+]/g, ''); if(v.indexOf('+') > 0) { v = v.replace(/\+/g, ''); } if(v.startsWith('+')) { v = '+' + v.slice(1).replace(/\+/g, ''); } this.value = v.slice(0, 16);">
+            <label for="mobile_input">Phone Number</label>
+            {% if error and not not_registered %}
             <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
             <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
             <script>
@@ -56,7 +67,11 @@
             {% endif %}
           </div>
 
-          <button type="submit" class="btn btn-primary w-100">Send OTP</button>
+          <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">Send OTP</button>
+
+          <div class="text-center mt-4 pt-3 border-top">
+            <p class="text-muted small mb-0">New to AgriOT? <a href="{% url 'farmer-register' %}" class="fw-bold" style="color: #63771F; text-decoration: none;">Register as a Farmer</a></p>
+          </div>
         </form>
       </div>
     </div>
@@ -69,4 +84,40 @@
 
   </div>
 </div>
+
+<!-- Modal Popup for Unregistered Mobile Number -->
+<div class="modal fade" id="unregisteredModal" tabindex="-1" aria-labelledby="unregisteredModalLabel" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 430px;">
+    <div class="modal-content border-0 shadow-lg text-center p-4" style="border-radius: 18px;">
+      <div class="d-inline-flex align-items-center justify-content-center rounded-circle mx-auto mb-3" style="width: 60px; height: 60px; background: #FFF4E5; color: #F79D4E;">
+        <i class="ri-user-add-line fs-1"></i>
+      </div>
+      <h5 class="fw-bold mb-2" id="unregisteredModalLabel" style="color: #1e293b;">New Farmer Registration</h5>
+      <p class="text-muted small mb-4" style="line-height: 1.6;">
+        The mobile number <strong class="text-dark">+91 {{ unregistered_mobile }}</strong> is not registered yet.<br>Would you like to register now?
+      </p>
+      <div class="d-flex gap-2 justify-content-center">
+        <button type="button" class="btn btn-light px-4 py-2 fw-semibold text-secondary" data-bs-dismiss="modal" style="border-radius: 8px;">
+          Cancel
+        </button>
+        <a href="{% url 'farmer-register' %}?mobile={{ unregistered_mobile }}" class="btn px-4 py-2 fw-semibold text-white shadow-sm" style="background: #63771F; border-radius: 8px; text-decoration: none;">
+          <i class="ri-check-line me-1"></i>Yes, Register
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% if not_registered %}
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const modalEl = document.getElementById('unregisteredModal');
+    if (modalEl && typeof bootstrap !== 'undefined') {
+      const unregModal = new bootstrap.Modal(modalEl);
+      unregModal.show();
+    }
+  });
+</script>
+{% endif %}
 {% endblock %}

@@ -58,14 +58,23 @@
     <link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}">
   <script>
     'use strict';
+    if (window.jQuery && jQuery.fn && jQuery.fn.dataTable) {
+        jQuery.fn.dataTable.ext.errMode = 'none';
+    }
     $(function() {
-        const select2 = $('.select3');
+        if (window.jQuery && jQuery.fn && jQuery.fn.dataTable) {
+            jQuery.fn.dataTable.ext.errMode = 'none';
+        }
+        const select2 = $('.select2');
 
         if (select2.length) {
             select2.each(function() {
                 var $this = $(this);
-                $this.wrap('<div class="position-relative"></div>').select2({
-                    dropdownParent: $this.parent()
+                var $modal = $this.closest('.modal');
+                $this.select2({
+                    dropdownParent: $modal.length ? $modal : $this.parent(),
+                    width: '100%',
+                    minimumResultsForSearch: 0
                 });
             });
         }

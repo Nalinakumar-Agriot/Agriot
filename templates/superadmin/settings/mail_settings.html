@@ -1,0 +1,386 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+
+{% block title %}Mail & SMTP Settings | Superadmin{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <!-- Header & Navigation Pills -->
+  <div class="card mb-4 border-0 shadow-sm" style="background: linear-gradient(135deg, #f7faf2 0%, #ffffff 100%); border-left: 5px solid #63771F !important;">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+      <div>
+        <h4 class="mb-1 text-dark fw-bold">
+          <i class="ri-mail-settings-line me-2" style="color: #63771F;"></i>
+          Mail &amp; SMTP Settings
+        </h4>
+        <p class="text-muted small mb-0">Configure global SMTP email delivery, test connectivity, and preview automated templates.</p>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <a href="{% url 'payment_integrations' %}" class="btn btn-outline-secondary btn-sm">
+          <i class="ri-bank-card-line me-1"></i> Payment Gateways
+        </a>
+        <a href="{% url 'superadmin_mail_settings' %}" class="btn btn-primary btn-sm active" style="background-color: #63771F; border-color: #63771F;">
+          <i class="ri-mail-line me-1"></i> Mail &amp; SMTP
+        </a>
+        <button type="submit" form="mail-settings-form" class="btn btn-primary btn-sm ms-2" style="background-color: #465515; border-color: #465515;">
+          <i class="ri-save-line me-1"></i> Save Mail Settings
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- Left Column: SMTP Configuration Form -->
+    <div class="col-lg-8">
+      <form id="mail-settings-form" method="POST" action="{% url 'superadmin_mail_settings' %}">
+        {% csrf_token %}
+
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+              <div class="p-2 rounded" style="background-color: rgba(99, 119, 31, 0.1);">
+                <i class="ri-server-line fs-4" style="color: #63771F;"></i>
+              </div>
+              <div>
+                <h5 class="mb-0 fw-semibold text-dark">SuperAdmin SMTP Configuration</h5>
+                <small class="text-muted">Global outgoing email gateway used for system notices &amp; farmer fallback</small>
+              </div>
+            </div>
+            <div>
+              {% if config.is_active and config.email_host_user %}
+              <span class="badge bg-label-success px-3 py-2 rounded-pill font-monospace"><i class="ri-checkbox-circle-line me-1"></i> ACTIVE &amp; READY</span>
+              {% else %}
+              <span class="badge bg-label-warning px-3 py-2 rounded-pill font-monospace"><i class="ri-time-line me-1"></i> SETUP REQUIRED</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="card-body pt-4">
+            <!-- Active Toggle -->
+            <div class="p-3 rounded mb-4" style="background-color: #fbfcf8; border: 1px solid #eef2e6;">
+              <div class="form-check form-switch d-flex align-items-center gap-2 ps-0">
+                <input class="form-check-input ms-0 me-2" type="checkbox" role="switch" id="is_active" name="is_active" {% if config.is_active %}checked{% endif %} style="width: 2.7em; height: 1.4em; cursor: pointer;">
+                <div>
+                  <label class="form-check-label fw-semibold text-dark mb-0" for="is_active" style="cursor: pointer;">
+                    Enable Global Email Dispatch
+                  </label>
+                  <div class="text-muted small">Allow sending registration welcome emails, renewal reminders, and purchase receipts</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="row g-3">
+              <!-- SMTP Host -->
+              <div class="col-md-8">
+                <label class="form-label fw-semibold text-dark" for="email_host">
+                  SMTP Host Server <span class="text-danger">*</span>
+                </label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-muted"><i class="ri-cloud-line"></i></span>
+                  <input type="text" 
+                         id="email_host" 
+                         name="email_host" 
+                         class="form-control font-monospace" 
+                         value="{{ config.email_host|default:'smtp.gmail.com' }}" 
+                         placeholder="smtp.gmail.com" 
+                         required>
+                </div>
+                <small class="form-text text-muted">E.g., <code>smtp.gmail.com</code> (Gmail), <code>smtp-mail.outlook.com</code> (Outlook), or your private SMTP server.</small>
+              </div>
+
+              <!-- SMTP Port -->
+              <div class="col-md-4">
+                <label class="form-label fw-semibold text-dark" for="email_port">
+                  Port <span class="text-danger">*</span>
+                </label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-muted"><i class="ri-hashtag"></i></span>
+                  <input type="number" 
+                         id="email_port" 
+                         name="email_port" 
+                         class="form-control font-monospace" 
+                         value="{{ config.email_port|default:587 }}" 
+                         placeholder="587" 
+                         required>
+                </div>
+                <small class="form-text text-muted"><code>587</code> for TLS, <code>465</code> for SSL.</small>
+              </div>
+
+              <!-- Encryption Mode -->
+              <div class="col-md-12 mb-2">
+                <label class="form-label fw-semibold text-dark d-block">Encryption Protocol</label>
+                <div class="d-flex gap-4">
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="security_mode" id="mode_tls" value="tls" {% if not config.email_use_ssl %}checked{% endif %}>
+                    <label class="form-check-label text-dark fw-medium" for="mode_tls">
+                      STARTTLS / TLS (Recommended on Port 587)
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="security_mode" id="mode_ssl" value="ssl" {% if config.email_use_ssl %}checked{% endif %}>
+                    <label class="form-check-label text-dark fw-medium" for="mode_ssl">
+                      SSL (Direct on Port 465)
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SMTP Host User / Email -->
+              <div class="col-md-6">
+                <label class="form-label fw-semibold text-dark" for="email_host_user">
+                  SMTP Username / Email <span class="text-danger">*</span>
+                </label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-muted"><i class="ri-user-received-line"></i></span>
+                  <input type="email" 
+                         id="email_host_user" 
+                         name="email_host_user" 
+                         class="form-control font-monospace" 
+                         value="{{ config.email_host_user|default:'' }}" 
+                         placeholder="your-email@gmail.com" 
+                         required>
+                </div>
+                <small class="form-text text-muted">Your authenticated email address.</small>
+              </div>
+
+              <!-- SMTP Password / App Password -->
+              <div class="col-md-6">
+                <label class="form-label fw-semibold text-dark" for="email_host_password">
+                  SMTP / App Password <span class="text-danger">*</span>
+                </label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-muted"><i class="ri-key-fill"></i></span>
+                  <input type="password" 
+                         id="email_host_password" 
+                         name="email_host_password" 
+                         class="form-control font-monospace" 
+                         value="{{ config.email_host_password|default:'' }}" 
+                         placeholder="16-character App Password" 
+                         {% if not config.email_host_password %}required{% endif %}>
+                  <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('email_host_password', 'pwd-toggle-icon')">
+                    <i class="ri-eye-line" id="pwd-toggle-icon"></i>
+                  </button>
+                </div>
+                <small class="form-text text-muted">For Gmail, use a <strong>16-digit App Password</strong>, not your personal password.</small>
+              </div>
+
+              <!-- Sender From Name -->
+              <div class="col-md-6">
+                <label class="form-label fw-semibold text-dark" for="from_name">
+                  Default Sender Name
+                </label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-muted"><i class="ri-building-line"></i></span>
+                  <input type="text" 
+                         id="from_name" 
+                         name="from_name" 
+                         class="form-control" 
+                         value="{{ config.from_name|default:'AgriOT Platform' }}" 
+                         placeholder="AgriOT Platform">
+                </div>
+                <small class="form-text text-muted">Displays as the Sender in farmer inboxes.</small>
+              </div>
+
+              <!-- Sender From Email -->
+              <div class="col-md-6">
+                <label class="form-label fw-semibold text-dark" for="from_email">
+                  From Email (Optional)
+                </label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-muted"><i class="ri-mail-send-line"></i></span>
+                  <input type="email" 
+                         id="from_email" 
+                         name="from_email" 
+                         class="form-control font-monospace" 
+                         value="{{ config.from_email|default:'' }}" 
+                         placeholder="Same as Username if blank">
+                </div>
+                <small class="form-text text-muted">Defaults to SMTP Username if left blank.</small>
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 pt-4 mt-3 border-top">
+              <a href="{% url 'payment_integrations' %}" class="btn btn-light">Back to Integrations</a>
+              <button type="submit" class="btn btn-primary" style="background-color: #63771F; border-color: #63771F;">
+                <i class="ri-check-line me-1"></i> Save SMTP Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column: Test Email Tool & Template Previews -->
+    <div class="col-lg-4">
+
+      <!-- Test Email Dispatch Tool -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3 border-bottom">
+          <h5 class="mb-0 fw-semibold text-dark d-flex align-items-center">
+            <i class="ri-send-plane-line me-2 text-primary"></i>
+            Test SMTP Connectivity
+          </h5>
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-3">
+            Verify that your SMTP host and authentication credentials can successfully deliver an email.
+          </p>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold text-dark small" for="test_email_input">
+              Recipient Email Address
+            </label>
+            <input type="email" id="test_email_input" class="form-control form-control-sm font-monospace" placeholder="youremail@example.com" value="{{ request.user.email }}">
+          </div>
+
+          <button type="button" class="btn btn-outline-primary w-100 btn-sm" id="btn-send-test" onclick="sendTestMail()">
+            <i class="ri-mail-check-line me-1"></i> Send Test Email Now
+          </button>
+
+          <div id="test-mail-status" class="mt-3 p-3 rounded small" style="display: none;"></div>
+        </div>
+      </div>
+
+      <!-- Live Template Previews -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3 border-bottom">
+          <h5 class="mb-0 fw-semibold text-dark d-flex align-items-center">
+            <i class="ri-layout-masonry-line me-2 text-info"></i>
+            Email Templates (3 Automated)
+          </h5>
+        </div>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush">
+            <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+              <div>
+                <strong class="text-dark d-block">1. Welcome Email</strong>
+                <small class="text-muted">Triggered on farmer registration/creation</small>
+              </div>
+              <a href="{% url 'superadmin_preview_email' 'welcome' %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                <i class="ri-eye-line me-1"></i> Preview
+              </a>
+            </li>
+
+            <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+              <div>
+                <strong class="text-dark d-block">2. Subscription Renewal</strong>
+                <small class="text-muted">Triggered upon manual or auto renewal</small>
+              </div>
+              <a href="{% url 'superadmin_preview_email' 'renewal' %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                <i class="ri-eye-line me-1"></i> Preview
+              </a>
+            </li>
+
+            <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+              <div>
+                <strong class="text-dark d-block">3. Package Buy / Upgrade</strong>
+                <small class="text-muted">Triggered when purchasing or switching plans</small>
+              </div>
+              <a href="{% url 'superadmin_preview_email' 'upgrade' %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                <i class="ri-eye-line me-1"></i> Preview
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Quick Setup Instructions Card -->
+      <div class="card border-0 shadow-sm" style="background-color: #F8FAF2; border: 1px solid #E5EBD8 !important;">
+        <div class="card-body">
+          <h6 class="fw-bold text-dark mb-2">
+            <i class="ri-lightbulb-line text-warning me-1"></i> Gmail App Password Setup:
+          </h6>
+          <ol class="small text-muted ps-3 mb-0" style="line-height: 1.8;">
+            <li>Log in to your Google Account and navigate to <strong>Security</strong>.</li>
+            <li>Ensure <strong>2-Step Verification</strong> is turned ON.</li>
+            <li>Search for <strong>"App passwords"</strong> in the top search bar.</li>
+            <li>Create a new App Password named <em>AgriOT</em>.</li>
+            <li>Copy the <strong>16-letter password</strong> and paste it into the password field above.</li>
+          </ol>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+function togglePasswordVisibility(inputId, iconId) {
+    const input = document.getElementById(inputId);
+    const icon = document.getElementById(iconId);
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'ri-eye-off-line';
+    } else {
+        input.type = 'password';
+        icon.className = 'ri-eye-line';
+    }
+}
+
+function sendTestMail() {
+    const emailInput = document.getElementById('test_email_input');
+    const statusBox = document.getElementById('test-mail-status');
+    const sendBtn = document.getElementById('btn-send-test');
+    const testEmail = (emailInput.value || '').trim();
+
+    if (!testEmail) {
+        alert('Please enter a recipient email address.');
+        emailInput.focus();
+        return;
+    }
+
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Sending Test Email...';
+
+    statusBox.style.display = 'block';
+    statusBox.className = 'mt-3 p-3 rounded small bg-light text-muted';
+    statusBox.innerText = 'Connecting to SMTP server and transmitting message...';
+
+    const formData = new FormData();
+    formData.append('test_email', testEmail);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    fetch('{% url "superadmin_test_mail" %}', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<i class="ri-mail-check-line me-1"></i> Send Test Email Now';
+        if (data.success) {
+            statusBox.className = 'mt-3 p-3 rounded small bg-label-success text-success fw-semibold';
+            statusBox.innerHTML = '<i class="ri-checkbox-circle-fill me-1"></i> ' + data.message;
+        } else {
+            statusBox.className = 'mt-3 p-3 rounded small bg-label-danger text-danger';
+            statusBox.innerHTML = '<i class="ri-error-warning-fill me-1"></i> ' + data.message;
+        }
+    })
+    .catch(err => {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<i class="ri-mail-check-line me-1"></i> Send Test Email Now';
+        statusBox.className = 'mt-3 p-3 rounded small bg-label-danger text-danger';
+        statusBox.innerHTML = '<i class="ri-error-warning-fill me-1"></i> Network error while connecting to server.';
+    });
+}
+</script>
+{% endblock %}

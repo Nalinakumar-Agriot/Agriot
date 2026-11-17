@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recurring Expense Reminder - AgriOT</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F4F7EE; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #2D3748; line-height: 1.6;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #F4F7EE; padding: 30px 15px;">
+    <tr>
+      <td align="center">
+        <!-- Main Card Container -->
+        <table role="presentation" width="100%" max-width="600" cellspacing="0" cellpadding="0" border="0" style="max-width: 600px; background-color: #FFFFFF; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(99, 119, 31, 0.08); border: 1px solid #E2E8F0;">
+          
+          <!-- Header Banner -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #E65100 0%, #BF360C 100%); padding: 36px 30px; text-align: center;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td align="center">
+                    <div style="display: inline-block; background-color: rgba(255, 255, 255, 0.2); padding: 8px 18px; border-radius: 30px; margin-bottom: 12px;">
+                      <span style="color: #FFFFFF; font-size: 13px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;">Recurring Expense Reminder</span>
+                    </div>
+                    <h1 style="color: #FFFFFF; margin: 0 0 8px 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">
+                      Expense Due Notification 🔔
+                    </h1>
+                    <p style="color: #FFCCBC; margin: 0; font-size: 15px; font-weight: 400;">
+                      Scheduled recurring farm expenditure reminder
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Body Content -->
+          <tr>
+            <td style="padding: 35px 30px 25px 30px;">
+              <p style="font-size: 16px; margin: 0 0 18px 0; color: #2D3748;">
+                Hello <strong>{{ farmer_name|default:"Farmer" }}</strong>,
+              </p>
+              <p style="font-size: 15px; margin: 0 0 24px 0; color: #4A5568; line-height: 1.7;">
+                This is a scheduled reminder for your recurring expense: <strong>{{ description }}</strong>. An entry has been logged or is due for settlement in your farm ledger.
+              </p>
+
+              <!-- Expense Details Table -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #FFF8E1; border: 1px solid #FFE082; border-radius: 12px; margin-bottom: 25px; overflow: hidden;">
+                <tr>
+                  <td style="padding: 16px 20px; background-color: #FFE082; border-bottom: 1px solid #FFD54F;">
+                    <strong style="color: #E65100; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+                      💰 Expense Breakdown
+                    </strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 18px 20px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td style="padding: 6px 0; font-size: 14px; color: #718096; width: 45%;">Expense Item:</td>
+                        <td style="padding: 6px 0; font-size: 14px; color: #1A202C; font-weight: 700;">{{ description }}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 6px 0; font-size: 14px; color: #718096;">Category:</td>
+                        <td style="padding: 6px 0; font-size: 14px; color: #1A202C; font-weight: 600;">{{ category|default:"General" }}</td>
+                      </tr>
+                      {% if farm_name %}
+                      <tr>
+                        <td style="padding: 6px 0; font-size: 14px; color: #718096;">Farm Land:</td>
+                        <td style="padding: 6px 0; font-size: 14px; color: #1A202C; font-weight: 600;">{{ farm_name }}</td>
+                      </tr>
+                      {% endif %}
+                      {% if vendor_name %}
+                      <tr>
+                        <td style="padding: 6px 0; font-size: 14px; color: #718096;">Vendor:</td>
+                        <td style="padding: 6px 0; font-size: 14px; color: #1A202C; font-weight: 600;">{{ vendor_name }}</td>
+                      </tr>
+                      {% endif %}
+                      <tr>
+                        <td style="padding: 6px 0; font-size: 14px; color: #718096;">Actual Amount:</td>
+                        <td style="padding: 6px 0; font-size: 16px; color: #D32F2F; font-weight: 800;">₹ {{ amount|floatformat:2 }}</td>
+                      </tr>
+                      {% if balance_due and balance_due > 0 %}
+                      <tr>
+                        <td style="padding: 6px 0; font-size: 14px; color: #D32F2F; font-weight: 600;">Outstanding Balance:</td>
+                        <td style="padding: 6px 0; font-size: 15px; color: #D32F2F; font-weight: 700;">₹ {{ balance_due|floatformat:2 }}</td>
+                      </tr>
+                      {% endif %}
+                      <tr>
+                        <td style="padding: 6px 0; font-size: 14px; color: #718096;">Repeat Cycle:</td>
+                        <td style="padding: 6px 0; font-size: 14px; color: #E65100; font-weight: 700;">{{ repeat_cycle|default:"Monthly" }}</td>
+                      </tr>
+                      {% if reminder_type %}
+                      <tr>
+                        <td style="padding: 6px 0; font-size: 14px; color: #718096;">Reminder Frequency:</td>
+                        <td style="padding: 6px 0; font-size: 14px; color: #1A202C; font-weight: 600;">{{ reminder_type }}</td>
+                      </tr>
+                      {% endif %}
+                      <tr>
+                        <td style="padding: 6px 0; font-size: 14px; color: #718096;">Date Logged:</td>
+                        <td style="padding: 6px 0; font-size: 14px; color: #1A202C; font-weight: 600;">{{ close_date }}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Call to Action -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 25px;">
+                <tr>
+                  <td align="center">
+                    <a href="{{ expenses_url }}" target="_blank" style="display: inline-block; background-color: #E65100; color: #FFFFFF; text-decoration: none; font-size: 15px; font-weight: 700; padding: 14px 34px; border-radius: 8px; box-shadow: 0 4px 12px rgba(230, 81, 0, 0.25);">
+                      Open Expense Ledger →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="font-size: 14px; color: #718096; margin: 0; line-height: 1.6;">
+                Need assistance? Feel free to contact our support team at <a href="mailto:support@agriot.com" style="color: #2D6A4F; font-weight: 600;">support@agriot.com</a>.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #F8FAF2; padding: 24px 30px; text-align: center; border-top: 1px solid #E2E8F0;">
+              <p style="font-size: 13px; color: #718096; margin: 0 0 6px 0; font-weight: 600;">
+                AgriOT Smart Farm Management Platform
+              </p>
+              <p style="font-size: 12px; color: #A0AEC0; margin: 0;">
+                &copy; {{ current_year|default:2026 }} AgriOT. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

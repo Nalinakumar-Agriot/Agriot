@@ -14,10 +14,16 @@ class Command(BaseCommand):
                 cursor.execute("SELECT setval(pg_get_serial_sequence('superadmin_taluk', 'id'), coalesce(max(id),0) + 1, false) FROM superadmin_taluk;")
 
         # Ensure India exists
-        country, _ = Country.objects.get_or_create(name='India', defaults={'status': '1'})
+        country = Country.objects.filter(name='India').first()
+        if not country:
+            country = Country.objects.create(name='India', status='1')
         
         # Ensure Tamil Nadu exists
-        state, _ = State.objects.get_or_create(name='Tamil Nadu', defaults={'country': country, 'status': '1'})
+        state = State.objects.filter(name='Tamil Nadu', country=country).first()
+        if not state:
+            state = State.objects.filter(name='Tamil Nadu').first()
+        if not state:
+            state = State.objects.create(name='Tamil Nadu', country=country, status='1')
 
         # Full data for 38 Tamil Nadu Districts and Taluks
         tn_data = {

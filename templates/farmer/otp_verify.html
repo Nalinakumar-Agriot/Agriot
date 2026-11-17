@@ -2,6 +2,7 @@
 {% load static %}
 
 {% block page_css %}
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 <style>
 .otp-boxes {
   display: flex;
@@ -29,6 +30,10 @@
   text-align: center;
   margin-top: 10px;
 }
+
+#resend-link:hover {
+  text-decoration: underline !important;
+}
 </style>
 {% endblock %}
 
@@ -42,23 +47,111 @@
 
         <img src="{% static 'img/auth/agri_logo_3.png' %}" width="200">
 
+        {% if show_workspace_modal %}
+        <!-- ================= DUAL ROLE SELECTION (OTP ALREADY VERIFIED) ================= -->
+        <div class="badge rounded-pill d-inline-flex align-items-center gap-1.5 px-3 py-1.5 mt-3 mb-2" style="background:#ECFDF5; color:#059669; border: 1px solid #A7F3D0;">
+          <i class="ri-checkbox-circle-fill fs-6"></i>
+          <span class="fw-semibold">OTP Verified Successfully</span>
+        </div>
+
+        <h5 class="mt-2 fw-bold text-dark">Choose Your Account</h5>
+        <p class="text-muted small mb-4">
+          Are you logging in as a <strong>Farmer (Owner)</strong> or <strong>Farm Manager</strong>?
+        </p>
+
+        <form method="POST" action="{% url 'select-workspace' %}" id="inlineWorkspaceForm">
+          {% csrf_token %}
+          <input type="hidden" name="workspace_type" id="inline_selected_type" value="{{ workspaces.0.type }}">
+          <input type="hidden" name="target_id" id="inline_selected_target" value="{{ workspaces.0.target_id }}">
+
+          <div class="d-flex flex-column gap-3 mb-4 text-start">
+            {% for ws in workspaces %}
+            <div class="p-3 rounded-3 border-2 border d-flex align-items-center justify-content-between inline-ws-card {% if forloop.first %}selected-ws-card border-primary bg-primary bg-opacity-10{% else %}border-light-subtle bg-white{% endif %}"
+                 style="cursor: pointer; transition: all 0.2s ease;"
+                 onclick="selectInlineRole('{{ ws.type }}', '{{ ws.target_id }}', this)">
+              <div class="d-flex align-items-center gap-3">
+                <div class="rounded-3 p-2.5 {% if ws.type == 'farmer' %}bg-success text-white{% else %}bg-warning text-dark{% endif %} d-flex align-items-center justify-content-center shadow-sm" style="width:44px;height:44px;">
+                  {% if ws.type == 'farmer' %}
+                    <i class="ri-plant-fill fs-4"></i>
+                  {% else %}
+                    <i class="ri-user-star-fill fs-4"></i>
+                  {% endif %}
+                </div>
+                <div>
+                  <div class="d-flex align-items-center gap-2">
+                    <h6 class="mb-0 fw-bold text-dark">{{ ws.title }}</h6>
+                    <span class="badge {% if ws.type == 'farmer' %}bg-success{% else %}bg-warning text-dark{% endif %} rounded-pill" style="font-size: 10px;">
+                      {{ ws.badge }}
+                    </span>
+                  </div>
+                  <div class="text-muted small mt-1">
+                    <i class="ri-briefcase-line me-1"></i>{{ ws.role_label }}
+                    {% if ws.location %}&bull; <i class="ri-map-pin-line ms-1 me-1"></i>{{ ws.location }}{% endif %}
+                  </div>
+                </div>
+              </div>
+              <div class="form-check m-0">
+                <input class="form-check-input" type="radio" name="inline_radio_choice" id="inline_choice_{{ forloop.counter }}" value="{{ ws.type }}_{{ ws.target_id }}" {% if forloop.first %}checked{% endif %} style="pointer-events: none; width: 1.25rem; height: 1.25rem;">
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary btn-lg rounded-3 fw-bold d-flex align-items-center justify-content-center gap-2 shadow-sm py-2.5">
+              <span>Continue to Dashboard</span>
+              <i class="ri-arrow-right-line"></i>
+            </button>
+            <a href="{% url 'farmer-logout' %}" class="btn btn-outline-secondary btn-sm">Switch Phone Number</a>
+          </div>
+        </form>
+
+        <script>
+        function selectInlineRole(type, targetId, cardEl) {
+          document.getElementById('inline_selected_type').value = type;
+          document.getElementById('inline_selected_target').value = targetId;
+
+          document.querySelectorAll('.inline-ws-card').forEach(el => {
+            el.classList.remove('selected-ws-card', 'border-primary', 'bg-primary', 'bg-opacity-10');
+            el.classList.add('border-light-subtle', 'bg-white');
+            const r = el.querySelector('input[type="radio"]');
+            if (r) r.checked = false;
+          });
+
+          cardEl.classList.add('selected-ws-card', 'border-primary', 'bg-primary', 'bg-opacity-10');
+          cardEl.classList.remove('border-light-subtle', 'bg-white');
+          const r = cardEl.querySelector('input[type="radio"]');
+          if (r) r.checked = true;
+        }
+
+        // Intercept browser back button to safely log out and return to the phone number login screen
+        try {
+          history.pushState(null, null, location.href);
+          window.onpopstate = function () {
+            window.location.replace("{% url 'farmer-logout' %}");
+          };
+        } catch (e) {
+          console.error("Back button interception error:", e);
+        }
+        </script>
+        {% else %}
+        <!-- OTP VERIFICATION FORM (FIRST TIME ONLY) -->
         <h5 class="mt-4">Verify OTP</h5>
 
         <p class="text-muted">
-          OTP has been sent to <b id="mobile-text">+91 {{ mobile|default:'XXXXXXXXXX' }}</b>
+          OTP has been sent to <b id="mobile-text">{% if mobile and not mobile|slice:":1" == "+" and mobile|length == 10 %}+91 {% endif %}{{ mobile|default:'XXXXXXXXXX' }}</b>
         </p>
 
-        <!-- OTP FORM -->
         <form method="POST" action="{% url 'otp-verify' %}">
           {% csrf_token %}
 
           <div class="otp-boxes mb-4">
-            <input type="text" maxlength="1" class="otp-input" required>
-            <input type="text" maxlength="1" class="otp-input" required>
-            <input type="text" maxlength="1" class="otp-input" required>
-            <input type="text" maxlength="1" class="otp-input" required>
-            <input type="text" maxlength="1" class="otp-input" required>
-            <input type="text" maxlength="1" class="otp-input" required>
+            <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" autofocus required>
+            <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" required>
+            <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" required>
+            <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" required>
+            <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" required>
+            <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" required>
           </div>
 
           {% if error %}
@@ -68,23 +161,17 @@
           <input type="hidden" name="otp" id="otp-value">
 
           <div class="d-flex align-items-center justify-content-center gap-2">
-            <a href="{% url 'farmer-login' %}" class="btn btn-secondary w-100">Back to Login</a>
+            <a href="{% url 'farmer-logout' %}" class="btn btn-secondary w-100">Back to Login</a>
             <button type="submit" class="btn btn-primary w-100">Verify OTP</button>
           </div>
           <div class="resend-text mt-3">
-            <span id="timer">Resend OTP in 30s</span>
-            <a href="{% url 'farmer-login' %}" id="resend-link" class="d-none">Resend OTP</a>
+            <span id="timer" class="text-muted">Resend OTP in 30s</span>
+            <a href="javascript:void(0);" id="resend-link" class="d-none fw-semibold" style="color: #F79D4E; text-decoration: none;">Resend OTP</a>
+            <span id="resending-spinner" class="d-none text-muted"><i class="ri-loader-4-line ri-spin align-middle me-1"></i>Sending new OTP...</span>
           </div>
-
-          {% if otp %}
-          <div class="mt-3 text-center">
-            <div class="alert alert-warning py-2 px-3 m-0 d-inline-block fw-bold" style="background-color: #fff3cd; color: #856404; border: 1px dashed #ffc107; border-radius: 8px; font-size: 15px;">
-              OTP: <span id="display-otp" style="letter-spacing: 2px;">{{ otp }}</span>
-            </div>
-          </div>
-          {% endif %}
 
         </form>
+        {% endif %}
       </div>
     </div>
 
@@ -97,12 +184,15 @@
   </div>
 </div>
 
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 <script>
-/* ---------------- OTP BOX AUTO MOVE ---------------- */
+/* ---------------- OTP BOX AUTO MOVE & PASTE ---------------- */
 const inputs = document.querySelectorAll(".otp-input");
 
 inputs.forEach((input, index) => {
-  input.addEventListener("input", () => {
+  input.addEventListener("input", (e) => {
+    // Only allow digits
+    input.value = input.value.replace(/[^0-9]/g, '');
     if (input.value && index < inputs.length - 1) {
       inputs[index + 1].focus();
     }
@@ -114,6 +204,18 @@ inputs.forEach((input, index) => {
       inputs[index - 1].focus();
     }
   });
+
+  input.addEventListener("paste", (e) => {
+    e.preventDefault();
+    const pasteData = (e.clipboardData || window.clipboardData).getData("text").trim();
+    const digits = pasteData.replace(/[^0-9]/g, '').slice(0, inputs.length);
+    digits.split('').forEach((digit, i) => {
+      if (inputs[i]) inputs[i].value = digit;
+    });
+    updateOTP();
+    const nextIdx = Math.min(digits.length, inputs.length - 1);
+    inputs[nextIdx].focus();
+  });
 });
 
 function updateOTP() {
@@ -122,21 +224,111 @@ function updateOTP() {
   document.getElementById("otp-value").value = otp;
 }
 
-/* ---------------- COUNTDOWN ---------------- */
+/* ---------------- COUNTDOWN & RESEND OTP ---------------- */
 let timeLeft = 30;
+let countdownInterval = null;
 const timerEl = document.getElementById("timer");
 const resendLink = document.getElementById("resend-link");
+const resendingSpinner = document.getElementById("resending-spinner");
 
-const countdown = setInterval(() => {
-  timeLeft--;
+function startCountdown(seconds) {
+  timeLeft = seconds || 30;
   timerEl.textContent = `Resend OTP in ${timeLeft}s`;
+  timerEl.classList.remove("d-none");
+  resendLink.classList.add("d-none");
+  if (resendingSpinner) resendingSpinner.classList.add("d-none");
 
-  if (timeLeft <= 0) {
-    clearInterval(countdown);
-    timerEl.classList.add("d-none");
+  if (countdownInterval) clearInterval(countdownInterval);
+
+  countdownInterval = setInterval(() => {
+    timeLeft--;
+    timerEl.textContent = `Resend OTP in ${timeLeft}s`;
+
+    if (timeLeft <= 0) {
+      clearInterval(countdownInterval);
+      timerEl.classList.add("d-none");
+      resendLink.classList.remove("d-none");
+    }
+  }, 1000);
+}
+
+// Initial 30s countdown start
+startCountdown(30);
+
+// Resend OTP via AJAX
+resendLink.addEventListener("click", function(e) {
+  e.preventDefault();
+
+  resendLink.classList.add("d-none");
+  timerEl.classList.add("d-none");
+  if (resendingSpinner) resendingSpinner.classList.remove("d-none");
+
+  const csrfToken = document.querySelector("[name=csrfmiddlewaretoken]") ? document.querySelector("[name=csrfmiddlewaretoken]").value : "";
+
+  fetch("{% url 'resend-otp' %}", {
+    method: "POST",
+    headers: {
+      "X-CSRFToken": csrfToken,
+      "X-Requested-With": "XMLHttpRequest",
+      "Content-Type": "application/x-www-form-urlencoded"
+    }
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (resendingSpinner) resendingSpinner.classList.add("d-none");
+
+    if (data.status === "success") {
+      // Clear OTP boxes
+      inputs.forEach(i => i.value = "");
+      document.getElementById("otp-value").value = "";
+      if (inputs.length > 0) inputs[0].focus();
+
+      // Show success toast
+      Toastify({
+        text: data.message || "New OTP sent successfully!",
+        duration: 4000,
+        gravity: "top",
+        position: "center",
+        style: {
+          background: "#28a745",
+          borderRadius: "8px"
+        },
+        close: true
+      }).showToast();
+
+      // Restart countdown
+      startCountdown(30);
+    } else {
+      resendLink.classList.remove("d-none");
+      Toastify({
+        text: data.message || "Failed to resend OTP.",
+        duration: 4000,
+        gravity: "top",
+        position: "center",
+        style: {
+          background: "#dc3545",
+          borderRadius: "8px"
+        },
+        close: true
+      }).showToast();
+    }
+  })
+  .catch(err => {
+    if (resendingSpinner) resendingSpinner.classList.add("d-none");
     resendLink.classList.remove("d-none");
-  }
-}, 1000);
+    Toastify({
+      text: "Network error while resending OTP. Please try again.",
+      duration: 4000,
+      gravity: "top",
+      position: "center",
+      style: {
+        background: "#dc3545",
+        borderRadius: "8px"
+      },
+      close: true
+    }).showToast();
+  });
+});
 </script>
 
 {% endblock %}

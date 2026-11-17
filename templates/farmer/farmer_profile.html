@@ -47,6 +47,64 @@
     box-shadow: 0 2px 6px rgba(246, 156, 85, 0.25);
     border-color: #F69C55 !important;
 }
+.package-plan-card {
+    border: 2px solid #e2e8f0 !important;
+    background-color: #ffffff;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+.package-plan-card:hover {
+    border-color: #cbd5e1 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.package-plan-card.selected-plan {
+    border: 2.5px solid #63771F !important;
+    background-color: rgba(99, 119, 31, 0.05) !important;
+    box-shadow: 0 6px 20px rgba(99, 119, 31, 0.18) !important;
+}
+/* SMTP fields use an input-group addon.  Size the complete group (not only
+   the input) so icon, field and password visibility button share one border
+   and one height. */
+#farmerMailSettingsForm .smtp-input-group {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    min-width: 0;
+}
+#farmerMailSettingsForm .smtp-input-group > .input-group-text,
+#farmerMailSettingsForm .smtp-input-group > .form-control,
+#farmerMailSettingsForm .smtp-input-group > .btn {
+    height: 40px !important;
+    min-height: 40px !important;
+    margin: 0 !important;
+}
+#farmerMailSettingsForm .smtp-input-group > .input-group-text {
+    flex: 0 0 46px;
+    width: 46px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#farmerMailSettingsForm .smtp-input-group > .form-control {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+#farmerMailSettingsForm .smtp-input-group > .btn {
+    flex: 0 0 46px;
+    width: 46px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#farmerMailSettingsForm .smtp-port-group {
+    max-width: 180px;
+}
+@media (max-width: 767.98px) {
+    #farmerMailSettingsForm .smtp-port-group { max-width: none; }
+}
 </style>
 {% endblock page_css %}
 
@@ -95,6 +153,13 @@ function togglePersonalEdit(showEdit) {
     document.getElementById('personalEditMode').style.display = showEdit ? 'block' : 'none';
 }
 
+function toggleManagerEdit(showEdit) {
+    var view = document.getElementById('managerViewMode');
+    var edit = document.getElementById('managerEditMode');
+    if (view) view.style.display = showEdit ? 'none' : 'block';
+    if (edit) edit.style.display = showEdit ? 'block' : 'none';
+}
+
 function previewProfileImage(input) {
     if (input.files && input.files[0]) {
         var reader = new FileReader();
@@ -131,6 +196,8 @@ function activateFarmerTab() {
             targetTabId = '#documents';
         } else if (targetTabId === '#subscription' || targetTabId === '#billing' || targetTabId === '#plans' || targetTabId === '#my_plans') {
             targetTabId = '#subscription';
+        } else if (targetTabId === '#mail_settings' || targetTabId === '#mail' || targetTabId === '#email' || targetTabId === '#mail-settings') {
+            targetTabId = '#mail_settings';
         }
 
         var tabLink = document.querySelector('#farmerTabs a[data-bs-target="' + targetTabId + '"]');
@@ -168,8 +235,13 @@ window.addEventListener('hashchange', function() {
     <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
         <div class="d-flex align-items-start flex-column">
             <h4 class="mb-2 fw-bold text-dark d-flex align-items-center">
-                <i class="ri-user-line me-2 text-primary"></i>
-                Farmer Profile & Subscription Billing
+                {% if is_manager_mode %}
+                    <i class="ri-user-star-line me-2 text-warning"></i>
+                    Manager Profile &amp; Managed Farm
+                {% else %}
+                    <i class="ri-user-line me-2 text-primary"></i>
+                    Farmer Profile &amp; Subscription Billing
+                {% endif %}
             </h4>
             <ul class="nav custom-tabs gap-2 flex-wrap" id="farmerTabs" role="tablist">
                 <li class="nav-item">
@@ -187,15 +259,29 @@ window.addEventListener('hashchange', function() {
                         <i class="ri-wallet-3-line me-1"></i>Subscription
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" data-bs-target="#mail_settings" href="#mail_settings">
+                        <i class="ri-mail-settings-line me-1"></i>Mail Integration
+                    </a>
+                </li>
             </ul>
         </div>
         <div class="d-flex align-items-center justify-content-end gap-2">
+            {% if is_manager_mode %}
+            <div class="badge rounded-pill d-flex align-items-center justify-content-end gap-2 px-3 py-2" style="background: #FFFBEB;border: 1px solid #FEF3C7;color: #D97706;">
+                <span>
+                    <i class="ri-user-star-line fs-5"></i>
+                </span>
+                <span class="fs-7 fw-semibold">Active Farm Manager</span>
+            </div>
+            {% else %}
             <div class="badge rounded-pill d-flex align-items-center justify-content-end gap-2 px-3 py-2" style="background: #F0FDF4;border: 1px solid #D0FAE5;color: #008236;">
                 <span>
                     <i class="ri-shield-flash-line fs-5"></i>
                 </span>
                 <span class="fs-7 fw-semibold">Active Sowing Plan Verified</span>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -209,12 +295,22 @@ window.addEventListener('hashchange', function() {
                         <div class="position-absolute" style="bottom: -40px; left: 20px;">
                             <div class="bg-white border border-3 rounded-3 overflow-hidden d-flex align-items-center justify-content-center fw-bold shadow-sm"
                                 style="width: 80px; height: 80px; font-size: 24px; position: relative;">
-                                {% if profile.profile_image %}
-                                <img src="{{ profile.profile_image.url }}" id="profileAvatarImg" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
+                                {% if is_manager_mode %}
+                                    {% if staff_obj.profile_image %}
+                                    <img src="{{ staff_obj.profile_image.url }}" id="profileAvatarImg" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
+                                    {% else %}
+                                    <div id="profileAvatarInitials" class="w-100 h-100 bg-warning text-dark d-flex align-items-center justify-content-center fs-3 fw-bold">
+                                        {{ staff_obj.name|default:request.user.first_name|default:request.user.username|slice:":2"|upper }}
+                                    </div>
+                                    {% endif %}
                                 {% else %}
-                                <div id="profileAvatarInitials" class="w-100 h-100 bg-primary text-white d-flex align-items-center justify-content-center fs-3 fw-bold">
-                                    {{ request.user.first_name|default:request.user.username|slice:":2"|upper }}
-                                </div>
+                                    {% if profile.profile_image %}
+                                    <img src="{{ profile.profile_image.url }}" id="profileAvatarImg" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
+                                    {% else %}
+                                    <div id="profileAvatarInitials" class="w-100 h-100 bg-primary text-white d-flex align-items-center justify-content-center fs-3 fw-bold">
+                                        {{ request.user.get_full_name|default:request.user.first_name|default:request.user.username|slice:":2"|upper }}
+                                    </div>
+                                    {% endif %}
                                 {% endif %}
                             </div>
                         </div>
@@ -222,18 +318,78 @@ window.addEventListener('hashchange', function() {
                     <div class="card-body pt-10 px-4">
                         <div class="d-flex justify-content-between align-items-start mb-3">
                             <div>
-                                <h5 class="fw-bold mb-0" id="profileNameDisplay">{{ request.user.first_name|default:request.user.username }}</h5>
+                                {% if is_manager_mode %}
+                                <h5 class="fw-bold mb-0" id="profileNameDisplay">{{ staff_obj.name|default:request.user.get_full_name|default:request.user.first_name|default:request.user.username }}</h5>
+                                <small class="text-muted" style="font-size: 11px; letter-spacing: 1px;">
+                                    EMP ID: MGR-{{ staff_obj.id|default:request.user.id|stringformat:"04d" }}
+                                </small>
+                                {% else %}
+                                <h5 class="fw-bold mb-0" id="profileNameDisplay">{{ request.user.get_full_name|default:request.user.first_name|default:request.user.username }}</h5>
                                 <small class="text-muted" style="font-size: 11px; letter-spacing: 1px;">
                                     ID: KH-8831-{{ request.user.id }}
                                 </small>
+                                {% endif %}
                             </div>
+                            {% if is_manager_mode %}
+                            <span class="badge bg-label-warning rounded-pill px-3 py-1 text-uppercase" style="font-size: 11px;">
+                                <i class="ri-user-star-line me-1"></i>{{ staff_obj.designation.name|default:staff_obj.role|default:'Farm Manager' }}
+                            </span>
+                            {% else %}
                             <span class="badge bg-label-success rounded-pill px-3 py-1 text-uppercase" style="font-size: 11px;">
                                 {{ profile.farmer_type|default:'Individual'|capfirst }}
                             </span>
+                            {% endif %}
                         </div>
                         <div id="viewMode">
                             <table class="table table-borderless mb-0" style="font-size: 12px;">
                                 <tbody>
+                                    {% if is_manager_mode %}
+                                    <tr class="border-top" style="border-bottom: 1px solid #eee;">
+                                        <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
+                                            <i class="ri-building-line me-2 fs-6"></i>Employer Farm
+                                        </td>
+                                        <td class="text-end fw-bold text-dark">
+                                            {{ employer_profile.company_name|default:employer_profile.user.first_name|default:employer_profile.user.username }}
+                                        </td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
+                                            <i class="ri-phone-line me-2 fs-6"></i>Employer Phone
+                                        </td>
+                                        <td class="text-end fw-semibold">
+                                            {{ employer_profile.mobile_number }}
+                                        </td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
+                                            <i class="ri-map-pin-line me-2 fs-6"></i>Farm Location
+                                        </td>
+                                        <td class="text-end fw-semibold">
+                                            {% if employer_profile.district %}{{ employer_profile.district.name }}, {% endif %}
+                                            {% if employer_profile.state %}{{ employer_profile.state.name }}{% else %}Tamil Nadu{% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
+                                            <i class="ri-shield-user-line me-2 fs-6"></i>Manager Contact
+                                        </td>
+                                        <td class="text-end fw-bold text-primary" id="profileMobileDisplay">
+                                            {{ staff_obj.mobile_number|default:request.user.username }}
+                                        </td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
+                                            <i class="ri-pulse-line me-2 fs-6"></i>Managed Acreage
+                                        </td>
+                                        <td class="text-end fw-bold text-success">{{ total_acreage }} Acres</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
+                                            <i class="ri-calendar-2-line fs-6 me-2"></i>Date Joined
+                                        </td>
+                                        <td class="text-end">{{ staff_obj.date_of_joining|date:"d-M-Y"|default:staff_obj.created_at|date:"d-M-Y" }}</td>
+                                    </tr>
+                                    {% else %}
                                     <tr class="border-top" style="border-bottom: 1px solid #eee;">
                                         <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
                                             <i class="ri-map-pin-line me-2 fs-6"></i>Regional location
@@ -257,12 +413,6 @@ window.addEventListener('hashchange', function() {
                                     </tr>
                                     <tr style="border-bottom: 1px solid #eee;">
                                         <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
-                                            <i class="ri-award-line me-2 fs-6"></i>Soil Health Index
-                                        </td>
-                                        <td class="text-end fw-bold text-primary">{{ health_index }}{% if health_index != 'N/A' %}/100 index{% endif %}</td>
-                                    </tr>
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <td class="text-muted text-uppercase fw-bold" style="font-size: 12px;">
                                             <i class="ri-phone-line me-2 fs-6"></i>Phone contact
                                         </td>
                                         <td class="text-end" id="profileMobileDisplay">{{ profile.mobile_number|default:request.user.username }}</td>
@@ -273,21 +423,50 @@ window.addEventListener('hashchange', function() {
                                         </td>
                                         <td class="text-end">{{ profile.created_at|date:"d-M-Y"|default:"24-Aug-2026" }}</td>
                                     </tr>
+                                    {% endif %}
                                 </tbody>
                             </table>
-                            <div class="mt-3 text-end">
-                                <button type="button" onclick="toggleEdit(true)" class="btn btn-outline-primary btn-sm px-3 rounded-3">
-                                    <i class="ri-edit-line me-1"></i> Quick Edit
-                                </button>
-                            </div>
                         </div>
                         <div id="editMode" style="display: none;">
                             <form id="profileUpdateForm" enctype="multipart/form-data">
                                 {% csrf_token %}
+                                {% if is_manager_mode %}
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label class="text-muted small fw-semibold">Manager Full Name *</label>
+                                        <input type="text" name="name" class="form-control form-control-sm" value="{{ staff_obj.name|default:request.user.first_name|default:request.user.username }}" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="text-muted small fw-semibold">Profile Photo</label>
+                                        <input type="file" name="profile_image" id="profileImageInput" class="form-control form-control-sm" accept="image/*" onchange="previewProfileImage(this)">
+                                        <small class="text-muted" style="font-size: 11px;">Upload JPG, PNG or WebP image (max 10MB).</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="text-muted small fw-semibold">Primary Email</label>
+                                        <input type="email" name="email" class="form-control form-control-sm" value="{{ request.user.email|default:'' }}">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="text-muted small fw-semibold">Contact Mobile No *</label>
+                                        <input type="text" name="mobile_number" class="form-control form-control-sm" value="{{ staff_obj.mobile_number|default:request.user.username }}" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="text-muted small fw-semibold">Residential Address</label>
+                                        <textarea name="address" rows="2" class="form-control form-control-sm">{{ staff_obj.address|default:'' }}</textarea>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="text-muted small fw-semibold">Employer Farm</label>
+                                        <input type="text" class="form-control form-control-sm bg-light" value="{{ employer_profile.company_name|default:employer_profile.user.first_name }}" readonly>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="text-muted small fw-semibold">Managed Acreage</label>
+                                        <input type="text" class="form-control form-control-sm bg-light" value="{{ total_acreage }} Acres" readonly>
+                                    </div>
+                                </div>
+                                {% else %}
                                 <div class="row g-3">
                                     <div class="col-12">
                                         <label class="text-muted small fw-semibold">Farmer / Company Name</label>
-                                        <input type="text" name="name" class="form-control form-control-sm" value="{{ request.user.first_name|default:request.user.username }}" required>
+                                        <input type="text" name="name" class="form-control form-control-sm" value="{{ request.user.get_full_name|default:request.user.first_name|default:request.user.username }}" required>
                                     </div>
                                     <div class="col-12">
                                         <label class="text-muted small fw-semibold">Profile Photo</label>
@@ -311,6 +490,7 @@ window.addEventListener('hashchange', function() {
                                         <input type="text" class="form-control form-control-sm" value="{{ total_acreage }} Acres" readonly>
                                     </div>
                                 </div>
+                                {% endif %}
                                 <!-- ACTIONS -->
                                 <div class="mt-4 d-flex gap-2">
                                     <button type="button" onclick="submitProfileUpdate()" class="btn btn-primary btn-sm px-4">
@@ -328,6 +508,246 @@ window.addEventListener('hashchange', function() {
                 <div class="card border-0 shadow-sm rounded-4">
                     <div class="card-body p-4">
 
+{% if is_manager_mode %}
+                        <!-- ============ MANAGER VIEW MODE ============ -->
+                        <div id="managerViewMode">
+                            <div class="d-flex align-items-center justify-content-between mb-4">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="d-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-10 text-warning" style="width:32px; height:32px;">
+                                        <i class="ri-user-star-line fs-5"></i>
+                                    </span>
+                                    <div>
+                                        <span class="fw-bold text-uppercase text-dark d-block" style="font-size:13px; letter-spacing:0.5px;">
+                                            Manager Professional Information
+                                        </span>
+                                        <small class="text-muted" style="font-size:11px;">Your personal contact details and manager credentials.</small>
+                                    </div>
+                                </div>
+                                <span class="badge bg-label-warning px-3 py-1.5 rounded-pill fs-7 fw-semibold">
+                                    <i class="ri-shield-user-line me-1"></i>Manager Mode Active
+                                </span>
+                            </div>
+
+                            <!-- Manager Personal Info -->
+                            <div class="row g-4 mb-4">
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Full Name (English)
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light">
+                                        {{ staff_obj.name|default:request.user.first_name|default:request.user.username }}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Contact Mobile Number
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light text-primary">
+                                        {{ staff_obj.mobile_number|default:request.user.username }}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Email Address
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light">
+                                        {{ request.user.email|default:'Not provided' }}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Official Role
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light">
+                                        {{ staff_obj.designation.name|default:staff_obj.role|default:'Farm Manager' }}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Date of Joining
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light">
+                                        {{ staff_obj.date_of_joining|date:"d-M-Y"|default:staff_obj.created_at|date:"d-M-Y" }}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Status
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light text-success">
+                                        <i class="ri-checkbox-circle-line me-1"></i>Active Employed
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Residential Address
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light">
+                                        {{ staff_obj.address|default:'Not provided' }}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Gender / DOB
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light">
+                                        {{ staff_obj.gender|default:'N/A'|capfirst }} {% if staff_obj.date_of_birth %}• {{ staff_obj.date_of_birth|date:"d-M-Y" }}{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Section 2: Assigned Employer Farm Info -->
+                            <div class="border rounded-3 p-3 mb-4" style="background: #fafafb; border: 1.5px solid #edf2f7 !important;">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="d-flex align-items-center justify-content-center rounded-circle bg-success bg-opacity-10 text-success" style="width:30px; height:30px;">
+                                            <i class="ri-building-line fs-6"></i>
+                                        </span>
+                                        <div>
+                                            <span class="fw-bold text-dark fs-6">Assigned Employer Farm Information</span>
+                                            <small class="text-muted d-block" style="font-size: 11px;">You have delegated administrative access to manage this farm.</small>
+                                        </div>
+                                    </div>
+                                    <span class="badge bg-label-success rounded-pill px-3 py-1">Assigned Employer</span>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <small class="text-muted text-uppercase fw-bold d-block" style="font-size: 10px;">Employer Farm Owner</small>
+                                        <div class="fw-bold text-dark mt-1">{{ employer_profile.user.get_full_name|default:employer_profile.user.username }}</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <small class="text-muted text-uppercase fw-bold d-block" style="font-size: 10px;">Company / Brand Name</small>
+                                        <div class="fw-bold text-dark mt-1">{{ employer_profile.company_name|default:'Individual Farm' }}</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <small class="text-muted text-uppercase fw-bold d-block" style="font-size: 10px;">Owner Contact Phone</small>
+                                        <div class="fw-bold text-dark mt-1">{{ employer_profile.mobile_number }}</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <small class="text-muted text-uppercase fw-bold d-block" style="font-size: 10px;">Farm Location</small>
+                                        <div class="fw-semibold text-dark mt-1">
+                                            {% if employer_profile.district %}{{ employer_profile.district.name }}, {% endif %}
+                                            {% if employer_profile.state %}{{ employer_profile.state.name }}{% else %}Tamil Nadu{% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <small class="text-muted text-uppercase fw-bold d-block" style="font-size: 10px;">Active Managed Acreage</small>
+                                        <div class="fw-bold text-success mt-1">{{ total_acreage }} Acres</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <small class="text-muted text-uppercase fw-bold d-block" style="font-size: 10px;">Primary Harvest Crop</small>
+                                        <div class="fw-bold text-dark mt-1">{{ main_crop }}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Section 3: Manager Operational Privileges -->
+                            <div class="border rounded-3 p-3 mb-4" style="background: #ffffff; border: 1.5px solid #edf2f7 !important;">
+                                <div class="d-flex align-items-center gap-2 mb-3">
+                                    <span class="d-flex align-items-center justify-content-center rounded-circle bg-primary bg-opacity-10 text-primary" style="width:30px; height:30px;">
+                                        <i class="ri-shield-check-line fs-6"></i>
+                                    </span>
+                                    <div>
+                                        <span class="fw-bold text-dark fs-6">Authorized Operational Modules</span>
+                                        <small class="text-muted d-block" style="font-size: 11px;">Permissions granted to your account by the farm owner.</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <span class="badge bg-label-success py-2 px-3 rounded-pill d-inline-flex align-items-center gap-1">
+                                        <i class="ri-checkbox-circle-fill"></i> Farm &amp; Field Operations
+                                    </span>
+                                    <span class="badge bg-label-success py-2 px-3 rounded-pill d-inline-flex align-items-center gap-1">
+                                        <i class="ri-checkbox-circle-fill"></i> Crop Planning &amp; Sowing
+                                    </span>
+                                    <span class="badge bg-label-success py-2 px-3 rounded-pill d-inline-flex align-items-center gap-1">
+                                        <i class="ri-checkbox-circle-fill"></i> Task Assignment &amp; Blueprints
+                                    </span>
+                                    <span class="badge bg-label-success py-2 px-3 rounded-pill d-inline-flex align-items-center gap-1">
+                                        <i class="ri-checkbox-circle-fill"></i> Harvest Sales &amp; Invoices
+                                    </span>
+                                    <span class="badge bg-label-success py-2 px-3 rounded-pill d-inline-flex align-items-center gap-1">
+                                        <i class="ri-checkbox-circle-fill"></i> Daily Farm Expenses &amp; Ledger
+                                    </span>
+                                    <span class="badge bg-label-success py-2 px-3 rounded-pill d-inline-flex align-items-center gap-1">
+                                        <i class="ri-checkbox-circle-fill"></i> Inventory &amp; Stock Consumables
+                                    </span>
+                                    <span class="badge bg-label-success py-2 px-3 rounded-pill d-inline-flex align-items-center gap-1">
+                                        <i class="ri-checkbox-circle-fill"></i> Farm Performance Reports
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="d-flex align-items-center justify-content-between pt-2">
+                                <span class="text-muted small">
+                                    <i class="ri-information-line me-1"></i>Official government KYC documents belong to the registered farm owner.
+                                </span>
+                                <button type="button" onclick="toggleManagerEdit(true)" class="btn btn-primary btn-sm px-4 rounded-3">
+                                    <i class="ri-edit-line me-1"></i> Edit Manager Details
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- ============ MANAGER EDIT MODE ============ -->
+                        <div id="managerEditMode" style="display:none;">
+                            <form id="managerEditForm" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                <div class="d-flex align-items-center gap-2 mb-4">
+                                    <span class="d-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-10 text-warning" style="width:28px; height:28px;">
+                                        <i class="ri-edit-2-line"></i>
+                                    </span>
+                                    <div>
+                                        <span class="fw-bold text-uppercase text-dark" style="font-size:13px; letter-spacing:0.5px;">
+                                            Edit Manager Information
+                                        </span>
+                                        <small class="text-muted d-block" style="font-size:11px;">Update your personal contact details.</small>
+                                    </div>
+                                </div>
+
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Full Name *</label>
+                                        <input type="text" name="name" class="form-control form-control-sm" value="{{ staff_obj.name|default:request.user.first_name|default:request.user.username }}" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Contact Mobile Number *</label>
+                                        <input type="text" name="mobile_number" class="form-control form-control-sm" value="{{ staff_obj.mobile_number|default:request.user.username }}" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Email Address</label>
+                                        <input type="email" name="email" class="form-control form-control-sm" value="{{ request.user.email|default:'' }}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Gender</label>
+                                        <select name="gender" class="form-select form-select-sm">
+                                            <option value="">Select Gender</option>
+                                            <option value="male" {% if staff_obj.gender|lower == 'male' %}selected{% endif %}>Male</option>
+                                            <option value="female" {% if staff_obj.gender|lower == 'female' %}selected{% endif %}>Female</option>
+                                            <option value="other" {% if staff_obj.gender|lower == 'other' %}selected{% endif %}>Other</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Date of Birth</label>
+                                        <input type="date" name="date_of_birth" class="form-control form-control-sm" value="{{ staff_obj.date_of_birth|date:'Y-m-d'|default:'' }}">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Residential Address</label>
+                                        <textarea name="address" rows="2" class="form-control form-control-sm" placeholder="Enter residential address">{{ staff_obj.address|default:'' }}</textarea>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Profile Photo</label>
+                                        <input type="file" name="profile_image" class="form-control form-control-sm" accept="image/*" onchange="previewProfileImage(this)">
+                                    </div>
+                                </div>
+
+                                <div class="mt-4 d-flex gap-2 justify-content-end">
+                                    <button type="button" onclick="toggleManagerEdit(false)" class="btn btn-outline-secondary btn-sm px-4">Dismiss</button>
+                                    <button type="button" onclick="submitManagerProfileUpdate()" class="btn btn-primary btn-sm px-4">
+                                        <i class="ri-save-line me-1"></i> Save Manager Details
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+{% else %}
                         <div class="d-flex align-items-center gap-2 mb-4">
                             <span class="d-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-10 text-warning" style="width:28px; height:28px;">
                                 <i class="ri-shield-user-line"></i>
@@ -457,7 +877,7 @@ window.addEventListener('hashchange', function() {
                                         Full Name (English) *
                                     </label>
                                     <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_full_name">
-                                        {{ request.user.first_name|default:request.user.username }}
+                                        {{ request.user.get_full_name|default:request.user.first_name|default:request.user.username }}
                                     </div>
                                 </div>
                                 <div class="col-md-4">
@@ -623,7 +1043,7 @@ window.addEventListener('hashchange', function() {
                                         State *
                                     </label>
                                     <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_state">
-                                        {{ profile.state|default:'N/A' }}
+                                        {{ profile.state.name|default:profile.state|default:'N/A' }}
                                     </div>
                                 </div>
                                 <div class="col-md-4">
@@ -631,7 +1051,7 @@ window.addEventListener('hashchange', function() {
                                         District *
                                     </label>
                                     <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_district">
-                                        {{ profile.district|default:'N/A' }}
+                                        {{ profile.district.name|default:profile.district|default:'N/A' }}
                                     </div>
                                 </div>
                                 <div class="col-md-4">
@@ -643,12 +1063,29 @@ window.addEventListener('hashchange', function() {
                                     </div>
                                 </div>
 
-                                <div class="col-md-4">
+                                <div class="col-md-6">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Village / Gram Panchayat *
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_village">
+                                        {{ profile.village|default:'N/A' }}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
                                     <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
                                         Pincode (6 Digit) *
                                     </label>
                                     <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_pincode">
                                         {{ profile.pincode|default:'N/A' }}
+                                    </div>
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px; letter-spacing:0.5px;">
+                                        Farm / Residential Address *
+                                    </label>
+                                    <div class="border rounded-3 px-3 py-2 fw-semibold bg-light" id="disp_address">
+                                        {{ profile.address|default:'N/A' }}
                                     </div>
                                 </div>
                             </div>
@@ -784,7 +1221,7 @@ window.addEventListener('hashchange', function() {
                                     <div class="col-md-4">
                                         <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Full Name (English) *</label>
                                         <input type="text" name="full_name" class="form-control form-control-sm"
-                                            value="{{ request.user.first_name|default:request.user.username }}" required>
+                                            value="{{ request.user.get_full_name|default:request.user.first_name|default:request.user.username }}" required>
                                     </div>
                                     <div class="col-md-4">
                                         <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Father's / Husband's Name *</label>
@@ -929,38 +1366,42 @@ window.addEventListener('hashchange', function() {
                                         <select name="state" id="select_state" class="form-select form-select-sm" required>
                                             <option value="">Select State</option>
                                             {% for state in states %}
-                                            <option value="{{ state.code }}" {% if profile.state == state.code %}selected{% endif %}>{{ state.name }}</option>
+                                            <option value="{{ state.id }}" {% if profile.state_id == state.id %}selected{% endif %}>{{ state.name }}</option>
                                             {% endfor %}
                                         </select>
                                     </div>
                                     <div class="col-md-4">
                                         <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">District *</label>
-                                        <select name="district" id="select_district" class="form-select form-select-sm" required {% if not profile.state %}disabled{% endif %}>
-                                            <option value="">{% if profile.state %}Select District{% else %}Select State First{% endif %}</option>
+                                        <select name="district" id="select_district" class="form-select form-select-sm" required {% if not profile.state_id %}disabled{% endif %}>
+                                            <option value="">{% if profile.state_id %}Select District{% else %}Select State First{% endif %}</option>
                                             {% for district in districts %}
-                                            <option value="{{ district.code }}" {% if profile.district == district.code %}selected{% endif %}>{{ district.name }}</option>
+                                            <option value="{{ district.id }}" {% if profile.district_id == district.id %}selected{% endif %}>{{ district.name }}</option>
                                             {% endfor %}
                                         </select>
                                     </div>
                                     <div class="col-md-4">
                                         <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Taluka / Tehsil / Block *</label>
-                                        <select name="taluka" id="select_taluka" class="form-select form-select-sm" required {% if not profile.district %}disabled{% endif %}>
-                                            <option value="">{% if profile.district %}Select Taluka{% else %}Select District First{% endif %}</option>
+                                        <select name="taluka" id="select_taluka" class="form-select form-select-sm" required {% if not profile.district_id %}disabled{% endif %}>
+                                            <option value="">{% if profile.district_id %}Select Taluka{% else %}Select District First{% endif %}</option>
                                             {% for taluka in talukas %}
-                                            <option value="{{ taluka.code }}" {% if profile.taluka == taluka.code %}selected{% endif %}>{{ taluka.name }}</option>
+                                            <option value="{{ taluka.name }}" {% if profile.taluka == taluka.name or profile.taluka == taluka.id|stringformat:"s" %}selected{% endif %}>{{ taluka.name }}</option>
                                             {% endfor %}
                                         </select>
                                     </div>
             
-                                    <div class="col-md-4">
+                                    <div class="col-md-6">
                                         <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Village / Gram Panchayat *</label>
                                         <input type="text" name="village" class="form-control form-control-sm"
                                             value="{{ profile.village|default:'' }}" required>
                                     </div>
-                                    <div class="col-md-4">
+                                    <div class="col-md-6">
                                         <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Pincode (6 Digit) *</label>
                                         <input type="text" name="pincode" class="form-control form-control-sm"
-                                            value="{{ profile.pincode|default:'' }}" maxlength="6" pattern="\d{6}" required>
+                                            value="{{ profile.pincode|default:'' }}" required maxlength="6" pattern="[0-9]{6}" inputmode="numeric">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="text-muted text-uppercase fw-bold d-block mb-1" style="font-size:11px;">Farm / Residential Address *</label>
+                                        <textarea name="address" class="form-control form-control-sm" rows="2" placeholder="Door no, street, landmark, area..." required>{{ profile.address|default:'' }}</textarea>
                                     </div>
                                 </div>
 
@@ -974,6 +1415,7 @@ window.addEventListener('hashchange', function() {
                                 </div>
                             </form>
                         </div>
+{% endif %}
 
                     </div>
                 </div>
@@ -1069,9 +1511,23 @@ window.addEventListener('hashchange', function() {
     </div>
 
     <div class="tab-pane fade" id="subscription">
-        <div class="row g-4">
-            <div class="col-lg-5">
-                <div class="card border-0 shadow-sm rounded-4 overflow-hidden mt-3">
+        {% if is_manager_mode %}
+        <div class="alert alert-warning border-0 rounded-4 d-flex align-items-center gap-3 p-3 mb-4 shadow-sm" style="background: #fffbeb; border-left: 4px solid #f59e0b !important;">
+            <div class="rounded-circle p-2 bg-warning bg-opacity-25 text-warning d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                <i class="ri-information-line fs-3"></i>
+            </div>
+            <div class="flex-grow-1">
+                <h6 class="fw-bold mb-1 text-dark">Managed Farm Workspace Subscription</h6>
+                <p class="mb-0 text-muted small">
+                    You are operating as a <strong>Farm Manager</strong> under <strong>{{ employer_profile.company_name|default:employer_profile.user.first_name|default:employer_profile.user.username }}</strong>'s farm account. Plan renewals, billing statements, and package upgrades are maintained directly by the farm owner.
+                </p>
+            </div>
+            <span class="badge bg-warning text-dark px-3 py-2 rounded-pill fw-bold">Managed Account</span>
+        </div>
+        {% endif %}
+        <div class="row g-4 mb-4">
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100">
                     <div class="d-flex justify-content-between align-items-center px-4 py-3 border-bottom" 
                         style="background: linear-gradient(to right, #f8fafc, #ffffff);">
                         <div>
@@ -1087,35 +1543,75 @@ window.addEventListener('hashchange', function() {
                             {{ subscriptions|length }} entries
                         </span>
                     </div>
-                    <div class="table-responsive">
+                    <div class="table-responsive" style="max-height: 290px; overflow-y: auto;">
                         <table class="table align-middle mb-0">
                             <thead class="bg-light text-muted text-uppercase" style="font-size: 10px;">
                                 <tr>
-                                    <th class="ps-4">Plan Tier</th>
+                                    <th class="ps-3">Plan Tier</th>
+                                    <th class="text-center">Cycle</th>
+                                    <th class="text-center">Start Date</th>
+                                    <th class="text-center">End Date</th>
                                     <th class="text-center">Status</th>
                                     <th class="text-end">Amount</th>
-                                    <th class="text-center pe-4">Receipt</th>
+                                    <th class="text-center pe-3">Receipt</th>
                                 </tr>
                             </thead>
-                            <tbody style="font-size: 13px;">
+                            <tbody style="font-size: 12.5px;">
                                 {% for sub in subscriptions %}
                                 <tr class="border-top">
-                                    <td class="ps-4 fw-semibold">{{ sub.package.name|default:"Custom Plan" }}</td>
-                                    <td class="text-center">
-                                        <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-1">
-                                            <i class="ri-check-line me-1"></i>{% if sub.payment_status == 'success' %}Settled{% else %}Pending{% endif %}
-                                        </span>
+                                    <td class="ps-3 fw-semibold text-dark">
+                                        <div>{{ sub.package.name|default:"Custom Plan" }}</div>
+                                        {% if sub.subscription_status == 'active' and sub.is_settled %}
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 10px;">Active</span>
+                                        {% elif sub.subscription_status == 'pending' %}
+                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle" style="font-size: 10px;">Awaiting Payment</span>
+                                        {% elif sub.subscription_status == 'expired' %}
+                                        <span class="badge bg-secondary-subtle text-secondary" style="font-size: 10px;">Expired</span>
+                                        {% endif %}
                                     </td>
-                                    <td class="text-end fw-bold">₹{{ sub.monthly_amount|floatformat:0 }}</td>
-                                    <td class="text-center pe-4">
-                                        <button class="btn btn-sm btn-light border" data-bs-toggle="modal" data-bs-target="#payment_view_modal" onclick="populateInvoiceModal('INV-{{ sub.created_at|date:'Y' }}-{{ sub.id|stringformat:'04d' }}', '{{ sub.created_at|date:'Y-m-d' }}', '{{ sub.package.name|default:'Custom Plan' }}', '₹{{ sub.monthly_amount|floatformat:0 }}')">
+                                    <td class="text-center text-nowrap">
+                                        <span class="badge bg-light text-dark border fw-semibold" style="font-size: 11px;">{{ sub.cycle_label }}</span>
+                                    </td>
+                                    <td class="text-center text-nowrap text-dark">
+                                        <i class="ri-calendar-line text-muted me-1"></i>{% if sub.start_date %}{{ sub.start_date|date:"d-M-Y" }}{% elif sub.created_at %}{{ sub.created_at|date:"d-M-Y" }}{% else %}-{% endif %}
+                                    </td>
+                                    <td class="text-center text-nowrap text-dark">
+                                        <i class="ri-calendar-event-line text-muted me-1"></i>{% if sub.end_date %}{{ sub.end_date|date:"d-M-Y" }}{% else %}-{% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        {% if sub.is_settled %}
+                                        <span class="badge bg-primary bg-opacity-10 text-primary px-2 py-1">
+                                            <i class="ri-check-line me-1"></i>Settled
+                                        </span>
+                                        {% elif sub.is_pending %}
+                                        <span class="badge bg-warning-subtle text-warning px-2 py-1">
+                                            <i class="ri-time-line me-1"></i>Pending
+                                        </span>
+                                        {% elif sub.is_failed %}
+                                        <span class="badge bg-danger-subtle text-danger px-2 py-1">
+                                            <i class="ri-close-line me-1"></i>{{ sub.payment_status|title }}
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-secondary-subtle text-secondary px-2 py-1">
+                                            {{ sub.payment_status|title }}
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end fw-bold text-dark text-nowrap">
+                                        <div>₹{{ sub.display_amount|floatformat:0 }}</div>
+                                        {% if sub.credit_applied and sub.credit_applied > 0 %}
+                                        <small class="text-success fw-normal" style="font-size: 10px;">Credit -₹{{ sub.credit_applied|floatformat:0 }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center pe-3">
+                                        <button class="btn btn-sm btn-light border py-1 px-2" data-bs-toggle="modal" data-bs-target="#payment_view_modal" onclick="populateInvoiceModal('INV-{{ sub.start_date|date:'Y'|default:'2026' }}-{{ sub.id|stringformat:'04d' }}', '{% if sub.start_date %}{{ sub.start_date|date:'d-M-Y' }}{% else %}{{ sub.created_at|date:'d-M-Y' }}{% endif %}', '{{ sub.package.name|default:'Custom Plan'|escapejs }}', '₹{{ sub.display_amount|floatformat:0 }}', '{{ sub.duration_label|escapejs }}', '{% if sub.is_settled %}Paid & Cleared{% elif sub.is_pending %}Pending{% else %}{{ sub.payment_status|title|escapejs }}{% endif %}')">
                                             <i class="ri-download-line me-1"></i>View
                                         </button>
                                     </td>
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="4" class="text-center text-muted py-4">No billing history found.</td>
+                                    <td colspan="7" class="text-center text-muted py-4">No billing history found.</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -1124,150 +1620,681 @@ window.addEventListener('hashchange', function() {
                 </div>
             </div>
             <!-- RIGHT COLUMN -->
-            <div class="col-lg-7">
-                <!-- Farmer Info Card -->
-                <div class="card border-0 shadow-sm rounded-4 mb-4">
-                    <div class="card-body p-4">
-                        <div class="d-flex justify-content-between align-items-start flex-wrap border-bottom pb-3 mb-3">
-                            <div>
-                                <small class="text-muted fw-bold text-uppercase" style="font-size:10px; letter-spacing:1px;">
-                                    Active Subscription Service
-                                </small>
-                                <h5 class="fw-bold mt-1 mb-1 d-flex align-items-center gap-2">
-                                    {% if active_subscription and active_subscription.package %}
-                                        {{ active_subscription.package.name }}
-                                    {% else %}
-                                        No Active Subscription
-                                    {% endif %}
-                                    <span class="badge bg-primary-subtle text-primary border" style="font-size:10px;">
-                                        Current tier
-                                    </span>
-                                </h5>
-                                <p class="text-muted small mb-0" style="max-width: 500px;">
-                                    {% if active_subscription and active_subscription.package %}
-                                        {{ active_subscription.package.description|default:"The standard choice for medium-scale commercial farms." }}
-                                    {% else %}
-                                        Please select a package from the catalog below to subscribe.
-                                    {% endif %}
-                                </p>
-                            </div>
-                            <div class="bg-dark text-white rounded-3 p-3 text-end">
-                                <small class="text-uppercase text-white" style="font-size:9px;">
-                                    Service Fee
-                                </small>
-                                <h4 class="fw-bold mb-0 text-white">
-                                    {% if active_subscription %}
-                                        ₹{{ active_subscription.monthly_amount|floatformat:0 }}
-                                    {% else %}
-                                        ₹0
-                                    {% endif %}
-                                </h4>
-                                <small class="text-white">per billing period</small>
-                            </div>
-                        </div>
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <div class="p-3 bg-gray-100 rounded border">
-                                    <small class="text-muted text-uppercase fw-bold" style="font-size:9px;">Billing Status</small>
-                                    <div class="fw-bold text-primary mt-1">
-                                        {% if active_subscription and active_subscription.payment_status == 'success' %}
-                                            <i class="ri-checkbox-circle-line me-1"></i> Standard Paid
-                                        {% else %}
-                                            <i class="ri-error-warning-line me-1 text-danger"></i> Pending/None
-                                        {% endif %}
+            <div class="col-lg-4">
+                <!-- Active Subscription Card -->
+                <div class="card border-0 rounded-4 overflow-hidden shadow-sm h-100" style="border: 1px solid #edf2f7 !important; background: #ffffff;">
+                    <!-- Top Midnight Purple/Navy Header -->
+                    <div style="background: #252243; padding: 24px;">
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <div style="width: 52px; height: 52px; background: rgba(255, 255, 255, 0.12); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/>
+                                        <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div style="color: #9490b8; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;">
+                                        {% if is_subscription_active %}ACTIVE SUBSCRIPTION{% elif farmer_subscription_info and farmer_subscription_info.is_expired %}EXPIRED SUBSCRIPTION{% elif farmer_subscription_info and farmer_subscription_info.is_pending %}PENDING SUBSCRIPTION{% else %}SUBSCRIPTION STATUS{% endif %}
                                     </div>
-                                    <small class="text-muted">Cleared on statement</small>
+                                    <h3 style="color: #ffffff; font-size: 24px; font-weight: 800; margin: 4px 0 0; line-height: 1.2;">
+                                        {% if active_subscription and active_subscription.package %}
+                                            {{ active_subscription.package.name }}
+                                        {% elif farmer_subscription_info and farmer_subscription_info.subscription and farmer_subscription_info.subscription.package %}
+                                            {{ farmer_subscription_info.subscription.package.name }}
+                                        {% else %}
+                                            No Active Subscription
+                                        {% endif %}
+                                    </h3>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="p-3 bg-gray-100 rounded border">
-                                    <small class="text-muted text-uppercase fw-bold" style="font-size:9px;">Next Renewal</small>
-                                    <div class="fw-bold mt-1 text-black">
-                                        <i class="ri-calendar-line me-1"></i> 
-                                        {% if active_subscription %}
-                                            {{ active_subscription.end_date|date:"d-M-Y" }}
-                                        {% else %}
-                                            N/A
-                                        {% endif %}
+                            <div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">
+                                {% if is_subscription_active %}
+                                <span style="background: #ff8438; color: #ffffff; font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 20px; white-space: nowrap; box-shadow: 0 2px 8px rgba(255, 132, 56, 0.35);">
+                                    {{ active_cycle_label }} Plan
+                                </span>
+                                <span style="color: #a7f3d0; font-size: 11px; font-weight: 700;">
+                                    <i class="ri-checkbox-circle-fill me-1"></i>Active
+                                </span>
+                                {% elif farmer_subscription_info and farmer_subscription_info.is_expired %}
+                                <span style="background: #dc2626; color: #ffffff; font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 20px; white-space: nowrap;">
+                                    Expired ({{ active_cycle_label }})
+                                </span>
+                                {% elif farmer_subscription_info and farmer_subscription_info.is_pending %}
+                                <span style="background: #f59e0b; color: #ffffff; font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 20px; white-space: nowrap;">
+                                    Payment Pending
+                                </span>
+                                {% else %}
+                                <span style="background: #64748b; color: #ffffff; font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 20px; white-space: nowrap;">
+                                    No Active Plan
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <p style="color: #cbd5e1; font-size: 14px; line-height: 1.55; margin-top: 14px; margin-bottom: 0;">
+                            {% if active_subscription and active_subscription.package and active_subscription.package.description %}
+                                {{ active_subscription.package.description }}
+                            {% elif farmer_subscription_info and farmer_subscription_info.subscription and farmer_subscription_info.subscription.package and farmer_subscription_info.subscription.package.description %}
+                                {{ farmer_subscription_info.subscription.package.description }}
+                            {% else %}
+                                Select a Monthly or Quarterly plan below to unlock full wireless sensor telemetry and farm operations.
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    <!-- Middle White Illustration & Price Section -->
+                    <div style="padding: 24px 24px 16px; text-align: center; background: #ffffff;">
+                        <div class="d-flex justify-content-center mb-1">
+                            <svg width="116" height="80" viewBox="0 0 120 85" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M48 16C55.5 10 64.5 10 72 16" stroke="#71719a" stroke-width="2.5" stroke-linecap="round"/>
+                                <path d="M53 22C57.5 18.5 62.5 18.5 67 22" stroke="#71719a" stroke-width="2.5" stroke-linecap="round"/>
+                                <path d="M58 28C59.3 27 60.7 27 62 28" stroke="#71719a" stroke-width="2.5" stroke-linecap="round"/>
+                                <rect x="47" y="34" width="26" height="26" rx="6" stroke="#4a4768" stroke-width="2.5" fill="#ffffff"/>
+                                <circle cx="60" cy="47" r="3.5" stroke="#4a4768" stroke-width="2.5" fill="#ffffff"/>
+                                <path d="M60 60V78" stroke="#4a4768" stroke-width="2.5" stroke-linecap="round"/>
+                                <path d="M26 78H94" stroke="#cbd5e1" stroke-width="2.5" stroke-linecap="round"/>
+                                <path d="M40 78C40 71 33 67 29 71C25 75 31 78 40 78Z" stroke="#71719a" stroke-width="2" fill="none"/>
+                                <path d="M40 78C40 70 46 65 50 69C54 73 47 78 40 78Z" stroke="#71719a" stroke-width="2" fill="none"/>
+                                <path d="M80 78C80 70 74 65 70 69C66 73 73 78 80 78Z" stroke="#71719a" stroke-width="2" fill="none"/>
+                                <path d="M80 78C80 71 87 67 91 71C95 75 89 78 80 78Z" stroke="#71719a" stroke-width="2" fill="none"/>
+                            </svg>
+                        </div>
+
+                        <h1 style="color: #1e1b4b; font-size: 46px; font-weight: 900; letter-spacing: -1.5px; margin: 4px 0 0; line-height: 1;">
+                            {% if active_subscription %}
+                                ₹{{ active_subscription.monthly_amount|floatformat:0 }}
+                            {% elif farmer_subscription_info and farmer_subscription_info.subscription %}
+                                ₹{{ farmer_subscription_info.subscription.monthly_amount|floatformat:0 }}
+                            {% else %}
+                                ₹0
+                            {% endif %}
+                        </h1>
+                        <p style="color: #64748b; font-size: 13.5px; font-weight: 600; margin: 4px 0 0;">
+                            {% if active_subscription %}
+                                per {{ active_cycle_unit }} ({{ active_cycle_label }} Billing)
+                            {% elif farmer_subscription_info and farmer_subscription_info.subscription %}
+                                {{ active_cycle_label }} Plan
+                            {% else %}
+                                No active billing cycle
+                            {% endif %}
+                        </p>
+                        {% if active_subscription and active_subscription.start_date %}
+                        <div class="d-flex justify-content-center gap-3 mt-2 text-muted" style="font-size: 11.5px;">
+                            <span><i class="ri-play-circle-line me-1 text-success"></i>Activated: <strong>{{ active_subscription.start_date|date:"d-M-Y" }}</strong></span>
+                            <span><i class="ri-calendar-check-line me-1 text-primary"></i>Expires: <strong>{{ active_subscription.end_date|date:"d-M-Y" }}</strong></span>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Bottom Status Cards (Side-by-side) -->
+                    <div style="padding: 0 24px 24px;">
+                        <div class="row g-3">
+                            <div class="col-sm-6">
+                                <div style="background: #f8fafc; border-radius: 16px; padding: 14px 16px; height: 100%; display: flex; align-items: center; gap: 12px; border: 1px solid #edf2f7;">
+                                    <div style="width: 42px; height: 42px; border-radius: 50%; background: {% if is_subscription_active %}#ffedd5{% elif farmer_subscription_info and farmer_subscription_info.is_expired %}#fee2e2{% else %}#fef3c7{% endif %}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{% if is_subscription_active %}#ea580c{% elif farmer_subscription_info and farmer_subscription_info.is_expired %}#dc2626{% else %}#d97706{% endif %}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <polyline points="16 10 11 15 8 12"/>
+                                        </svg>
                                     </div>
-                                    <small class="text-muted">Automatic digital roll</small>
+                                    <div>
+                                        <div style="color: #475569; font-size: 10.5px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase;">
+                                            BILLING STATUS
+                                        </div>
+                                        <div style="color: {% if is_subscription_active %}#ea580c{% elif farmer_subscription_info and farmer_subscription_info.is_expired %}#dc2626{% else %}#d97706{% endif %}; font-size: 16px; font-weight: 800; line-height: 1.2; margin: 2px 0;">
+                                            {% if is_subscription_active %}
+                                                Paid ({{ active_cycle_label }})
+                                            {% elif farmer_subscription_info and farmer_subscription_info.is_expired %}
+                                                Expired
+                                            {% elif farmer_subscription_info and farmer_subscription_info.is_pending %}
+                                                Payment Pending
+                                            {% else %}
+                                                Inactive
+                                            {% endif %}
+                                        </div>
+                                        <div style="color: #64748b; font-size: 11.5px; font-weight: 500;">
+                                            {% if is_subscription_active %}Cleared on statement{% elif farmer_subscription_info and farmer_subscription_info.is_pending %}Awaiting verification{% else %}Purchase a plan to activate{% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-sm-6">
+                                <div style="background: #f8fafc; border-radius: 16px; padding: 14px 16px; height: 100%; display: flex; align-items: center; gap: 12px; border: 1px solid #edf2f7;">
+                                    <div style="width: 42px; height: 42px; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1e1b4b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                            <line x1="16" y1="2" x2="16" y2="6"/>
+                                            <line x1="8" y1="2" x2="8" y2="6"/>
+                                            <line x1="3" y1="10" x2="21" y2="10"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div style="color: #475569; font-size: 10.5px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase;">
+                                            NEXT RENEWAL
+                                        </div>
+                                        <div style="color: #1e1b4b; font-size: 16px; font-weight: 800; line-height: 1.2; margin: 2px 0;">
+                                            {% if active_subscription and active_subscription.end_date %}
+                                                {{ active_subscription.end_date|date:"d-M-Y" }}
+                                            {% elif farmer_subscription_info and farmer_subscription_info.end_date %}
+                                                {{ farmer_subscription_info.end_date|date:"d-M-Y" }}
+                                            {% else %}
+                                                N/A
+                                            {% endif %}
+                                        </div>
+                                        <div style="color: #64748b; font-size: 11.5px; font-weight: 500;">
+                                            {% if active_subscription and active_subscription.auto_renew %}Auto-renew enabled{% elif active_subscription %}Manual renewal{% else %}No scheduled renewal{% endif %}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
+                        {% if active_subscription and active_subscription.scheduled_billing_cycle %}
+                        <div class="alert alert-info border-0 rounded-3 p-2 mt-3 mb-0 d-flex align-items-center justify-content-between gap-2" style="background: #eef2ff; font-size: 12px;">
+                            <div class="text-dark">
+                                <i class="ri-calendar-schedule-line text-primary me-1"></i>
+                                Scheduled Switch: <strong>{{ active_subscription.scheduled_package.name|default:active_subscription.package.name }} ({{ active_sub_quote.scheduled_billing_cycle_label }})</strong> starts on <strong>{{ active_subscription.end_date|date:"d-M-Y" }}</strong>.
+                            </div>
+                            <button type="button" class="btn btn-xs btn-outline-primary py-1 px-2 text-nowrap" style="font-size: 11px;" onclick="cancelScheduledSwitch()">
+                                Keep {{ active_cycle_label }}
+                            </button>
+                        </div>
+                        {% endif %}
+
+                        {% if latest_pending_sub %}
+                        <div class="alert alert-warning border-0 rounded-3 p-2 mt-3 mb-0 small d-flex align-items-center gap-2" style="font-size: 12px;">
+                            <i class="ri-time-line text-warning fs-5"></i>
+                            <div>
+                                Pending checkout for <strong>{{ latest_pending_sub.package.name|default:"Plan" }} ({{ latest_pending_sub.cycle_label }})</strong> — activates only after payment verification.
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if farmer_subscription_info and farmer_subscription_info.is_expiring_soon and active_subscription and active_subscription.package and active_subscription.package.price > 0 %}
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-warning btn-sm w-100 fw-bold py-2 shadow-xs rounded-3" onclick="renewPlan({{ active_subscription.package.id }}, '{{ active_cycle }}')">
+                                <i class="ri-refresh-line me-1"></i> Renew {{ active_cycle_label }} Plan
+                            </button>
+                        </div>
+                        {% elif farmer_subscription_info and farmer_subscription_info.is_expired and farmer_subscription_info.subscription and farmer_subscription_info.subscription.package and farmer_subscription_info.subscription.package.price > 0 %}
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-danger btn-sm w-100 fw-bold py-2 shadow-xs rounded-3" onclick="renewPlan({{ farmer_subscription_info.subscription.package.id }}, '{{ active_cycle }}')">
+                                <i class="ri-refresh-line me-1"></i> Reactivate {{ active_cycle_label }} Plan
+                            </button>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
-                <div class="card border-0 shadow-sm rounded-4 mb-4">
+            </div>
+        </div>
+
+        <!-- ROW 2: CATALOG ON LEFT, OPERATIONAL LIMITS ON RIGHT -->
+        <div class="row g-4 mb-4">
+            <!-- LEFT: AGRIOT KRISHI PLAN UPGRADES CATALOG -->
+            <div class="col-xl-8 col-lg-7">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
                     <div class="card-body p-4">
-                        <div class="mb-3">
-                            <h6 class="fw-bold text-uppercase d-flex align-items-center gap-2" style="letter-spacing:1px;">
-                                <i class="ri-sparkling-line text-warning"></i>
-                                Agriot Krishi Plan Upgrades Catalog
-                            </h6>
-                            <p class="text-muted small mb-0">
-                                Toggle other operational plans to upgrade subplots limits, deploy high-gain weather nodes, or sync workforce management parameters.
-                            </p>
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+                            <div>
+                                <h6 class="fw-bold text-uppercase d-flex align-items-center gap-2 mb-1" style="letter-spacing:1px;">
+                                    <i class="ri-sparkling-line text-warning"></i>
+                                    Agriot Krishi Plan Upgrades Catalog
+                                </h6>
+                                <p class="text-muted small mb-0">
+                                    Upgrades (Low &rarr; High) apply immediately. Lower plans or shorter cycles unlock after your active plan completes.
+                                </p>
+                            </div>
+                            <!-- Billing Cycle Tabs -->
+                            <div class="d-inline-flex align-items-center p-1 rounded-pill border bg-light" id="catalogCycleSwitcher" role="tablist">
+                                <button type="button"
+                                        class="btn btn-sm rounded-pill px-3 py-1 fw-semibold catalog-cycle-btn {% if active_cycle == 'monthly' %}active btn-dark text-white{% else %}text-secondary bg-transparent{% endif %}"
+                                        data-cycle="monthly"
+                                        onclick="applyCatalogCycle('monthly')">
+                                    Monthly
+                                </button>
+                                <button type="button"
+                                        class="btn btn-sm rounded-pill px-3 py-1 fw-semibold catalog-cycle-btn {% if active_cycle == 'quarterly' %}active btn-dark text-white{% else %}text-secondary bg-transparent{% endif %}"
+                                        data-cycle="quarterly"
+                                        onclick="applyCatalogCycle('quarterly')">
+                                    Quarterly
+                                    <span class="badge bg-primary-subtle text-primary ms-1" style="font-size: 9.5px;">3 Mo</span>
+                                </button>
+                                <button type="button"
+                                        class="btn btn-sm rounded-pill px-3 py-1 fw-semibold catalog-cycle-btn {% if active_cycle == 'yearly' %}active btn-dark text-white{% else %}text-secondary bg-transparent{% endif %}"
+                                        data-cycle="yearly"
+                                        onclick="applyCatalogCycle('yearly')">
+                                    Annual
+                                    <span class="badge bg-success-subtle text-success ms-1" style="font-size: 9.5px;">12 Mo</span>
+                                </button>
+                            </div>
                         </div>
-                        <div class="row g-3">
+
+                        {% if is_subscription_active and active_subscription %}
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 px-3 py-2 rounded-3 mb-3 border" style="background: #f8fafc; font-size: 12.5px;">
+                            <div>
+                                <i class="ri-vip-crown-line text-warning me-1"></i>
+                                Current Active Subscription:
+                                <strong class="text-dark">{{ active_subscription.package.name }}</strong>
+                                <span class="badge bg-primary ms-1">{{ active_cycle_label }}</span>
+                            </div>
+                            <span class="text-muted">Valid until <strong class="text-dark">{{ active_subscription.end_date|date:"d-M-Y" }}</strong></span>
+                        </div>
+                        {% endif %}
+
+                        <div class="row g-3" id="catalogPackagesGrid">
                             {% for pkg in packages %}
-                            <div class="col-md-4">
-                                <div class="border rounded-4 p-3 h-100 d-flex flex-column justify-content-between {% if active_subscription and active_subscription.package.id == pkg.id %}border-primary bg-primary bg-opacity-10 position-relative{% endif %}">
-                                    {% if active_subscription and active_subscription.package.id == pkg.id %}
-                                    <span class="position-absolute top-0 end-0 m-2 badge bg-primary">
-                                        Active
+                            <div class="col-md-4 catalog-pkg-col"
+                                 id="pkg_col_{{ pkg.id }}"
+                                 data-pkg-id="{{ pkg.id }}"
+                                 data-active-monthly="{% if pkg.is_active_monthly %}true{% else %}false{% endif %}"
+                                 data-active-quarterly="{% if pkg.is_active_quarterly %}true{% else %}false{% endif %}"
+                                 data-active-yearly="{% if pkg.is_active_yearly %}true{% else %}false{% endif %}">
+                                <div class="package-plan-card rounded-4 p-3 h-100 d-flex flex-column justify-content-between {% if active_subscription and active_subscription.package.id == pkg.id or not active_subscription and forloop.first %}selected-plan{% endif %} position-relative"
+                                     id="pkg_card_{{ pkg.id }}"
+                                     onclick="selectPlanCard({{ pkg.id }}, '{{ pkg.name|escapejs }}', '{{ pkg.my_users|default:'10'|escapejs }}', '{{ pkg.max_acre_support|default:'50'|escapejs }}', '{{ pkg.my_land|default:'5'|escapejs }}', '{{ pkg.my_crop|default:'15'|escapejs }}')">
+                                    <span class="position-absolute top-0 end-0 m-2 badge catalog-pkg-badge {% if active_subscription and active_subscription.package.id == pkg.id %}bg-primary{% else %}d-none{% endif %}"
+                                          id="pkg_badge_{{ pkg.id }}">
+                                        {% if active_subscription and active_subscription.package.id == pkg.id %}Active ({{ active_cycle_label }}){% endif %}
                                     </span>
-                                    {% endif %}
                                     <div>
                                         <small class="text-muted text-uppercase fw-bold" style="font-size:10px;">
                                             Package ID: PKG-{{ pkg.id }}
                                         </small>
-                                        <h6 class="fw-bold mt-1">{{ pkg.name }}</h6>
+                                        <h6 class="fw-bold mt-1 text-dark">{{ pkg.name }}</h6>
                                         <div class="d-flex align-items-end gap-1 mt-2 mb-2">
-                                            <h5 class="fw-bold mb-0">₹{{ pkg.price|floatformat:0 }}</h5>
-                                            <small class="text-muted">/ Month</small>
+                                            <h5 class="fw-bold mb-0 text-dark catalog-pkg-price" id="pkg_price_{{ pkg.id }}">₹{{ pkg.active_cycle_price|default:pkg.price|floatformat:0 }}</h5>
+                                            <small class="text-muted catalog-pkg-unit" id="pkg_unit_{{ pkg.id }}">/ {{ active_cycle_unit }}</small>
                                         </div>
                                         <p class="text-muted small mb-2">
                                             {{ pkg.description|default:"Great package for your farm operations." }}
                                         </p>
-                                        <button class="btn btn-link p-0 small fw-bold text-decoration-none" style="font-size: 12px;"
+                                        <button class="btn btn-link p-0 small fw-bold text-decoration-none" style="font-size: 12px; color: #63771F;"
                                                 data-bs-toggle="collapse" 
-                                                data-bs-target="#spec{{ pkg.id }}">
+                                                data-bs-target="#spec{{ pkg.id }}"
+                                                onclick="event.stopPropagation();">
                                             View Core Specs <i class="ri-arrow-down-s-line"></i>
                                         </button>
-                                        <div class="collapse mt-2 small text-muted" id="spec{{ pkg.id }}">
+                                        <div class="collapse show mt-2 small text-muted" id="spec{{ pkg.id }}">
                                             <span class="text-uppercase fw-semibold" style="font-size: 11px;">Key Features</span>
                                             <div class="d-flex flex-column">
                                                 <div class="d-flex align-items-center justify-content-start gap-1">
-                                                    <i class="ri-check-line text-primary"></i>
+                                                    <i class="ri-check-line" style="color: #63771F;"></i>
+                                                    {% if pkg.max_acre_support|lower == 'unlimited' %}
+                                                    <span style="font-size: 11px;">Unlimited Acres support</span>
+                                                    {% else %}
                                                     <span style="font-size: 11px;">Up to {{ pkg.max_acre_support|default:"50" }} Acres support</span>
+                                                    {% endif %}
                                                 </div>
                                                 <div class="d-flex align-items-center justify-content-start gap-1">
-                                                    <i class="ri-check-line text-primary"></i>
+                                                    <i class="ri-check-line" style="color: #63771F;"></i>
                                                     <span style="font-size: 11px;">Detailed Analytics</span>
                                                 </div>
                                                 <div class="d-flex align-items-center justify-content-start gap-1">
-                                                    <i class="ri-check-line text-primary"></i>
+                                                    <i class="ri-check-line" style="color: #63771F;"></i>
                                                     <span style="font-size: 11px;">Email & SMS Alerts</span>
                                                 </div>
                                             </div>
-                                            <span class="text-uppercase fw-semibold" style="font-size: 11px;">Max Field Limits</span>
-                                            <span class="bg-gray-100 text-black badge rounded-3">Up to {{ pkg.max_acre_support|default:"50" }} Acres supported</span>                                    
+                                            <span class="text-uppercase fw-semibold mt-1" style="font-size: 11px;">Field Capacity</span>
+                                            {% if pkg.max_acre_support|lower == 'unlimited' %}
+                                            <span class="bg-light text-dark badge rounded-3 border">Unlimited Acres supported</span>
+                                            {% else %}
+                                            <span class="bg-light text-dark badge rounded-3 border">Up to {{ pkg.max_acre_support|default:"50" }} Acres supported</span>
+                                            {% endif %}
                                         </div>
                                     </div>
+                                    <div class="catalog-pkg-action mt-3" id="pkg_action_{{ pkg.id }}">
                                     {% if active_subscription and active_subscription.package.id == pkg.id %}
-                                    <div class="text-center mt-3">
-                                        <span class="badge bg-primary-subtle text-primary border w-100 py-2">
-                                            <i class="ri-check-line"></i> Currently Active
+                                        {% if pkg.price == 0 or 'trial' in pkg.name|lower %}
+                                        <div class="text-center" id="active_plan_action_box">
+                                            <span class="badge bg-primary-subtle text-primary border w-100 py-2 fs-7 fw-semibold">
+                                                <i class="ri-check-line me-1"></i> Currently Active (1-Time Trial)
+                                            </span>
+                                        </div>
+                                        {% elif farmer_subscription_info and farmer_subscription_info.is_expiring_soon %}
+                                        <div class="d-flex flex-column gap-2" id="active_plan_action_box">
+                                            <button type="button" class="btn btn-warning btn-sm w-100 fw-bold d-flex align-items-center justify-content-center gap-1 shadow-sm" id="renew_active_plan_btn" onclick="event.stopPropagation(); renewPlan({{ pkg.id }}, '{{ active_cycle }}')">
+                                                <i class="ri-refresh-line"></i> Renew {{ active_cycle_label }}
+                                            </button>
+                                            <span class="badge bg-primary-subtle text-primary border w-100 py-1" style="font-size: 11px;">
+                                                <i class="ri-check-line"></i> Current Plan (Expires Soon)
+                                            </span>
+                                        </div>
+                                        {% else %}
+                                        <div class="text-center" id="active_plan_action_box">
+                                            <span class="badge bg-primary-subtle text-primary border w-100 py-2 fs-7 fw-semibold">
+                                                <i class="ri-check-line me-1"></i> Current Plan ({{ active_cycle_label }})
+                                            </span>
+                                        </div>
+                                        {% endif %}
+                                    {% elif farmer_subscription_info and farmer_subscription_info.subscription and farmer_subscription_info.subscription.package.id == pkg.id and farmer_subscription_info.is_expired and pkg.price > 0 %}
+                                    <div class="d-flex flex-column gap-2" id="expired_plan_action_box">
+                                        <button type="button" class="btn btn-danger btn-sm w-100 fw-bold d-flex align-items-center justify-content-center gap-1 shadow-sm" id="reactivate_plan_btn" onclick="event.stopPropagation(); renewPlan({{ pkg.id }}, '{{ active_cycle }}')">
+                                            <i class="ri-refresh-line"></i> Renew & Reactivate
+                                        </button>
+                                        <span class="badge bg-danger-subtle text-danger border w-100 py-1" style="font-size: 11px;">
+                                            <i class="ri-close-circle-line"></i> Plan Expired
                                         </span>
                                     </div>
+                                    {% elif pkg.is_trial_claimed or pkg.price == 0 and farmer_used_free_trial %}
+                                    <div class="text-center">
+                                        <span class="badge w-100 py-2 text-wrap d-flex align-items-center justify-content-center gap-1 rounded-3" 
+                                              style="background-color: rgba(100, 116, 139, 0.12); color: #475569; border: 1px solid rgba(100, 116, 139, 0.25); font-size: 11px; font-weight: 600;">
+                                            <i class="ri-checkbox-circle-line text-secondary"></i>
+                                            Free Trial Already Claimed
+                                        </span>
+                                    </div>
+                                    {% elif is_subscription_active and not pkg.can_switch %}
+                                    <div class="text-center">
+                                        <span class="badge bg-light text-muted border w-100 py-2 px-2 text-wrap d-flex align-items-center justify-content-center gap-1 rounded-3" style="font-size: 11px; font-weight: 600; line-height: 1.35; cursor: not-allowed;">
+                                            <i class="ri-time-line"></i>
+                                            Available after current plan ends ({{ active_subscription.end_date|date:"d-M-Y" }})
+                                        </span>
+                                        <small class="d-block text-muted mt-1" style="font-size: 10px;">Only upgrades allowed while plan is active</small>
+                                    </div>
                                     {% else %}
-                                    <button class="btn btn-dark btn-sm mt-3" onclick="switchPlan({{ pkg.id }})">
-                                        Switch & Upgrade
+                                    <button type="button" class="btn btn-dark btn-sm w-100" onclick="event.stopPropagation(); handlePlanAction({{ pkg.id }}, '{{ active_cycle }}', false)">
+                                        {% if is_subscription_active %}Switch & Upgrade{% else %}Buy Plan{% endif %}
                                     </button>
                                     {% endif %}
+                                    </div>
                                 </div>
                             </div>
                             {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: OPERATIONAL LIMITS (Light Theme & Highlighted Limit Counts) -->
+            <div class="col-xl-4 col-lg-5">
+                <div class="card border-0 shadow-sm rounded-4 h-100" style="background-color: #ffffff; border: 1px solid #e2e8f0 !important;">
+                    <div class="card-body p-4 d-flex flex-column justify-content-between">
+                        <div>
+                            <!-- Header -->
+                            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="p-2 rounded-circle d-flex align-items-center justify-content-center" style="background-color: rgba(99, 119, 31, 0.12); width: 36px; height: 36px;">
+                                        <i class="ri-dashboard-3-line" style="color: #63771F; font-size: 18px;"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="fw-bold text-dark mb-0" style="font-size: 14px;">Operational Limits</h6>
+                                        <small class="text-muted" style="font-size: 11px;">Selected Plan Capacity</small>
+                                    </div>
+                                </div>
+                                <span class="badge rounded-pill px-3 py-2" id="limits_plan_badge" style="background-color: rgba(99, 119, 31, 0.12); color: #4e5e18; font-weight: 700; font-size: 11.5px; border: 1px solid rgba(99, 119, 31, 0.25);">
+                                    {{ plan_limits.package_name }}
+                                </span>
+                            </div>
+
+                            <!-- Progress Items Container with Highlighted Limit Counts -->
+                            <div class="d-flex flex-column gap-2" id="limits_items_container">
+                                
+                                <!-- Metric 1: Acre Limit -->
+                                <div class="p-3 rounded border" style="background-color: #fbfcf9; border-color: #eef2e6 !important;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-semibold text-dark" style="font-size: 13.5px;">
+                                            <i class="ri-landscape-line me-1" style="color: #63771F;"></i> Acre Limit
+                                        </span>
+                                        <span class="badge px-3 py-1 rounded-pill" id="limit_highlight_acres" style="background-color: rgba(99, 119, 31, 0.14); color: #4e5e18; font-size: 13px; font-weight: 700; border: 1px solid rgba(99, 119, 31, 0.25);">
+                                            {{ plan_limits.acres.used }} / {{ plan_limits.acres.max }} Acres
+                                        </span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-1">
+                                        <small class="text-muted" style="font-size: 11px;">Acreage capacity supported</small>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="fw-bold text-dark" id="limit_pct_acres" style="font-size: 13.5px;">{{ plan_limits.acres.pct }}%</span>
+                                            <svg width="32" height="32" viewBox="0 0 36 36" style="transform: rotate(-90deg);">
+                                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#e2e8f0" stroke-width="4" />
+                                                <path id="limit_ring_acres" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#63771F" stroke-width="4" stroke-dasharray="{{ plan_limits.acres.pct }}, 100" stroke-linecap="round" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Metric 2: Land Limit -->
+                                <div class="p-3 rounded border" style="background-color: #fbfcf9; border-color: #eef2e6 !important;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-semibold text-dark" style="font-size: 13.5px;">
+                                            <i class="ri-grid-line me-1" style="color: #63771F;"></i> Land Limit
+                                        </span>
+                                        <span class="badge px-3 py-1 rounded-pill" id="limit_highlight_farms" style="background-color: rgba(99, 119, 31, 0.14); color: #4e5e18; font-size: 13px; font-weight: 700; border: 1px solid rgba(99, 119, 31, 0.25);">
+                                            {{ plan_limits.farms.used }} / {{ plan_limits.farms.max }} Lands
+                                        </span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-1">
+                                        <small class="text-muted" style="font-size: 11px;">Land subplots allowed</small>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="fw-bold text-dark" id="limit_pct_farms" style="font-size: 13.5px;">{{ plan_limits.farms.pct }}%</span>
+                                            <svg width="32" height="32" viewBox="0 0 36 36" style="transform: rotate(-90deg);">
+                                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#e2e8f0" stroke-width="4" />
+                                                <path id="limit_ring_farms" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#63771F" stroke-width="4" stroke-dasharray="{{ plan_limits.farms.pct }}, 100" stroke-linecap="round" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Metric 3: Crop Limit -->
+                                <div class="p-3 rounded border" style="background-color: #fbfcf9; border-color: #eef2e6 !important;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-semibold text-dark" style="font-size: 13.5px;">
+                                            <i class="ri-plant-line me-1" style="color: #63771F;"></i> Crop Limit
+                                        </span>
+                                        <span class="badge px-3 py-1 rounded-pill" id="limit_highlight_crops" style="background-color: rgba(99, 119, 31, 0.14); color: #4e5e18; font-size: 13px; font-weight: 700; border: 1px solid rgba(99, 119, 31, 0.25);">
+                                            {{ plan_limits.crops.used }} / {{ plan_limits.crops.max }} Crops
+                                        </span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-1">
+                                        <small class="text-muted" style="font-size: 11px;">Crop schedules allowed</small>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="fw-bold text-dark" id="limit_pct_crops" style="font-size: 13.5px;">{{ plan_limits.crops.pct }}%</span>
+                                            <svg width="32" height="32" viewBox="0 0 36 36" style="transform: rotate(-90deg);">
+                                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#e2e8f0" stroke-width="4" />
+                                                <path id="limit_ring_crops" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#63771F" stroke-width="4" stroke-dasharray="{{ plan_limits.crops.pct }}, 100" stroke-linecap="round" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Metric 4: Users Limit -->
+                                <div class="p-3 rounded border" style="background-color: #fbfcf9; border-color: #eef2e6 !important;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-semibold text-dark" style="font-size: 13.5px;">
+                                            <i class="ri-user-star-line me-1" style="color: #63771F;"></i> Manager Limit
+                                        </span>
+                                        <span class="badge px-3 py-1 rounded-pill" id="limit_highlight_users" style="background-color: rgba(99, 119, 31, 0.14); color: #4e5e18; font-size: 13px; font-weight: 700; border: 1px solid rgba(99, 119, 31, 0.25);">
+                                            {{ plan_limits.users.used }} / {{ plan_limits.users.max }} Managers
+                                        </span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-1">
+                                        <small class="text-muted" style="font-size: 11px;">Active farm managers (Employees are unlimited)</small>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="fw-bold text-dark" id="limit_pct_users" style="font-size: 13.5px;">{{ plan_limits.users.pct }}%</span>
+                                            <svg width="32" height="32" viewBox="0 0 36 36" style="transform: rotate(-90deg);">
+                                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#e2e8f0" stroke-width="4" />
+                                                <path id="limit_ring_users" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#63771F" stroke-width="4" stroke-dasharray="{{ plan_limits.users.pct }}, 100" stroke-linecap="round" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <!-- Card footer notice -->
+                        <div class="pt-3 mt-3 border-top text-center">
+                            <small class="text-muted" style="font-size: 11px;">
+                                <i class="ri-cursor-line me-1" style="color: #63771F;"></i> Click any plan card on the left to preview limits.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- TAB 4: MAIL INTEGRATION / CUSTOM SMTP SETTINGS -->
+    <div class="tab-pane fade" id="mail_settings">
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pb-3 mb-4 border-bottom">
+                    <div>
+                        <h5 class="fw-bold text-dark mb-1 d-flex align-items-center">
+                            <i class="ri-mail-settings-line text-primary me-2 fs-4"></i>
+                            Custom Mail Delivery (SMTP Integration)
+                        </h5>
+                        <p class="text-muted small mb-0">
+                            Configure your custom email credentials to send farm updates, invoices, and alerts under your own domain name.
+                        </p>
+                    </div>
+                    <span class="badge {% if farmer_smtp and farmer_smtp.is_active %}bg-success-subtle text-success border border-success{% else %}bg-secondary-subtle text-secondary border{% endif %} px-3 py-2 rounded-pill fw-semibold">
+                        <i class="ri-checkbox-blank-circle-fill me-1" style="font-size: 8px;"></i>
+                        {% if farmer_smtp and farmer_smtp.is_active %}Active Custom SMTP{% else %}Using AgriOT Platform SMTP{% endif %}
+                    </span>
+                </div>
+
+                <div class="row g-4">
+                    <!-- Left Column: Form -->
+                    <div class="col-lg-8">
+                        <form method="POST" action="{% url 'farmer-mail-settings' %}" id="farmerMailSettingsForm">
+                            {% csrf_token %}
+                            <input type="hidden" name="is_ajax" value="1">
+                            
+                            <div class="card bg-light border-0 rounded-3 p-3 mb-3">
+                                <div class="form-check form-switch d-flex align-items-center gap-3 ps-0 mb-0">
+                                    <input class="form-check-input ms-0" type="checkbox" id="farmer_smtp_active" name="is_active" {% if farmer_smtp and farmer_smtp.is_active %}checked{% endif %} style="width: 2.5em; height: 1.25em;">
+                                    <div>
+                                        <label class="form-check-label fw-bold text-dark" for="farmer_smtp_active">
+                                            Enable Custom SMTP Delivery
+                                        </label>
+                                        <div class="text-muted small" style="font-size: 12px;">
+                                            When enabled, automated messages will be dispatched via this server. If disabled, system falls back to AgriOT global server.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <label class="form-label fw-semibold text-dark small" for="farmer_email_host">
+                                        SMTP Host <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group input-group-sm smtp-input-group">
+                                        <span class="input-group-text bg-light text-muted"><i class="ri-server-line"></i></span>
+                                        <input type="text" id="farmer_email_host" name="email_host" class="form-control form-control-sm font-monospace" value="{{ farmer_smtp.email_host|default:'smtp.gmail.com' }}" placeholder="smtp.gmail.com" required>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold text-dark small" for="farmer_email_port">
+                                        Port <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group input-group-sm smtp-input-group smtp-port-group">
+                                        <span class="input-group-text bg-light text-muted"><i class="ri-hashtag"></i></span>
+                                        <input type="number" id="farmer_email_port" name="email_port" class="form-control form-control-sm font-monospace" value="{{ farmer_smtp.email_port|default:587 }}" placeholder="587" required>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-dark small">
+                                        Encryption Protocol
+                                    </label>
+                                    <div class="d-flex gap-3 pt-1">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="security_mode" id="mode_tls" value="tls" {% if not farmer_smtp or farmer_smtp.email_use_tls %}checked{% endif %}>
+                                            <label class="form-check-label small" for="mode_tls">TLS (Recommended)</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="security_mode" id="mode_ssl" value="ssl" {% if farmer_smtp and farmer_smtp.email_use_ssl %}checked{% endif %}>
+                                            <label class="form-check-label small" for="mode_ssl">SSL</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-dark small" for="farmer_email_user">
+                                        SMTP Username / Email <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group input-group-sm smtp-input-group">
+                                        <span class="input-group-text bg-light text-muted"><i class="ri-at-line"></i></span>
+                                        <input type="text" id="farmer_email_user" name="email_host_user" class="form-control form-control-sm font-monospace" value="{{ farmer_smtp.email_host_user|default:'' }}" placeholder="yourname@gmail.com" required>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-dark small" for="farmer_email_pwd">
+                                        SMTP Password / App Password
+                                    </label>
+                                    <div class="input-group input-group-sm smtp-input-group">
+                                        <span class="input-group-text bg-light text-muted"><i class="ri-lock-password-line"></i></span>
+                                        <input type="password" id="farmer_email_pwd" name="email_host_password" class="form-control form-control-sm font-monospace" placeholder="{% if farmer_smtp.email_host_password %}••••••••••••{% else %}Enter app password{% endif %}">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="togglePasswordVisibility('farmer_email_pwd', 'farmer-pwd-icon')">
+                                            <i class="ri-eye-line" id="farmer-pwd-icon"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-dark small" for="farmer_from_name">
+                                        Sender Display Name
+                                    </label>
+                                    <div class="input-group input-group-sm smtp-input-group">
+                                        <span class="input-group-text bg-light text-muted"><i class="ri-user-line"></i></span>
+                                        <input type="text" id="farmer_from_name" name="from_name" class="form-control form-control-sm" value="{{ farmer_smtp.from_name|default:request.user.first_name|default:'My Farm' }}">
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-dark small" for="farmer_from_email">
+                                        From Email
+                                    </label>
+                                    <div class="input-group input-group-sm smtp-input-group">
+                                        <span class="input-group-text bg-light text-muted"><i class="ri-mail-send-line"></i></span>
+                                        <input type="email" id="farmer_from_email" name="from_email" class="form-control form-control-sm font-monospace" value="{{ farmer_smtp.from_email|default:'' }}" placeholder="Same as username if blank">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                                <button type="submit" class="btn btn-primary btn-sm px-4" style="background-color: #63771F; border-color: #63771F;">
+                                    <i class="ri-check-line me-1"></i> Save Custom SMTP Settings
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Right Column: Test Email Tool & Tips -->
+                    <div class="col-lg-4">
+                        <div class="card border rounded-4 shadow-none mb-3" style="background-color: #fbfcf8;">
+                            <div class="card-body p-3">
+                                <h6 class="fw-bold text-dark mb-2 d-flex align-items-center">
+                                    <i class="ri-send-plane-line text-primary me-2"></i>
+                                    Test Outgoing Email
+                                </h6>
+                                <p class="small text-muted mb-3" style="font-size: 11.5px;">
+                                    Send a live test message to verify your SMTP connection works without errors.
+                                </p>
+                                <div class="mb-2">
+                                    <label class="form-label small text-muted mb-1" for="farmer_test_recipient">Recipient Email</label>
+                                    <input type="email" id="farmer_test_recipient" class="form-control form-control-sm font-monospace" value="{{ request.user.profile.email|default:request.user.email|default:'' }}" placeholder="recipient@example.com">
+                                </div>
+                                <button type="button" class="btn btn-outline-primary btn-sm w-100" id="btn-farmer-test-mail" onclick="sendFarmerTestMail()">
+                                    <i class="ri-mail-check-line me-1"></i> Send Test Message
+                                </button>
+                                <div id="farmer-test-mail-status" class="mt-2 small p-2 rounded" style="display: none;"></div>
+                            </div>
+                        </div>
+
+                        <div class="card border rounded-4 shadow-none" style="background-color: #FFFDF7; border-color: #FEF3C7 !important;">
+                            <div class="card-body p-3">
+                                <h6 class="fw-bold text-dark mb-2" style="font-size: 12.5px;">
+                                    <i class="ri-information-line text-warning me-1"></i> How It Works:
+                                </h6>
+                                <p class="small text-muted mb-0" style="font-size: 11.5px; line-height: 1.6;">
+                                    If you configure and enable your custom SMTP, all automated notifications (Welcome, Renewals, and Package receipts) will be delivered using your own credentials. If not enabled or left empty, AgriOT's official SMTP system takes care of delivery seamlessly.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1318,7 +2345,7 @@ window.addEventListener('hashchange', function() {
         <div class="row border-bottom pb-3 mb-3 small">
           <div class="col-md-6">
             <small class="text-muted text-uppercase">Registered Licensee</small>
-            <div class="fw-bold">{{ request.user.first_name|default:request.user.username }}</div>
+            <div class="fw-bold">{{ request.user.get_full_name|default:request.user.first_name|default:request.user.username }}</div>
             <div class="text-muted">Email: {{ request.user.profile.email|default:"N/A" }}</div>
             <div class="text-muted">Phone: +91 {{ request.user.username }}</div>
           </div>
@@ -1349,7 +2376,7 @@ window.addEventListener('hashchange', function() {
                       Active wireless telemetry & automated irrigation control
                     </div>
                   </td>
-                  <td class="text-center">1 Month</td>
+                  <td class="text-center" id="modal-package-duration">1 Month</td>
                   <td class="text-end fw-bold" id="modal-package-cost">₹28,967</td>
                 </tr>
               </tbody>
@@ -1360,10 +2387,10 @@ window.addEventListener('hashchange', function() {
              style="background:#f1f5f9;">
           <div>
             <small class="text-primary text-uppercase">Settlement State</small>
-            <div class="fw-bold text-primary">
+            <div class="fw-bold text-primary" id="modal-settlement-state">
               <i class="ri-checkbox-circle-line me-1"></i>Paid & Cleared
             </div>
-            <small class="text-muted">Paid via UPI</small>
+            <small class="text-muted">AgriOT Subscription Billing</small>
           </div>
           <div class="text-end">
             <small class="text-muted text-uppercase">Total</small>
@@ -1665,12 +2692,21 @@ function deleteDocument(docId, docTitle) {
 </script>
 
 <script>
-    function populateInvoiceModal(invoiceId, date, package, amount) {
+    function populateInvoiceModal(invoiceId, date, packageName, amount, durationLabel, settlementLabel) {
         document.getElementById('modal-invoice-id').innerText = invoiceId;
         document.getElementById('modal-invoice-date').innerText = 'Date: ' + date;
-        document.getElementById('modal-package-name').innerText = package;
+        document.getElementById('modal-package-name').innerText = packageName;
         document.getElementById('modal-package-cost').innerText = amount;
         document.getElementById('modal-total-cost').innerText = amount;
+        const durEl = document.getElementById('modal-package-duration');
+        if (durEl) durEl.innerText = durationLabel || '1 Month';
+        const settleEl = document.getElementById('modal-settlement-state');
+        if (settleEl) {
+            const label = settlementLabel || 'Paid & Cleared';
+            const isOk = label.toLowerCase().includes('paid');
+            settleEl.className = 'fw-bold ' + (isOk ? 'text-primary' : 'text-warning');
+            settleEl.innerHTML = `<i class="${isOk ? 'ri-checkbox-circle-line' : 'ri-time-line'} me-1"></i>${label}`;
+        }
     }
 
     function printInvoice() {
@@ -1740,6 +2776,46 @@ function deleteDocument(docId, docTitle) {
         });
     }
 
+    function submitManagerProfileUpdate() {
+        const form = document.getElementById('managerEditForm');
+        const formData = new FormData(form);
+
+        Swal.fire({
+            title: 'Updating Manager Profile...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        fetch("{% url 'update_profile' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success || data.status === 'success') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Manager Details Saved!',
+                    text: 'Your manager profile details have been saved successfully.',
+                    confirmButtonColor: '#F69C55',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                Swal.fire('Error', data.error || data.message || "Failed to update manager profile", 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'An unexpected error occurred.', 'error');
+        });
+    }
+
     function submitPersonalInfoUpdate() {
         const form = document.getElementById('personalInfoForm');
         const formData = new FormData(form);
@@ -1779,17 +2855,356 @@ function deleteDocument(docId, docTitle) {
             Swal.fire('Error', 'An unexpected error occurred while saving KYC.', 'error');
         });
     }
-    function switchPlan(packageId) {
+
+    function selectPlanCard(pkgId, pkgName, myUsers, maxAcres, myLand, myCrop) {
+        // 1. Visually highlight the selected card
+        document.querySelectorAll('.package-plan-card').forEach(card => {
+            card.classList.remove('selected-plan');
+        });
+        const activeCard = document.getElementById('pkg_card_' + pkgId);
+        if (activeCard) {
+            activeCard.classList.add('selected-plan');
+        }
+
+        // 2. Update Plan Badge
+        const badge = document.getElementById('limits_plan_badge');
+        if (badge) {
+            badge.innerText = pkgName;
+        }
+
+        // 3. Current live usage counts & active state
+        const staffCount = {{ staff_count|default:0 }};
+        const totalAcreage = parseFloat("{{ total_acreage|default:'0' }}") || 0;
+        const farmsCount = {{ farms_count|default:0 }};
+        const cropCount = {{ crop_count|default:0 }};
+        const hasActivePlan = {% if plan_limits.has_active_plan %}true{% else %}false{% endif %};
+
+        // Acre Limit
+        const isAcresUnlimited = (maxAcres || '').toLowerCase().includes('unlimited');
+        const matchAcres = (maxAcres || '').match(/[\d\.]+/);
+        const maxAcresVal = matchAcres ? parseFloat(matchAcres[0]) : 50;
+        const pctAcres = hasActivePlan ? (isAcresUnlimited ? 100 : (maxAcresVal > 0 ? Math.max(0, Math.min(100, Math.round(((maxAcresVal - totalAcreage) / maxAcresVal) * 100))) : 0)) : 0;
+        const maxAcresDisplay = isAcresUnlimited ? 'Unlimited' : maxAcresVal;
+        const hlAcres = document.getElementById('limit_highlight_acres');
+        if (hlAcres) hlAcres.innerText = totalAcreage + ' / ' + maxAcresDisplay + ' Acres';
+        const pctAcresEl = document.getElementById('limit_pct_acres');
+        if (pctAcresEl) pctAcresEl.innerText = pctAcres + '%';
+        const ringAcres = document.getElementById('limit_ring_acres');
+        if (ringAcres) ringAcres.setAttribute('stroke-dasharray', pctAcres + ', 100');
+
+        // Land Limit
+        const matchLand = (myLand || '').match(/\d+/);
+        const maxFarms = matchLand ? parseInt(matchLand[0]) : 5;
+        const pctFarms = hasActivePlan ? (maxFarms > 0 ? Math.max(0, Math.min(100, Math.round(((maxFarms - farmsCount) / maxFarms) * 100))) : 100) : 0;
+        const hlFarms = document.getElementById('limit_highlight_farms');
+        if (hlFarms) hlFarms.innerText = farmsCount + ' / ' + maxFarms + ' Lands';
+        const pctFarmsEl = document.getElementById('limit_pct_farms');
+        if (pctFarmsEl) pctFarmsEl.innerText = pctFarms + '%';
+        const ringFarms = document.getElementById('limit_ring_farms');
+        if (ringFarms) ringFarms.setAttribute('stroke-dasharray', pctFarms + ', 100');
+
+        // Crop Limit
+        const matchCrop = (myCrop || '').match(/\d+/);
+        const maxCrops = matchCrop ? parseInt(matchCrop[0]) : 15;
+        const pctCrops = hasActivePlan ? (maxCrops > 0 ? Math.max(0, Math.min(100, Math.round(((maxCrops - cropCount) / maxCrops) * 100))) : 100) : 0;
+        const hlCrops = document.getElementById('limit_highlight_crops');
+        if (hlCrops) hlCrops.innerText = cropCount + ' / ' + maxCrops + ' Crops';
+        const pctCropsEl = document.getElementById('limit_pct_crops');
+        if (pctCropsEl) pctCropsEl.innerText = pctCrops + '%';
+        const ringCrops = document.getElementById('limit_ring_crops');
+        if (ringCrops) ringCrops.setAttribute('stroke-dasharray', pctCrops + ', 100');
+
+        // Users Limit
+        const matchUsers = (myUsers || '').match(/\d+/);
+        const maxUsers = matchUsers ? parseInt(matchUsers[0]) : 10;
+        const pctUsers = hasActivePlan ? (maxUsers > 0 ? Math.max(0, Math.min(100, Math.round(((maxUsers - staffCount) / maxUsers) * 100))) : 100) : 0;
+        const hlUsers = document.getElementById('limit_highlight_users');
+        if (hlUsers) hlUsers.innerText = staffCount + ' / ' + maxUsers + ' Users';
+        const pctUsersEl = document.getElementById('limit_pct_users');
+        if (pctUsersEl) pctUsersEl.innerText = pctUsers + '%';
+        const ringUsers = document.getElementById('limit_ring_users');
+        if (ringUsers) ringUsers.setAttribute('stroke-dasharray', pctUsers + ', 100');
+    }
+    window.selectPlanCard = selectPlanCard;
+
+    const activeSubQuote = {{ active_sub_quote_json|default:'null'|safe }};
+    const packageQuotes = {{ package_quotes_json|default:'{}'|safe }};
+    let selectedCatalogCycle = "{{ active_cycle|default:'monthly'|escapejs }}";
+    const isExpiringSoon = {{ farmer_subscription_info.is_expiring_soon|yesno:"true,false"|default:"false" }};
+    const isExpiredPlan = {{ farmer_subscription_info.is_expired|yesno:"true,false"|default:"false" }};
+    const expiredPkgId = {{ farmer_subscription_info.subscription.package.id|default:"null" }};
+
+    function applyCatalogCycle(cycle) {
+        selectedCatalogCycle = cycle || 'monthly';
+
+        document.querySelectorAll('.catalog-cycle-btn').forEach(btn => {
+            const isMatch = btn.dataset.cycle === selectedCatalogCycle;
+            btn.classList.toggle('active', isMatch);
+            btn.classList.toggle('btn-dark', isMatch);
+            btn.classList.toggle('text-white', isMatch);
+            btn.classList.toggle('text-secondary', !isMatch);
+            btn.classList.toggle('bg-transparent', !isMatch);
+        });
+
+        document.querySelectorAll('.catalog-pkg-col').forEach(col => {
+            const pkgId = col.dataset.pkgId;
+            const quotesForPkg = packageQuotes[pkgId] || {};
+            const q = quotesForPkg[selectedCatalogCycle];
+            if (!q) return;
+
+            col.style.display = q.is_cycle_active ? '' : 'none';
+
+            const priceEl = document.getElementById('pkg_price_' + pkgId);
+            const unitEl = document.getElementById('pkg_unit_' + pkgId);
+            const badgeEl = document.getElementById('pkg_badge_' + pkgId);
+            const cardEl = document.getElementById('pkg_card_' + pkgId);
+            const actionEl = document.getElementById('pkg_action_' + pkgId);
+
+            if (priceEl) priceEl.textContent = '₹' + Math.round(q.price || 0).toLocaleString('en-IN');
+            if (unitEl) unitEl.textContent = '/ ' + (q.unit_label || 'Month');
+
+            const isActivePkgDifferentCycle = q.has_active_plan && String(q.current_package_id) === String(pkgId) && !q.is_current;
+            if (badgeEl) {
+                if (q.is_current) {
+                    badgeEl.className = 'position-absolute top-0 end-0 m-2 badge bg-primary catalog-pkg-badge';
+                    badgeEl.textContent = `Active (${q.current_billing_cycle_label})`;
+                } else if (isActivePkgDifferentCycle) {
+                    badgeEl.className = 'position-absolute top-0 end-0 m-2 badge bg-info-subtle text-info border border-info-subtle catalog-pkg-badge';
+                    badgeEl.textContent = `Active on ${q.current_billing_cycle_label}`;
+                } else {
+                    badgeEl.className = 'position-absolute top-0 end-0 m-2 badge catalog-pkg-badge d-none';
+                    badgeEl.textContent = '';
+                }
+            }
+
+            if (cardEl) {
+                cardEl.classList.toggle('selected-plan', Boolean(q.is_current));
+            }
+
+            if (!actionEl) return;
+
+            if (q.is_current) {
+                if (q.is_target_free_trial) {
+                    actionEl.innerHTML = `
+                        <div class="text-center">
+                            <span class="badge bg-primary-subtle text-primary border w-100 py-2 fs-7 fw-semibold">
+                                <i class="ri-check-line me-1"></i> Current Plan (1-Time Trial)
+                            </span>
+                        </div>`;
+                } else if (isExpiringSoon) {
+                    actionEl.innerHTML = `
+                        <div class="d-flex flex-column gap-2">
+                            <button type="button" class="btn btn-warning btn-sm w-100 fw-bold d-flex align-items-center justify-content-center gap-1 shadow-sm" onclick="event.stopPropagation(); renewPlan(${pkgId}, '${selectedCatalogCycle}')">
+                                <i class="ri-refresh-line"></i> Renew ${q.target_billing_cycle_label}
+                            </button>
+                            <span class="badge bg-primary-subtle text-primary border w-100 py-1" style="font-size: 11px;">
+                                <i class="ri-check-line"></i> Current Plan (Expires Soon)
+                            </span>
+                        </div>`;
+                } else {
+                    actionEl.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary btn-sm w-100 fw-semibold" disabled style="opacity: 0.9; cursor: default;">
+                            <i class="ri-check-line me-1"></i> Current Plan (${q.target_billing_cycle_label})
+                        </button>`;
+                }
+                return;
+            }
+
+            if (q.is_already_scheduled) {
+                actionEl.innerHTML = `
+                    <div class="d-flex flex-column gap-1">
+                        <span class="badge bg-info-subtle text-info border border-info-subtle w-100 py-2 text-wrap" style="font-size: 11px;">
+                            <i class="ri-calendar-check-line me-1"></i> Scheduled for ${q.effective_date_formatted}
+                        </span>
+                        <button type="button" class="btn btn-outline-secondary btn-xs w-100" style="font-size: 11px;" onclick="event.stopPropagation(); cancelScheduledSwitch()">
+                            Cancel Scheduled Switch
+                        </button>
+                    </div>`;
+                return;
+            }
+
+            if (q.is_target_free_trial && q.free_trial_claimed) {
+                actionEl.innerHTML = `
+                    <div class="text-center">
+                        <span class="badge w-100 py-2 text-wrap d-flex align-items-center justify-content-center gap-1 rounded-3"
+                              style="background-color: rgba(100, 116, 139, 0.12); color: #475569; border: 1px solid rgba(100, 116, 139, 0.25); font-size: 11px; font-weight: 600;">
+                            <i class="ri-checkbox-circle-line text-secondary"></i>
+                            Free Trial Already Claimed
+                        </span>
+                    </div>`;
+                return;
+            }
+
+            if (!q.can_switch) {
+                const safeReason = String(q.block_reason || 'Unavailable').replace(/"/g, '&quot;');
+                const compactLabel = (q.is_downgrade && q.end_date_formatted)
+                    ? `<i class="ri-time-line"></i> Available after current plan ends (${q.end_date_formatted})`
+                    : `<i class="ri-lock-line"></i> ${q.block_reason || 'Unavailable'}`;
+                actionEl.innerHTML = `
+                    <div class="text-center" title="${safeReason}">
+                        <span class="badge bg-light text-muted border w-100 py-2 px-2 text-wrap d-flex align-items-center justify-content-center gap-1 rounded-3"
+                              style="font-size: 11px; font-weight: 600; line-height: 1.35; cursor: not-allowed;">
+                            ${compactLabel}
+                        </span>
+                        ${q.is_downgrade ? `<small class="d-block text-muted mt-1" style="font-size: 10px;">Only upgrades allowed while plan is active</small>` : ''}
+                    </div>`;
+                return;
+            }
+
+            if (q.action_type === 'upgrade') {
+                const label = String(q.current_package_id) === String(pkgId)
+                    ? `Upgrade to ${q.target_billing_cycle_label}`
+                    : `Switch & Upgrade`;
+                actionEl.innerHTML = `
+                    <button type="button" class="btn btn-dark btn-sm w-100 fw-semibold" onclick="event.stopPropagation(); handlePlanAction(${pkgId}, '${selectedCatalogCycle}', false)">
+                        ${label}
+                    </button>`;
+            } else if (q.action_type === 'switch_cycle') {
+                actionEl.innerHTML = `
+                    <button type="button" class="btn btn-outline-primary btn-sm w-100 fw-semibold" onclick="event.stopPropagation(); handlePlanAction(${pkgId}, '${selectedCatalogCycle}', false)">
+                        Switch to ${q.target_billing_cycle_label}
+                    </button>`;
+            } else if (q.action_type === 'downgrade') {
+                actionEl.innerHTML = `
+                    <button type="button" class="btn btn-outline-secondary btn-sm w-100 fw-semibold" onclick="event.stopPropagation(); handlePlanAction(${pkgId}, '${selectedCatalogCycle}', false)">
+                        Downgrade (${q.target_billing_cycle_label})
+                    </button>`;
+            } else {
+                const isExpiredMatch = isExpiredPlan && expiredPkgId && String(expiredPkgId) === String(pkgId);
+                actionEl.innerHTML = `
+                    <button type="button" class="btn ${isExpiredMatch ? 'btn-danger' : 'btn-dark'} btn-sm w-100 fw-semibold" onclick="event.stopPropagation(); handlePlanAction(${pkgId}, '${selectedCatalogCycle}', false)">
+                        ${isExpiredMatch ? `Renew & Reactivate (${q.target_billing_cycle_label})` : `Buy ${q.target_billing_cycle_label} Plan`}
+                    </button>`;
+            }
+        });
+    }
+    window.applyCatalogCycle = applyCatalogCycle;
+
+    function renewPlan(packageId, cycle) {
+        const useCycle = cycle || selectedCatalogCycle || 'monthly';
+        const q = (packageQuotes[String(packageId)] || {})[useCycle] || {};
+        const packageName = q.target_package_name || 'Subscription';
+        const cycleLabel = q.target_billing_cycle_label || 'Monthly';
+        const durLabel = q.duration_label || '30 Days';
+        const amt = parseFloat(q.price || 0);
+
         Swal.fire({
-            title: 'Confirm Plan Switch',
-            text: 'Are you sure you want to upgrade/switch to this package?',
+            title: `Renew ${cycleLabel} Subscription`,
+            html: `<div class="text-start">
+                     <p class="mb-2 text-dark">You are renewing <strong>${packageName}</strong> for <strong>${durLabel}</strong>.</p>
+                     <div class="p-3 bg-light rounded-3 border d-flex justify-content-between align-items-center">
+                       <span class="text-muted">Renewal Amount (${cycleLabel}):</span>
+                       <span class="fw-bold fs-5 text-success">₹${amt.toLocaleString('en-IN')}</span>
+                     </div>
+                   </div>`,
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonColor: '#63771F',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: `<i class="ri-refresh-line me-1"></i> Proceed to Pay ₹${amt.toLocaleString('en-IN')}`,
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                initiatePlanOrder(packageId, useCycle, true);
+            }
+        });
+    }
+
+    function cancelScheduledSwitch() {
+        Swal.fire({
+            title: 'Cancel Scheduled Switch?',
+            text: 'Your current active plan and billing cycle will remain unchanged at renewal.',
             icon: 'question',
             showCancelButton: true,
             confirmButtonColor: '#63771F',
-            cancelButtonColor: '#d33',
-            confirmButtonText: 'Yes, proceed!'
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, Keep Current Plan'
         }).then((result) => {
-            if (result.isConfirmed) {
+            if (!result.isConfirmed) return;
+            fetch("{% url 'farmer-switch-plan' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ action: 'cancel_scheduled_switch' })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'Updated', text: data.message, confirmButtonColor: '#63771F' })
+                        .then(() => { window.location.hash = '#subscription'; window.location.reload(); });
+                } else {
+                    Swal.fire('Error', data.error || 'Unable to cancel scheduled switch.', 'error');
+                }
+            })
+            .catch(() => Swal.fire('Error', 'Network error while updating subscription.', 'error'));
+        });
+    }
+    window.cancelScheduledSwitch = cancelScheduledSwitch;
+
+    function handlePlanAction(packageId, cycle, isRenewal) {
+        const useCycle = cycle || selectedCatalogCycle || 'monthly';
+        const q = (packageQuotes[String(packageId)] || {})[useCycle];
+        if (!q) {
+            initiatePlanOrder(packageId, useCycle, Boolean(isRenewal));
+            return;
+        }
+
+        if (!q.can_switch) {
+            Swal.fire({
+                title: 'Unavailable',
+                text: q.block_reason || 'This plan option is currently unavailable.',
+                icon: 'warning',
+                confirmButtonColor: '#63771F'
+            });
+            return;
+        }
+
+        if (q.is_scheduled_switch) {
+            const isCycleSwitch = q.action_type === 'switch_cycle';
+            const titleText = isCycleSwitch
+                ? `Switch to ${q.target_billing_cycle_label} Billing`
+                : `Schedule Downgrade to ${q.target_package_name}`;
+            const htmlBody = `
+                <div class="text-start">
+                    <p class="text-muted small mb-3">
+                        Your already-paid <strong>${q.current_package_name} (${q.current_billing_cycle_label})</strong> benefits will <strong>remain active through ${q.end_date_formatted}</strong>. No payment is charged today.
+                    </p>
+                    <div class="p-3 rounded-3 bg-light border mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted small">Current Paid Plan:</span>
+                            <strong class="text-dark small">${q.current_package_name} (${q.current_billing_cycle_label})</strong>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted small">Next Plan at Renewal:</span>
+                            <strong class="text-primary small">${q.target_package_name} (${q.target_billing_cycle_label} — ₹${Number(q.target_price).toLocaleString('en-IN')})</strong>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted small">Additional Payment Today:</span>
+                            <span class="badge bg-success-subtle text-success border fw-bold">₹0 (Paid benefits preserved)</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted small">Effective Date:</span>
+                            <span class="badge bg-primary-subtle text-primary border small">${q.effective_date_formatted}</span>
+                        </div>
+                    </div>
+                </div>`;
+
+            Swal.fire({
+                title: titleText,
+                html: htmlBody,
+                icon: 'info',
+                width: '520px',
+                showCancelButton: true,
+                confirmButtonColor: '#63771F',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="ri-calendar-check-line me-1"></i> Confirm Switch',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (!result.isConfirmed) return;
+                Swal.fire({ title: 'Scheduling Switch...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
                 fetch("{% url 'farmer-switch-plan' %}", {
                     method: 'POST',
                     headers: {
@@ -1797,61 +3212,244 @@ function deleteDocument(docId, docTitle) {
                         'X-CSRFToken': '{{ csrf_token }}',
                         'X-Requested-With': 'XMLHttpRequest'
                     },
-                    body: JSON.stringify({ package_id: packageId })
+                    body: JSON.stringify({
+                        action: 'schedule_switch',
+                        package_id: packageId,
+                        billing_cycle: useCycle
+                    })
                 })
-                .then(response => response.json())
+                .then(r => r.json())
                 .then(data => {
                     if (data.success) {
-                        if (data.amount === 0) {
-                            verifySwitchPayment({
-                                 razorpay_payment_id: "pay_free_mock",
-                                 razorpay_order_id: data.order_id,
-                                 razorpay_signature: "free_tier_bypass"
-                            }, data.package_id, data.mobile_number);
-                        } else {
-                            const options = {
-                              "key": data.key_id,
-                              "amount": data.amount,
-                              "currency": "INR",
-                              "name": "AgriOT WiFarm",
-                              "description": `Upgrade to ${data.package_name}`,
-                              "order_id": data.order_id,
-                              "handler": function (response) {
-                                verifySwitchPayment(response, data.package_id, data.mobile_number);
-                              },
-                              "prefill": {
-                                "name": data.fullname,
-                                "contact": data.mobile_number
-                              },
-                              "theme": {
-                                "color": "#63771F"
-                              }
-                            };
-                            const rzp = new Razorpay(options);
-                            rzp.on('payment.failed', function (response) {
-                                Swal.fire("Payment failed", response.error.description, "error");
-                            });
-                            rzp.open();
-                        }
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Plan Switch Scheduled',
+                            text: data.message,
+                            confirmButtonColor: '#63771F'
+                        }).then(() => { window.location.hash = '#subscription'; window.location.reload(); });
                     } else {
-                        Swal.fire('Error', 'Error initiating switch: ' + data.error, 'error');
+                        Swal.fire('Error', data.error || 'Could not schedule plan switch.', 'error');
                     }
                 })
-                .catch(error => {
-                    console.error('Error:', error);
-                    Swal.fire('Error', 'An unexpected error occurred.', 'error');
-                });
+                .catch(() => Swal.fire('Error', 'Network error while scheduling plan switch.', 'error'));
+            });
+            return;
+        }
+
+        const hasCredit = q.has_active_plan && q.deduction_credit > 0;
+        const netPayable = Number(q.net_payable || 0);
+        const titleText = q.has_active_plan
+            ? `Upgrade to ${q.target_package_name} (${q.target_billing_cycle_label})`
+            : `Subscribe to ${q.target_package_name} (${q.target_billing_cycle_label})`;
+
+        let confirmText = netPayable === 0
+            ? '<i class="ri-check-double-line me-1"></i> Activate Plan (₹0 Due)'
+            : `<i class="ri-secure-payment-line me-1"></i> Pay ₹${netPayable.toLocaleString('en-IN')} & Activate`;
+        let confirmColor = netPayable === 0 ? '#16a34a' : '#63771F';
+
+        let descHtml = '';
+        if (hasCredit) {
+            descHtml = `
+                <div class="text-start">
+                    <p class="text-muted small mb-3">
+                        Upgrading to <strong>${q.target_package_name} (${q.target_billing_cycle_label})</strong>. Unused credit from your active ${q.current_billing_cycle_label} plan is applied below.
+                    </p>
+                    <div class="p-3 rounded-3 border mb-3 shadow-xs" style="background: #fbfcfd; border-color: #e2e8f0;">
+                        <div class="d-flex justify-content-between align-items-center pb-2 mb-2 border-bottom">
+                            <div>
+                                <span class="fw-bold text-dark d-block" style="font-size: 13.5px;">New Plan: ${q.target_package_name}</span>
+                                <small class="text-muted" style="font-size: 11px;">${q.duration_label} • Effective ${q.effective_date_formatted}</small>
+                            </div>
+                            <span class="fw-bold text-dark fs-6">₹${Number(q.target_price).toLocaleString('en-IN')}</span>
+                        </div>
+                        <div class="py-1">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="text-muted small" style="font-size: 12px;">Active Plan (${q.current_package_name} — ${q.current_billing_cycle_label}):</span>
+                                <span class="text-dark small fw-medium" style="font-size: 12px;">₹${Number(q.current_price).toLocaleString('en-IN')} / ${q.total_days} days</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted small" style="font-size: 12px;">Remaining Unused Days:</span>
+                                <span class="badge bg-primary-subtle text-primary border" style="font-size: 11px;">
+                                    <i class="ri-time-line me-1"></i>${q.remaining_days} Days @ ₹${q.daily_rate}/day
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center p-2 rounded-2" style="background: rgba(34, 197, 94, 0.08); border: 1px dashed #22c55e;">
+                                <div>
+                                    <span class="text-success fw-bold d-block" style="font-size: 12px;">
+                                        <i class="ri-subtract-line me-1"></i>Pro-Rata Unused Credit:
+                                    </span>
+                                    ${q.extra_days > 0 ? `<small class="text-success" style="font-size: 10.5px;">Excess credit adds +${q.extra_days} bonus days (valid until ${q.new_end_date_formatted})</small>` : `<small class="text-muted" style="font-size: 10.5px;">Valid until ${q.new_end_date_formatted}</small>`}
+                                </div>
+                                <span class="fw-bold text-success fs-6">- ₹${Number(q.deduction_credit).toLocaleString('en-IN')}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-3 rounded-3 d-flex justify-content-between align-items-center shadow-xs" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: #ffffff;">
+                        <div>
+                            <span class="d-block text-white-50 text-uppercase fw-bold" style="font-size: 10px;">Net Payable Today:</span>
+                            <small class="text-light opacity-75" style="font-size: 11px;">Activates immediately (${q.effective_duration_days} days)</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="fw-bold fs-4 text-warning">₹${netPayable.toLocaleString('en-IN')}</span>
+                        </div>
+                    </div>
+                </div>`;
+        } else {
+            descHtml = `
+                <div class="text-start">
+                    <p class="mb-3 text-dark">You are subscribing to <strong>${q.target_package_name} (${q.target_billing_cycle_label})</strong> for <strong>${q.duration_label}</strong>.</p>
+                    <div class="p-3 bg-light rounded-3 border">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small">Effective Date:</span>
+                            <span class="fw-semibold text-dark small">${q.effective_date_formatted} (until ${q.new_end_date_formatted})</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">Subscription Amount:</span>
+                            <span class="fw-bold fs-5 text-success">₹${netPayable.toLocaleString('en-IN')}</span>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        Swal.fire({
+            title: titleText,
+            html: descHtml,
+            icon: 'info',
+            width: '540px',
+            showCancelButton: true,
+            confirmButtonColor: confirmColor,
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: confirmText,
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                initiatePlanOrder(packageId, useCycle, Boolean(isRenewal));
             }
         });
     }
+    window.handlePlanAction = handlePlanAction;
 
-    function verifySwitchPayment(rzpResponse, packageId, mobileNumber) {
+    function switchPlan(packageId, packageName, price) {
+        handlePlanAction(packageId, selectedCatalogCycle, false);
+    }
+
+    function reportPendingPaymentStatus(orderId, statusType) {
+        if (!orderId) return;
+        const fd = new FormData();
+        fd.append('razorpay_order_id', orderId);
+        fd.append('payment_status', statusType);
+        fetch('/farmer/verify_payment/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+            body: fd
+        }).catch(() => {});
+    }
+
+    function initiatePlanOrder(packageId, billingCycle, isRenewal) {
+        const useCycle = billingCycle || selectedCatalogCycle || 'monthly';
+        Swal.fire({
+            title: 'Connecting to Payment Gateway...',
+            text: 'Creating secure payment order, please wait...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        fetch("{% url 'farmer-switch-plan' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                action: 'initiate',
+                package_id: packageId,
+                billing_cycle: useCycle,
+                is_renewal: Boolean(isRenewal)
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            Swal.close();
+            if (data.success) {
+                if (data.amount === 0) {
+                    verifySwitchPayment({
+                         razorpay_payment_id: "pay_free_mock",
+                         razorpay_order_id: data.order_id,
+                         razorpay_signature: "free_tier_bypass"
+                    }, data.package_id, data.mobile_number, data.billing_cycle || useCycle, isRenewal);
+                } else {
+                    let paymentCompleted = false;
+                    const options = {
+                      "key": data.key_id,
+                      "amount": data.amount,
+                      "currency": "INR",
+                      "name": "AgriOT WiFarm",
+                      "description": isRenewal
+                          ? `Renewal: ${data.package_name} (${data.billing_cycle_label || useCycle})`
+                          : `Subscription: ${data.package_name} (${data.billing_cycle_label || useCycle})`,
+                      "order_id": data.order_id,
+                      "handler": function (response) {
+                        paymentCompleted = true;
+                        verifySwitchPayment(response, data.package_id, data.mobile_number, data.billing_cycle || useCycle, isRenewal);
+                      },
+                      "modal": {
+                        "ondismiss": function() {
+                            if (!paymentCompleted) {
+                                reportPendingPaymentStatus(data.order_id, 'cancelled');
+                                Swal.fire({
+                                    icon: 'info',
+                                    title: 'Payment Cancelled',
+                                    text: 'Checkout was closed before payment verification. Your existing subscription remains unchanged.',
+                                    confirmButtonColor: '#63771F'
+                                }).then(() => { window.location.hash = '#subscription'; window.location.reload(); });
+                            }
+                        }
+                      },
+                      "prefill": {
+                        "name": data.fullname,
+                        "contact": data.mobile_number
+                      },
+                      "theme": {
+                        "color": "#63771F"
+                      }
+                    };
+                    const rzp = new Razorpay(options);
+                    rzp.on('payment.failed', function (response) {
+                        paymentCompleted = true;
+                        reportPendingPaymentStatus(data.order_id, 'failed');
+                        Swal.fire("Payment Failed", response.error ? response.error.description : 'Transaction failed. Your existing subscription was not affected.', "error")
+                            .then(() => { window.location.hash = '#subscription'; window.location.reload(); });
+                    });
+                    rzp.open();
+                }
+            } else {
+                Swal.fire('Error', data.error || 'Failed to initiate payment order.', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'An unexpected error occurred while connecting to payment gateway.', 'error');
+        });
+    }
+
+    function verifySwitchPayment(rzpResponse, packageId, mobileNumber, billingCycle, isRenewal) {
+        const useCycle = billingCycle || selectedCatalogCycle || 'monthly';
+        Swal.fire({
+            title: 'Verifying Payment...',
+            text: 'Verifying payment signature with server and activating your plan...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
         const formData = new FormData();
         formData.append('razorpay_payment_id', rzpResponse.razorpay_payment_id);
         formData.append('razorpay_order_id', rzpResponse.razorpay_order_id);
         formData.append('razorpay_signature', rzpResponse.razorpay_signature);
         formData.append('package_id', packageId);
         formData.append('mobile_number', mobileNumber);
+        formData.append('billing_cycle', useCycle);
+        formData.append('is_renewal', isRenewal ? 'true' : 'false');
 
         fetch('/farmer/verify_payment/', {
           method: 'POST',
@@ -1863,18 +3461,190 @@ function deleteDocument(docId, docTitle) {
         .then(res => res.json())
         .then(data => {
             if (data.status === 'success') {
+                const cycleLbl = (data.data && data.data.billing_cycle_label) || useCycle;
+                const pkgName = (data.data && data.data.package_name) || 'Subscription';
                 Swal.fire({
-                    title: 'Payment Successful!',
-                    text: 'Your subscription has been upgraded.',
+                    title: isRenewal ? 'Subscription Renewed!' : 'Subscription Activated!',
+                    text: `${pkgName} (${cycleLbl}) is now active!`,
                     icon: 'success',
                     confirmButtonColor: '#63771F'
                 }).then(() => {
+                    window.location.hash = '#subscription';
                     window.location.reload();
                 });
             } else {
-                Swal.fire('Error', data.message || "Payment verification failed.", 'error');
+                Swal.fire('Payment Verification Failed', data.message || 'Verification failed', 'error');
             }
+        })
+        .catch(err => {
+            console.error('Verification error:', err);
+            Swal.fire('Error', 'An error occurred during verification.', 'error');
         });
     }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        applyCatalogCycle(selectedCatalogCycle);
+    });
+
+    // Cascading location pickers for farmer profile edit (State -> District -> Taluk)
+    document.addEventListener('DOMContentLoaded', function () {
+        const stateSelect = document.getElementById('select_state');
+        const districtSelect = document.getElementById('select_district');
+        const talukaSelect = document.getElementById('select_taluka');
+
+        if (stateSelect && districtSelect) {
+            stateSelect.addEventListener('change', function () {
+                const stateId = this.value;
+                districtSelect.innerHTML = '<option value="">Loading districts...</option>';
+                districtSelect.disabled = true;
+                if (talukaSelect) {
+                    talukaSelect.innerHTML = '<option value="">Select District First</option>';
+                    talukaSelect.disabled = true;
+                }
+
+                if (!stateId) {
+                    districtSelect.innerHTML = '<option value="">Select State First</option>';
+                    return;
+                }
+
+                fetch('/farmer/farms/get_districts/?state_id=' + stateId)
+                    .then(res => res.json())
+                    .then(data => {
+                        districtSelect.innerHTML = '<option value="">Select District</option>';
+                        (data.districts || []).forEach(d => {
+                            districtSelect.innerHTML += `<option value="${d.id}">${d.name}</option>`;
+                        });
+                        districtSelect.disabled = false;
+                    })
+                    .catch(() => {
+                        districtSelect.innerHTML = '<option value="">Error loading</option>';
+                    });
+            });
+        }
+
+        if (districtSelect && talukaSelect) {
+            districtSelect.addEventListener('change', function () {
+                const districtId = this.value;
+                talukaSelect.innerHTML = '<option value="">Loading taluks...</option>';
+                talukaSelect.disabled = true;
+
+                if (!districtId) {
+                    talukaSelect.innerHTML = '<option value="">Select District First</option>';
+                    return;
+                }
+
+                fetch('/farmer/farms/get_taluks/?district_id=' + districtId)
+                    .then(res => res.json())
+                    .then(data => {
+                        talukaSelect.innerHTML = '<option value="">Select Taluka</option>';
+                        (data.taluks || []).forEach(t => {
+                            talukaSelect.innerHTML += `<option value="${t.name}">${t.name}</option>`;
+                        });
+                        talukaSelect.disabled = false;
+                    })
+                    .catch(() => {
+                        talukaSelect.innerHTML = '<option value="">Error loading</option>';
+                    });
+            });
+        }
+    });
 </script>
+
+<script>
+    function togglePasswordVisibility(inputId, iconId) {
+        const input = document.getElementById(inputId);
+        const icon = document.getElementById(iconId);
+        if (!input || !icon) return;
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'ri-eye-off-line';
+        } else {
+            input.type = 'password';
+            icon.className = 'ri-eye-line';
+        }
+    }
+
+    function sendFarmerTestMail() {
+        const input = document.getElementById('farmer_test_recipient');
+        const statusBox = document.getElementById('farmer-test-mail-status');
+        const btn = document.getElementById('btn-farmer-test-mail');
+        const email = (input ? input.value : '').trim();
+
+        if (!email) {
+            Swal.fire('Recipient Required', 'Please enter a test recipient email address.', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sending...';
+        statusBox.style.display = 'block';
+        statusBox.className = 'mt-2 small p-2 rounded bg-light text-muted';
+        statusBox.innerText = 'Connecting to custom SMTP server...';
+
+        const formData = new FormData();
+        formData.append('test_email', email);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        fetch('{% url "farmer-test-mail" %}', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="ri-mail-check-line me-1"></i> Send Test Message';
+            if (data.success) {
+                statusBox.className = 'mt-2 small p-2 rounded bg-success bg-opacity-10 text-success fw-semibold';
+                statusBox.innerHTML = '<i class="ri-checkbox-circle-line me-1"></i> ' + data.message;
+                Swal.fire({
+                    title: 'Test Email Sent!',
+                    text: data.message,
+                    icon: 'success',
+                    confirmButtonColor: '#63771F'
+                });
+            } else {
+                statusBox.className = 'mt-2 small p-2 rounded bg-danger bg-opacity-10 text-danger';
+                statusBox.innerHTML = '<i class="ri-error-warning-line me-1"></i> ' + data.message;
+                Swal.fire('SMTP Error', data.message, 'error');
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="ri-mail-check-line me-1"></i> Send Test Message';
+            statusBox.className = 'mt-2 small p-2 rounded bg-danger bg-opacity-10 text-danger';
+            statusBox.innerText = 'Network connection failed.';
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const mailForm = document.getElementById('farmerMailSettingsForm');
+        if (mailForm) {
+            mailForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                fetch('{% url "farmer-mail-settings" %}', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Saved!',
+                        text: data.message || 'Custom SMTP settings saved successfully!',
+                        confirmButtonColor: '#63771F'
+                    }).then(() => {
+                        window.location.reload();
+                    });
+                })
+                .catch(err => {
+                    Swal.fire('Error', 'Failed to save SMTP settings.', 'error');
+                });
+            });
+        }
+    });
+</script>
+
 {% endblock %}

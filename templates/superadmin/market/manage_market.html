@@ -436,8 +436,35 @@ document.addEventListener('DOMContentLoaded', function() {
         if (demandFilter) $(demandFilter).on('change select2:select', filterCards);
     }
     if (cropFilter) cropFilter.addEventListener('change', filterCards);
-    if (demandFilter) demandFilter.addEventListener('change', filterCards);
     window.filterCards = filterCards;
+
+    // Crop Filter Click Handler
+    $(document).on('click', '.crop-filter-opt', function (e) {
+        e.preventDefault();
+        let val = $(this).data('val');
+        let label = $(this).find('.crop-opt-text').text().trim();
+        $('#cropFilter').val(val).trigger('change');
+        $('#cropFilterLabel').text(label);
+        $('.crop-filter-opt').removeClass('active');
+        $('.crop-filter-opt .check-mark').addClass('d-none');
+        $(this).addClass('active');
+        $(this).find('.check-mark').removeClass('d-none');
+        filterCards();
+    });
+
+    // Demand Filter Click Handler
+    $(document).on('click', '.demand-filter-opt', function (e) {
+        e.preventDefault();
+        let val = $(this).data('val');
+        let label = $(this).find('.demand-opt-text').text().trim();
+        $('#demandFilter').val(val).trigger('change');
+        $('#demandFilterLabel').text(label);
+        $('.demand-filter-opt').removeClass('active');
+        $('.demand-filter-opt .check-mark').addClass('d-none');
+        $(this).addClass('active');
+        $(this).find('.check-mark').removeClass('d-none');
+        filterCards();
+    });
 });
 
 function toggleMarketSearchBox() {
@@ -614,19 +641,91 @@ $(document).ready(function() {
           </div>
         </div>
 
-        <select class="form-select form-select-sm w-auto" id="cropFilter">
-            <option value="All">All Crops</option>
+        <!-- Themed Crop Filter Dropdown -->
+        <input type="hidden" id="cropFilter" value="All">
+        <div class="dropdown">
+          <button class="btn dropdown-toggle d-flex align-items-center gap-2 px-3 rounded-3 fw-semibold filter-dropdown-btn" 
+                  type="button" 
+                  id="cropFilterBtn" 
+                  data-bs-toggle="dropdown" 
+                  aria-expanded="false">
+            <i class="ri-plant-line" style="color: #F69C55;"></i>
+            <span id="cropFilterLabel">All Crops</span>
+          </button>
+          <ul class="dropdown-menu shadow-lg border-0 py-1 rounded-3" aria-labelledby="cropFilterBtn" style="min-width: 170px; max-height: 280px; overflow-y: auto;">
+            <li>
+              <a class="dropdown-item filter-dropdown-opt crop-filter-opt d-flex align-items-center justify-content-between active" href="javascript:void(0)" data-val="All">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #94a3b8;"></span>
+                  <span class="crop-opt-text">All Crops</span>
+                </span>
+                <i class="ri-check-line check-mark"></i>
+              </a>
+            </li>
             {% for crop in all_crops %}
-            <option value="{{ crop.name }}">{{ crop.name }}</option>
+            <li>
+              <a class="dropdown-item filter-dropdown-opt crop-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="{{ crop.name }}">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #22c55e;"></span>
+                  <span class="crop-opt-text">{{ crop.name }}</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
             {% endfor %}
-        </select>
+          </ul>
+        </div>
 
-        <select class="form-select form-select-sm w-auto" id="demandFilter">
-            <option value="All">All Demand Levels</option>
-            <option value="High">High Demand</option>
-            <option value="Medium">Medium Demand</option>
-            <option value="Low">Low Demand</option>
-        </select>
+        <!-- Themed Demand Filter Dropdown -->
+        <input type="hidden" id="demandFilter" value="All">
+        <div class="dropdown">
+          <button class="btn dropdown-toggle d-flex align-items-center gap-2 px-3 rounded-3 fw-semibold filter-dropdown-btn" 
+                  type="button" 
+                  id="demandFilterBtn" 
+                  data-bs-toggle="dropdown" 
+                  aria-expanded="false">
+            <i class="ri-bar-chart-2-line" style="color: #F69C55;"></i>
+            <span id="demandFilterLabel">All Demand Levels</span>
+          </button>
+          <ul class="dropdown-menu shadow-lg border-0 py-1 rounded-3" aria-labelledby="demandFilterBtn" style="min-width: 180px;">
+            <li>
+              <a class="dropdown-item filter-dropdown-opt demand-filter-opt d-flex align-items-center justify-content-between active" href="javascript:void(0)" data-val="All">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #94a3b8;"></span>
+                  <span class="demand-opt-text">All Demand Levels</span>
+                </span>
+                <i class="ri-check-line check-mark"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item filter-dropdown-opt demand-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="High">
+                <span class="d-flex align-items-center gap-2 text-primary">
+                  <span class="rounded-circle bg-primary" style="width: 8px; height: 8px;"></span>
+                  <span class="demand-opt-text">High Demand</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item filter-dropdown-opt demand-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Medium">
+                <span class="d-flex align-items-center gap-2 text-warning">
+                  <span class="rounded-circle bg-warning" style="width: 8px; height: 8px;"></span>
+                  <span class="demand-opt-text">Medium Demand</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item filter-dropdown-opt demand-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Low">
+                <span class="d-flex align-items-center gap-2 text-secondary">
+                  <span class="rounded-circle bg-secondary" style="width: 8px; height: 8px;"></span>
+                  <span class="demand-opt-text">Low Demand</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+          </ul>
+        </div>
     </div>
 </div>
 <div class="row g-3 mb-2">
@@ -1573,8 +1672,8 @@ $(document).ready(function() {
       });
   }
 
-  function deleteQuickUnit(name) {
-      if (!confirm(`Are you sure you want to delete unit "${name}"?`)) return;
+  async function deleteQuickUnit(name) {
+      if (!(await window.confirmQuickDelete(name, 'unit'))) return;
       var formData = new FormData();
       formData.append('name', name);
 

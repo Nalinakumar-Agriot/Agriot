@@ -64,10 +64,10 @@
           </div>
           {% endif %}
 
-          <!-- Mobile -->
+          <!-- Mobile or Username -->
           <div class="form-floating mb-4">
-            <input type="text" class="form-control" name="mobile" placeholder="Enter Mobile Number" value="{{ request.COOKIES.saved_mobile|default:'' }}" required>
-            <label>Mobile Number</label>
+            <input type="text" class="form-control" name="mobile" placeholder="Enter Mobile Number or Username" value="{{ request.COOKIES.saved_mobile|default:'' }}" required>
+            <label>Mobile Number or Username</label>
           </div>
 
           <!-- Password -->

@@ -13,6 +13,7 @@
 {% endblock vendor_css %}
 
 {% block page_css %}
+{% include "layout/partials/admin_search_styles.html" %}
 {{ block.super }}
 <style>
   .dataTables_length select {
@@ -123,7 +124,7 @@ $(document).ready(function () {
 
 <div class="card mb-2">
     <div class="card-body d-flex gap-2 flex-wrap p-2">
-        <div class="input-group w-75">
+        <div class="input-group admin-list-search w-75">
             <span class="input-group-text bg-white"><i class="ri-search-line"></i></span>
             <input type="text" class="form-control custom-search" placeholder="Search by Location Name...">
         </div>

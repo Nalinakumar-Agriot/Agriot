@@ -10,6 +10,7 @@
 
 {% block page_css %}
 {{ block.super }}
+{% include "layout/partials/report_toolbar_styles.html" %}
 <style>
   .nav-pills .nav-link.active,
   .nav-pills .show > .nav-link {
@@ -136,7 +137,7 @@
 
 <!-- Filter & Search Toolbar Card -->
 <div class="card border-0 shadow-sm rounded-4 mb-4">
-  <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3">
+  <div class="report-toolbar card-body d-flex gap-2 align-items-center flex-wrap p-3">
 
     <!-- Collapsible Search -->
     <div class="d-flex align-items-center search-collapse-wrapper" id="search_collapse_wrapper">
@@ -159,7 +160,7 @@
     </div>
 
     <!-- Right side category filter -->
-    <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+    <div class="report-toolbar-actions d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
       <select id="moduleCategoryFilter" class="form-select w-auto" onchange="filterByCategory(this.value)">
         <option value="all">All Report Modules</option>
         <option value="commercial">Commercial (Customer, Land)</option>

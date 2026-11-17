@@ -1,0 +1,131 @@
+{% extends "farmer/auth_base.html" %}
+{% load static %}
+{% block title %}Select Workspace - AgriOT{% endblock %}
+{% block page_css %}
+<style>
+  .workspace-card {
+    border: 2px solid #e2e8f0;
+    border-radius: 16px;
+    transition: all 0.25s ease;
+    background: #ffffff;
+    cursor: pointer;
+  }
+  .workspace-card:hover {
+    border-color: #10b981;
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.15);
+  }
+  .workspace-card.manager-card:hover {
+    border-color: #f59e0b;
+    box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.15);
+  }
+  .workspace-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+  }
+  .bg-farmer-icon {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+  }
+  .bg-manager-icon {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5 min-vh-100 d-flex flex-column justify-content-center align-items-center">
+  <div class="w-100" style="max-width: 820px;">
+    <!-- Logo & Header -->
+    <div class="text-center mb-5">
+      <img src="{% static 'img/auth/agri_logo_3.png' %}" width="260" class="mb-3" alt="AgriOT"
+           onerror="this.src='https://via.placeholder.com/180x50?text=AgriOT'">
+      <h3 class="fw-bold text-dark mb-2">Welcome back, {{ user_name }}! 👋</h3>
+      <p class="text-muted fs-6 mb-0">You have multiple roles on AgriOT. Select which farm workspace you want to manage today:</p>
+    </div>
+
+    <!-- Workspace Options -->
+    <div class="row g-4 justify-content-center">
+      {% for ws in workspaces %}
+      <div class="col-md-6">
+        <form method="POST" action="{% url 'select-workspace' %}">
+          {% csrf_token %}
+          <input type="hidden" name="workspace_type" value="{{ ws.type }}">
+          <input type="hidden" name="target_id" value="{{ ws.target_id }}">
+
+          <div class="workspace-card p-4 h-100 d-flex flex-column justify-content-between {% if ws.type == 'manager' %}manager-card{% endif %}" onclick="this.closest('form').submit();">
+            <div>
+              <div class="d-flex align-items-center justify-content-between mb-3">
+                <div class="workspace-icon {% if ws.type == 'farmer' %}bg-farmer-icon{% else %}bg-manager-icon{% endif %}">
+                  {% if ws.type == 'farmer' %}
+                    <i class="ri-plant-fill"></i>
+                  {% else %}
+                    <i class="ri-user-star-fill"></i>
+                  {% endif %}
+                </div>
+                <span class="badge {% if ws.type == 'farmer' %}bg-success-subtle text-success border border-success{% else %}bg-warning-subtle text-warning border border-warning{% endif %} px-3 py-1 rounded-pill fw-semibold">
+                  {{ ws.role_badge }}
+                </span>
+              </div>
+
+              <h5 class="fw-bold text-dark mb-1">{{ ws.title }}</h5>
+              <div class="text-muted small mb-3">
+                {% if ws.type == 'farmer' %}
+                  <span><i class="ri-shield-user-line me-1 text-success"></i>Personal Farm Ownership</span>
+                {% else %}
+                  <span><i class="ri-building-line me-1 text-warning"></i>Employed by <strong>{{ ws.owner_name }}</strong></span>
+                {% endif %}
+              </div>
+
+              <div class="p-3 bg-light rounded-3 mb-4">
+                <div class="d-flex justify-content-between small text-secondary mb-1">
+                  <span>Registered Farms:</span>
+                  <strong class="text-dark">{{ ws.farms_count }} Farms</strong>
+                </div>
+                <div class="d-flex justify-content-between small text-secondary">
+                  <span>Scope:</span>
+                  <span class="text-dark fw-medium">
+                    {% if ws.type == 'farmer' %}Full Owner Control{% else %}Field Management{% endif %}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" class="btn w-100 fw-bold py-2.5 {% if ws.type == 'farmer' %}btn-success{% else %}btn-warning text-dark{% endif %} shadow-sm d-flex align-items-center justify-content-center gap-2">
+              <span>Open {% if ws.type == 'farmer' %}My Farm{% else %}Manager Workspace{% endif %}</span>
+              <i class="ri-arrow-right-line"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+      {% endfor %}
+
+      {% if can_register_own_farm %}
+      <!-- Callout: Register Own Farm -->
+      <div class="col-12 text-center mt-3">
+        <div class="p-3 border rounded-3 bg-white shadow-sm d-inline-flex align-items-center gap-3">
+          <i class="ri-sparkling-fill text-success fs-4"></i>
+          <span class="text-secondary small">Own a farm of your own?</span>
+          <a href="{% url 'farmer-register' %}" class="btn btn-sm btn-outline-success fw-bold px-3">
+            Register as a Farmer
+          </a>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Sign Out Footer -->
+    <div class="text-center mt-5">
+      <a href="{% url 'farmer-logout' %}" class="text-muted small text-decoration-none">
+        <i class="ri-logout-box-r-line me-1"></i> Sign in with a different mobile number
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

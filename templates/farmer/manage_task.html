@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
 <link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
 <link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/flatpickr/flatpickr.css' %}" />
 <link rel="stylesheet" href="{% static 'vendor/libs/fullcalendar/fullcalendar.css' %}" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 {% endblock vendor_css %}
@@ -20,6 +21,7 @@
 <script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
 <script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
 <script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+<script src="{% static 'vendor/libs/flatpickr/flatpickr.js' %}"></script>
 <script src="{% static 'vendor/libs/fullcalendar/fullcalendar.js' %}"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 {% endblock vendor_js %}
@@ -28,13 +30,14 @@
 {{ block.super }}
 <style>
 .swal2-container { z-index: 20000 !important; }
+.flatpickr-calendar { z-index: 11000 !important; }
 .modal[id^="quick_add_"] {
-    z-index: 10700 !important;
+    z-index: 10950 !important;
     background-color: rgba(15, 23, 42, 0.45) !important;
     backdrop-filter: blur(2px);
 }
 .modal[id^="quick_add_"] .modal-dialog {
-    z-index: 10701 !important;
+    z-index: 10955 !important;
 }
 /* FullCalendar Button Styling Fix */
 .fc .fc-button {
@@ -190,6 +193,20 @@
   transform: translateX(0);
   pointer-events: auto;
 }
+.card-stats.task-tab {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid transparent !important;
+}
+.card-stats.task-tab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08) !important;
+}
+.card-stats.task-tab.active {
+  border-color: #28a745 !important;
+  background: #fbfdfb !important;
+  box-shadow: 0 4px 15px rgba(40,167,69,0.12) !important;
+}
 </style>
 {% endblock page_css %}
 
@@ -240,6 +257,7 @@ document.addEventListener('click', function (e) {
 let taskDataTable = null;
 
 function initTaskDataTable() {
+    $.fn.dataTable.ext.errMode = 'none';
     if ($.fn.DataTable.isDataTable('#taskDataTable')) {
         $('#taskDataTable').DataTable().destroy();
     }
@@ -289,11 +307,14 @@ if ($.fn.dataTable && $.fn.dataTable.ext) {
         const row = settings.aoData[dataIndex].nTr;
         if (!row) return true;
 
-        const rowStatus   = row.getAttribute('data-status');
+        const rowStatus   = row.getAttribute('data-status') || '';
         const rowPriority = row.getAttribute('data-priority') || '';
         const rowWorker   = row.getAttribute('data-worker') || '';
+        const rowFarm     = (row.getAttribute('data-farm') || '').toLowerCase();
         const searchData  = (row.getAttribute('data-search') || '').toLowerCase();
 
+        const farmEl   = document.getElementById('filterFarm');
+        const farm     = farmEl ? farmEl.value.toLowerCase().trim() : '';
         const status   = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '';
         const priority = document.getElementById('filterPriority') ? document.getElementById('filterPriority').value : '';
         const worker   = document.getElementById('filterWorker') ? document.getElementById('filterWorker').value : '';
@@ -303,21 +324,24 @@ if ($.fn.dataTable && $.fn.dataTable.ext) {
         const activeTabBtn = document.querySelector('.task-tab.active');
         const activeTab = activeTabBtn ? activeTabBtn.getAttribute('data-tab-id') : 'all';
 
+        const okFarm     = !farm     || rowFarm === farm || rowFarm.includes(farm);
         const okStatus   = !status   || rowStatus === status;
         const okPriority = !priority || rowPriority.includes(priority);
         const okWorker   = !worker   || rowWorker.includes(worker);
         const okTab      = activeTab === 'all' || rowStatus === activeTab;
         const okSearch   = !query    || searchData.includes(query);
 
-        return okStatus && okPriority && okWorker && okTab && okSearch;
+        return okFarm && okStatus && okPriority && okWorker && okTab && okSearch;
     });
 }
 
 // Dropdown & Search filters
 function applyFilters() {
-    const status   = document.getElementById('filterStatus').value;
-    const priority = document.getElementById('filterPriority').value;
-    const worker   = document.getElementById('filterWorker').value;
+    const farmEl   = document.getElementById('filterFarm');
+    const farm     = farmEl ? farmEl.value.toLowerCase().trim() : '';
+    const status   = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '';
+    const priority = document.getElementById('filterPriority') ? document.getElementById('filterPriority').value : '';
+    const worker   = document.getElementById('filterWorker') ? document.getElementById('filterWorker').value : '';
     const queryEl  = document.getElementById('searchInput');
     const query    = queryEl ? queryEl.value.toLowerCase().trim() : '';
 
@@ -327,20 +351,22 @@ function applyFilters() {
     // Filter Cards
     let visibleCards = 0;
     document.querySelectorAll('.task-card-wrapper').forEach(card => {
-        const cardStatus   = card.getAttribute('data-status');
+        const cardStatus   = card.getAttribute('data-status') || '';
         const cardPriority = card.getAttribute('data-priority') || '';
         const cardWorker   = card.getAttribute('data-worker') || '';
+        const cardFarm     = (card.getAttribute('data-farm') || '').toLowerCase();
 
         const titleText    = card.querySelector('h5')?.textContent.toLowerCase() || '';
         const descText     = card.querySelector('p')?.textContent.toLowerCase() || '';
 
+        const okFarm     = !farm     || cardFarm === farm || cardFarm.includes(farm);
         const okStatus   = !status   || cardStatus === status;
         const okPriority = !priority || cardPriority.includes(priority);
         const okWorker   = !worker   || cardWorker.includes(worker);
         const okTab      = activeTab === 'all' || cardStatus === activeTab;
-        const okSearch   = !query    || titleText.includes(query) || descText.includes(query);
+        const okSearch   = !query    || titleText.includes(query) || descText.includes(query) || cardFarm.includes(query);
 
-        if (okStatus && okPriority && okWorker && okTab && okSearch) {
+        if (okFarm && okStatus && okPriority && okWorker && okTab && okSearch) {
             card.style.display = '';
             visibleCards++;
         } else {
@@ -446,43 +472,210 @@ function calculateTotalHours(formId) {
     var form = document.getElementById(formId);
     if (!form) return;
     
-    var startDateVal = form.querySelector('[name="start_date"]').value;
-    var endDateVal = form.querySelector('[name="end_date"]').value;
-    var startTimeVal = form.querySelector('[name="start_time"]').value;
-    var endTimeVal = form.querySelector('[name="end_time"]').value;
+    var scheduleTypeInput = form.querySelector('[name="schedule_type"]');
+    var isRecurring = scheduleTypeInput && scheduleTypeInput.value === 'recurring';
     
+    var startTimeVal = form.querySelector('[name="start_time"]') ? form.querySelector('[name="start_time"]').value : '';
+    var endTimeVal = form.querySelector('[name="end_time"]') ? form.querySelector('[name="end_time"]').value : '';
     var totalHoursInput = form.querySelector('[name="total_hours"]');
     if (!totalHoursInput) return;
-    
-    if (startDateVal && endDateVal && startTimeVal && endTimeVal) {
-        // 1. Calculate hours per single day
-        var startDayStr = "2026-01-01"; // arbitrary baseline date
+
+    var hoursPerDay = 0;
+    if (startTimeVal && endTimeVal) {
+        var startDayStr = "2026-01-01";
         var start = new Date(startDayStr + 'T' + startTimeVal);
         var end = new Date(startDayStr + 'T' + endTimeVal);
-        
         var diffMs = end - start;
-        // If end time is before start time, assume it rolls over to the next morning (add 24 hours)
         if (endTimeVal < startTimeVal) {
             diffMs += 24 * 60 * 60 * 1000;
         }
-        
-        var hoursPerDay = diffMs / (1000 * 60 * 60);
+        hoursPerDay = diffMs / (1000 * 60 * 60);
         if (hoursPerDay < 0) hoursPerDay = 0;
-        
-        // 2. Calculate number of days in range inclusive
-        var dateStart = new Date(startDateVal + 'T00:00:00');
-        var dateEnd = new Date(endDateVal + 'T00:00:00');
-        var diffDaysMs = dateEnd - dateStart;
-        var daysCount = Math.floor(diffDaysMs / (1000 * 60 * 60 * 24)) + 1;
-        
-        if (daysCount < 1) daysCount = 1;
-        
-        // 3. Compute total hours
-        var totalHrs = hoursPerDay * daysCount;
-        totalHoursInput.value = totalHrs.toFixed(2);
-    } else {
-        totalHoursInput.value = '';
     }
+    
+    if (isRecurring) {
+        var csvInput = form.querySelector('[name="recurring_dates_csv"]');
+        var dates = (csvInput && csvInput.value) ? csvInput.value.split(',').filter(Boolean) : [];
+        var count = dates.length;
+        if (count > 0 && hoursPerDay > 0) {
+            var totalHrs = hoursPerDay * count;
+            totalHoursInput.value = totalHrs.toFixed(2);
+        } else if (hoursPerDay > 0) {
+            totalHoursInput.value = hoursPerDay.toFixed(2);
+        } else {
+            totalHoursInput.value = '';
+        }
+    } else {
+        var startDateEl = form.querySelector('[name="start_date"]');
+        var endDateEl = form.querySelector('[name="end_date"]');
+        var startDateVal = startDateEl ? startDateEl.value : '';
+        var endDateVal = endDateEl ? endDateEl.value : '';
+        if (startDateVal && endDateVal && hoursPerDay > 0) {
+            var dateStart = new Date(startDateVal + 'T00:00:00');
+            var dateEnd = new Date(endDateVal + 'T00:00:00');
+            var diffDaysMs = dateEnd - dateStart;
+            var daysCount = Math.floor(diffDaysMs / (1000 * 60 * 60 * 24)) + 1;
+            if (daysCount < 1) daysCount = 1;
+            var totalHrs = hoursPerDay * daysCount;
+            totalHoursInput.value = totalHrs.toFixed(2);
+        } else if (hoursPerDay > 0) {
+            totalHoursInput.value = hoursPerDay.toFixed(2);
+        } else {
+            totalHoursInput.value = '';
+        }
+    }
+}
+
+var editDatePicker = null;
+
+function initEditDatePicker() {
+    const input = document.getElementById('edit_date_picker_input');
+    if (!input || typeof flatpickr === 'undefined') return;
+
+    if (!editDatePicker) {
+        editDatePicker = flatpickr(input, {
+            mode: "single",
+            dateFormat: "Y-m-d",
+            altInput: false,
+            onChange: function(selectedDates, dateStr, instance) {
+                if (selectedDates && selectedDates.length > 0) {
+                    setEditTaskDate(dateStr, selectedDates[0]);
+                }
+            }
+        });
+    }
+}
+
+function openEditCalendar() {
+    initEditDatePicker();
+    if (editDatePicker) {
+        editDatePicker.open();
+    }
+}
+
+function setEditTaskDate(ymd, dtObj) {
+    const startInput = document.getElementById('edit_start_date');
+    const endInput = document.getElementById('edit_end_date');
+    const taskDateInput = document.getElementById('edit_task_date');
+    const badge = document.getElementById('edit_selected_date_badge');
+    const pickerInput = document.getElementById('edit_date_picker_input');
+
+    if (startInput) startInput.value = ymd;
+    if (endInput) endInput.value = ymd;
+    if (taskDateInput) taskDateInput.value = ymd;
+
+    if (dtObj) {
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const formatted = `${String(dtObj.getDate()).padStart(2, '0')}-${monthNames[dtObj.getMonth()]}-${dtObj.getFullYear()}`;
+        if (badge) {
+            badge.innerHTML = `<i class="ri-calendar-check-line me-1"></i>${formatted}`;
+            badge.style.display = 'inline-block';
+        }
+        if (pickerInput) {
+            pickerInput.value = formatted;
+        }
+    } else if (ymd && pickerInput) {
+        pickerInput.value = ymd;
+    }
+
+    calculateTotalHours('editTaskForm');
+}
+
+var addRecurringPicker = null;
+
+function initRecurringPickers() {
+    const input = document.getElementById('add_recurring_picker_input');
+    if (!input || typeof flatpickr === 'undefined') return;
+
+    if (!addRecurringPicker) {
+        addRecurringPicker = flatpickr(input, {
+            mode: "multiple",
+            dateFormat: "Y-m-d",
+            altInput: false,
+            minDate: "today",
+            onClose: function(selectedDates, dateStr, instance) {
+                updateRecurringDateTags('addTaskForm', selectedDates);
+            },
+            onChange: function(selectedDates, dateStr, instance) {
+                updateRecurringDateTags('addTaskForm', selectedDates);
+            }
+        });
+    }
+}
+
+function openRecurringCalendar(formId) {
+    initRecurringPickers();
+    if (addRecurringPicker) {
+        addRecurringPicker.open();
+    }
+}
+
+function updateRecurringDateTags(formId, selectedDates) {
+    const container = document.getElementById('add_recurring_tags_container');
+    const csvInput = document.getElementById('add_recurring_dates_csv');
+    const countEl = document.getElementById('recurring_dates_count');
+    const banner = document.getElementById('recurring_summary_banner');
+    const pickerInput = document.getElementById('add_recurring_picker_input');
+    const feedback = document.getElementById('recurring_dates_feedback');
+
+    if (pickerInput) pickerInput.classList.remove('is-invalid');
+    if (feedback) feedback.style.display = 'none';
+
+    if (!selectedDates || selectedDates.length === 0) {
+        if (csvInput) csvInput.value = '';
+        if (container) {
+            container.innerHTML = '<small class="text-muted fst-italic">No dates selected yet. Click \'Select Dates\' above to choose recurring dates on the calendar.</small>';
+        }
+        if (banner) banner.style.setProperty('display', 'none', 'important');
+        calculateTotalHours(formId);
+        return;
+    }
+
+    selectedDates.sort((a, b) => a - b);
+
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const ymdList = [];
+    let html = '';
+
+    selectedDates.forEach(dt => {
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        const ymd = `${y}-${m}-${d}`;
+        ymdList.push(ymd);
+
+        const formatted = `${d}-${monthNames[dt.getMonth()]}-${y}`;
+        html += `<span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2 py-1 d-inline-flex align-items-center gap-1 shadow-xs" style="font-size: 11.5px; font-weight: 600;">
+            <i class="ri-calendar-check-line me-1"></i>${formatted}
+            <a href="javascript:void(0);" onclick="removeRecurringDate('${formId}', '${ymd}')" class="text-danger ms-1 fw-bold fs-6" style="text-decoration:none; line-height: 1;" title="Remove this date">&times;</a>
+        </span>`;
+    });
+
+    if (csvInput) csvInput.value = ymdList.join(',');
+    if (container) container.innerHTML = html;
+    if (countEl) countEl.innerText = selectedDates.length;
+    if (banner) banner.style.removeProperty('display');
+
+    calculateTotalHours(formId);
+}
+
+function removeRecurringDate(formId, ymd) {
+    if (!addRecurringPicker) return;
+    const currentDates = addRecurringPicker.selectedDates;
+    const filteredDates = currentDates.filter(dt => {
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}` !== ymd;
+    });
+    addRecurringPicker.setDate(filteredDates, true);
+}
+
+function clearRecurringDates(formId) {
+    if (addRecurringPicker) {
+        addRecurringPicker.clear();
+    }
+    updateRecurringDateTags(formId, []);
 }
 
 // Update UI indicator and validation context for category-specific required fields
@@ -547,14 +740,55 @@ function submitAddTask() {
         }
     }
 
+    // Check recurring schedule validation
+    const schedType = form.querySelector('[name="schedule_type"]');
+    if (schedType && schedType.value === 'recurring') {
+        const csvInput = form.querySelector('[name="recurring_dates_csv"]');
+        const recurringDates = (csvInput && csvInput.value) ? csvInput.value.split(',').filter(Boolean) : [];
+        if (recurringDates.length === 0) {
+            const pickerInput = document.getElementById('add_recurring_picker_input');
+            const feedback = document.getElementById('recurring_dates_feedback');
+            if (pickerInput) pickerInput.classList.add('is-invalid');
+            if (feedback) {
+                feedback.innerText = 'Please click and select at least one recurring date on the calendar.';
+                feedback.style.display = 'block';
+            }
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Dates Required',
+                    text: 'Please click and pick at least one recurring date on the calendar.',
+                    confirmButtonColor: '#63771F'
+                });
+            }
+            valid = false;
+        }
+    }
+
     if (!valid) return;
 
     const data = new FormData(form);
     fetch("{% url 'add_farm_task' %}", { method: 'POST', body: data })
         .then(r => r.json())
         .then(res => {
-            if (res.success) { location.reload(); }
-            else { alert('Error: ' + (res.error || 'Unknown error')); }
+            if (res.success) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success!',
+                        text: res.message || 'Task scheduled successfully!',
+                        confirmButtonColor: '#63771F'
+                    }).then(() => location.reload());
+                } else {
+                    location.reload();
+                }
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', res.error || 'Failed to create task.', 'error');
+                } else {
+                    alert('Error: ' + (res.error || 'Unknown error'));
+                }
+            }
         })
         .catch(err => alert('Network error: ' + err));
 }
@@ -608,12 +842,30 @@ function openEditModal(taskId, title, description, priority, workTimeline, split
     $('#edit_worker_id').val(workerIds).trigger('change');
     document.getElementById('edit_status').value       = status;
 
-    document.getElementById('edit_start_date').value = startDate || '';
-    document.getElementById('edit_end_date').value = endDate || '';
-    document.getElementById('edit_start_time').value = startTime || '';
-    document.getElementById('edit_end_time').value = endTime || '';
+    var activeDate = startDate || taskDate || endDate || '';
+    document.getElementById('edit_start_date').value = activeDate;
+    document.getElementById('edit_end_date').value = activeDate;
+    document.getElementById('edit_task_date').value = activeDate;
+    document.getElementById('edit_start_time').value = startTime || '09:00';
+    document.getElementById('edit_end_time').value = endTime || '18:00';
     document.getElementById('edit_total_hours').value = totalHours || '';
     document.getElementById('edit_actual_hours').value = actualHours || '';
+
+    initEditDatePicker();
+    if (activeDate) {
+        if (editDatePicker) {
+            editDatePicker.setDate(activeDate, false);
+        }
+        var dtParts = activeDate.split('-');
+        if (dtParts.length === 3) {
+            var dtObj = new Date(parseInt(dtParts[0]), parseInt(dtParts[1]) - 1, parseInt(dtParts[2]));
+            setEditTaskDate(activeDate, dtObj);
+        } else {
+            setEditTaskDate(activeDate, null);
+        }
+    }
+
+    calculateTotalHours('editTaskForm');
 
     var modal = new bootstrap.Modal(document.getElementById('editTaskModal'));
     modal.show();
@@ -683,10 +935,6 @@ function confirmQuickDelete(itemName, callback) {
                 callback();
             }
         });
-    } else {
-        if (confirm('Are you sure you want to delete "' + itemName + '"?')) {
-            callback();
-        }
     }
 }
 
@@ -904,14 +1152,43 @@ function submitEditTask() {
         }
     }
 
+    const dateInput = form.querySelector('[name="start_date"]');
+    if (dateInput && !dateInput.value) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Date Required',
+                text: 'Please select a scheduled date for the task.',
+                confirmButtonColor: '#63771F'
+            });
+        }
+        valid = false;
+    }
+
     if (!valid) return;
 
     const data = new FormData(form);
     fetch("{% url 'edit_farm_task' %}", { method: 'POST', body: data })
         .then(r => r.json())
         .then(res => {
-            if (res.success) { location.reload(); }
-            else { alert('Error: ' + (res.error || 'Unknown error')); }
+            if (res.success) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Updated!',
+                        text: res.message || 'Task updated successfully!',
+                        confirmButtonColor: '#63771F'
+                    }).then(() => location.reload());
+                } else {
+                    location.reload();
+                }
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', res.error || 'Failed to update task.', 'error');
+                } else {
+                    alert('Error: ' + (res.error || 'Unknown error'));
+                }
+            }
         })
         .catch(err => alert('Network error: ' + err));
 }
@@ -981,7 +1258,7 @@ function updateStatus(taskId, status) {
 <div class="row g-3 mb-4">
   <!-- Total Tasks -->
   <div class="col-sm-6 col-lg-3">
-    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats task-tab active" data-tab-id="all" onclick="filterByTab('all', this)">
       <div class="card-body d-flex align-items-center gap-3 p-3">
         <div class="avatar avatar-md flex-shrink-0" style="background:rgba(13,110,253,0.10); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
           <i class="ri-clipboard-line fs-3" style="color:#0d6efd;"></i>
@@ -997,7 +1274,7 @@ function updateStatus(taskId, status) {
 
   <!-- Pending Queue -->
   <div class="col-sm-6 col-lg-3">
-    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats task-tab" data-tab-id="Pending" onclick="filterByTab('Pending', this)">
       <div class="card-body d-flex align-items-center gap-3 p-3">
         <div class="avatar avatar-md flex-shrink-0" style="background:rgba(255,193,7,0.12); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
           <i class="ri-time-line fs-3" style="color:#ffc107;"></i>
@@ -1013,7 +1290,7 @@ function updateStatus(taskId, status) {
 
   <!-- Active Progress -->
   <div class="col-sm-6 col-lg-3">
-    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats task-tab" data-tab-id="In Progress" onclick="filterByTab('In Progress', this)">
       <div class="card-body d-flex align-items-center gap-3 p-3">
         <div class="avatar avatar-md flex-shrink-0" style="background:rgba(246,156,85,0.12); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
           <i class="ri-loader-4-line fs-3" style="color:#f69c55;"></i>
@@ -1029,7 +1306,7 @@ function updateStatus(taskId, status) {
 
   <!-- Completed Chores -->
   <div class="col-sm-6 col-lg-3">
-    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats">
+    <div class="card border-0 shadow-sm rounded-4 h-100 card-stats task-tab" data-tab-id="Completed" onclick="filterByTab('Completed', this)">
       <div class="card-body d-flex align-items-center gap-3 p-3">
         <div class="avatar avatar-md flex-shrink-0" style="background:rgba(25,135,84,0.12); border-radius:12px; width:52px; height:52px; display:flex; align-items:center; justify-content:center;">
           <i class="ri-checkbox-circle-line fs-3" style="color:#198754;"></i>
@@ -1048,8 +1325,8 @@ function updateStatus(taskId, status) {
 
 <!-- Filter & Search Bar -->
 <div class="card mb-3 border-0 shadow-sm rounded-4">
-  <div class="card-body d-flex gap-2 align-items-center justify-content-between flex-wrap p-3">
-    <div class="d-flex align-items-center gap-2">
+  <div class="card-body farmer-filter-toolbar p-3">
+    <div class="farmer-filter-search d-flex align-items-center gap-2">
       <!-- Collapsible Search -->
       <div class="d-flex align-items-center search-collapse-wrapper" id="search_collapse_wrapper">
         <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="search_toggle_btn" onclick="toggleSearchBox()" style="width: 38px; height: 38px;">
@@ -1072,13 +1349,19 @@ function updateStatus(taskId, status) {
     </div>
 
     <!-- Filters -->
-    <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+    <div class="farmer-filter-controls flex-wrap">
+      <select class="form-select form-select-sm w-auto" id="filterFarm" onchange="applyFilters()">
+        <option value="">All Farm Lands</option>
+        {% for f in farms %}
+        <option value="{{ f.land_name }}">{{ f.land_name }}</option>
+        {% endfor %}
+      </select>
+
       <select class="form-select form-select-sm w-auto" id="filterStatus" onchange="applyFilters()">
         <option value="">All Statuses</option>
         <option value="Pending">Pending</option>
         <option value="In Progress">In Progress</option>
         <option value="Completed">Completed</option>
-        <option value="Scheduled">Scheduled</option>
       </select>
 
       <select class="form-select form-select-sm w-auto" id="filterPriority" onchange="applyFilters()">
@@ -1105,6 +1388,7 @@ function updateStatus(taskId, status) {
   <div class="col-12 col-md-6 col-lg-4 task-card-wrapper"
        data-status="{{ task.status }}"
        data-priority="{{ task.priority }}"
+       data-farm="{{ task.farm.land_name|default:'' }}"
        data-worker="{% for w in task.assigned_workers.all %}{{ w.name }}{% if not forloop.last %},{% endif %}{% endfor %}">
     <div class="task-card">
       <div class="d-flex justify-content-between align-items-start mb-3">
@@ -1210,7 +1494,6 @@ function updateStatus(taskId, status) {
               <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'Pending')"><i class="ri-time-line text-warning"></i> Pending</button></li>
               <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'In Progress')"><span class="spinner-grow spinner-grow-sm text-primary" style="width:8px; height:8px;"></span> In Progress</button></li>
               <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'Completed')"><i class="ri-checkbox-circle-fill text-success"></i> Completed</button></li>
-              <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'Scheduled')"><i class="ri-calendar-event-line text-info"></i> Scheduled</button></li>
             </ul>
           </div>
           {% endif %}
@@ -1282,6 +1565,7 @@ function updateStatus(taskId, status) {
           <tr class="task-table-row"
               data-status="{{ task.status }}"
               data-priority="{{ task.priority }}"
+              data-farm="{{ task.farm.land_name|default:'' }}"
               data-worker="{% for w in task.assigned_workers.all %}{{ w.name }}{% if not forloop.last %},{% endif %}{% endfor %}"
               data-search="{{ task.title|lower }} {{ task.description|default:''|lower }} {{ task.farm.land_name|default:''|lower }} {{ task.task_category.name|default:''|lower }} {% for w in task.assigned_workers.all %}{{ w.name|lower }} {% endfor %}">
             <!-- Task & Details -->
@@ -1403,7 +1687,6 @@ function updateStatus(taskId, status) {
                   <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'Pending')"><i class="ri-time-line text-warning"></i> Pending</button></li>
                   <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'In Progress')"><span class="spinner-grow spinner-grow-sm text-primary" style="width:8px; height:8px;"></span> In Progress</button></li>
                   <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'Completed')"><i class="ri-checkbox-circle-fill text-success"></i> Completed</button></li>
-                  <li><button class="dropdown-item d-flex align-items-center gap-2" onclick="updateStatus({{ task.id }}, 'Scheduled')"><i class="ri-calendar-event-line text-info"></i> Scheduled</button></li>
                 </ul>
               </div>
               {% endif %}
@@ -1526,7 +1809,7 @@ function updateStatus(taskId, status) {
                 </option>
                 {% endfor %}
               </select>
-              <select class="split-option-template d-none" style="display: none;">
+              <select class="split-option-template d-none" style="display: none !important;" aria-hidden="true" tabindex="-1">
                 {% for split in crop_splits %}
                 <option value="{{ split.id }}" data-farm="{{ split.farm.id }}">
                   {{ split.crop.name|default:"Unknown" }} ({{ split.farm.land_name }})
@@ -1547,34 +1830,82 @@ function updateStatus(taskId, status) {
             </div>
             
            
-            <div class="col-6">
-              <label class="form-label">Start Date <span class="text-danger">*</span></label>
-              <input type="date" name="start_date" id="add_start_date" class="form-control" value="{% now 'Y-m-d' %}" onchange="calculateTotalHours('addTaskForm')" required>
-              <div class="invalid-feedback"></div>
-            </div>
+            <!-- Schedule Configuration (Default Calendar Selection UI) -->
+            <div class="col-12">
+              <div class="card border rounded-3 p-3 bg-light bg-opacity-50">
+                <input type="hidden" name="schedule_type" value="recurring">
+                <input type="hidden" name="recurring_dates_csv" id="add_recurring_dates_csv" value="">
 
-            <div class="col-6">
-              <label class="form-label">End Date <span class="text-danger">*</span></label>
-              <input type="date" name="end_date" id="add_end_date" class="form-control" value="{% now 'Y-m-d' %}" onchange="calculateTotalHours('addTaskForm')" required>
-              <div class="invalid-feedback"></div>
-            </div>
-            <div class="col-6">
-              <label class="form-label">Start Time <span class="text-danger">*</span></label>
-              <input type="time" name="start_time" id="add_start_time" class="form-control" value="09:00" onchange="calculateTotalHours('addTaskForm')" required>
-              <div class="invalid-feedback"></div>
-            </div>
-            <div class="col-6">
-              <label class="form-label">End Time <span class="text-danger">*</span></label>
-              <input type="time" name="end_time" id="add_end_time" class="form-control" value="18:00" onchange="calculateTotalHours('addTaskForm')" required>
-              <div class="invalid-feedback"></div>
-            </div>
-            <div class="col-6">
-              <label class="form-label">Total Hours (Auto)</label>
-              <input type="number" step="0.01" name="total_hours" id="add_total_hours" class="form-control" readonly placeholder="0.0">
-            </div>
-            <div class="col-6">
-              <label class="form-label">Actual Hours</label>
-              <input type="number" step="0.01" name="actual_hours" id="add_actual_hours" class="form-control" placeholder="Enter actual hours">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-dark mb-0 d-flex align-items-center">
+                    <i class="ri-calendar-event-line text-primary me-2 fs-5"></i>
+                    Schedule Date &amp; Time
+                  </label>
+                  <button type="button" class="btn btn-link btn-sm text-danger p-0 text-decoration-none small fw-semibold" onclick="clearRecurringDates('addTaskForm')">
+                    <i class="ri-delete-bin-line me-1"></i>Clear All Dates
+                  </button>
+                </div>
+
+                <!-- Recurring Calendar Picker Section (Default & Always Active) -->
+                <div class="p-3 bg-white border rounded-3 mb-2 shadow-xs">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-semibold text-dark small">
+                      <i class="ri-calendar-2-line text-success me-1"></i> Click below to pick date(s) on calendar:
+                    </span>
+                  </div>
+
+                  <!-- Flatpickr input with button -->
+                  <div class="input-group mb-2">
+                    <span class="input-group-text bg-light text-primary"><i class="ri-calendar-todo-line"></i></span>
+                    <input type="text" id="add_recurring_picker_input" class="form-control bg-white" placeholder="Click here to open calendar view..." readonly style="cursor: pointer;" onclick="openRecurringCalendar('addTaskForm')">
+                    <button class="btn btn-primary" type="button" onclick="openRecurringCalendar('addTaskForm')">
+                      <i class="ri-calendar-event-line me-1"></i> Select Dates
+                    </button>
+                  </div>
+
+                  <!-- Selected dates tag container -->
+                  <div id="add_recurring_tags_container" class="d-flex flex-wrap gap-2 pt-2 border-top" style="min-height: 38px;">
+                    <small class="text-muted fst-italic">No dates selected yet. Click 'Select Dates' above to choose dates on the calendar.</small>
+                  </div>
+                  <div class="invalid-feedback" id="recurring_dates_feedback"></div>
+                </div>
+
+                <div class="alert alert-info py-2 px-3 small mb-0 d-flex align-items-center" id="recurring_summary_banner" style="display: none !important;">
+                  <i class="ri-information-line fs-5 me-2 text-info"></i>
+                  <div>
+                    <strong id="recurring_dates_count">0</strong> tasks will be scheduled on each selected calendar date with the times below.
+                  </div>
+                </div>
+
+                <!-- Time & Hours Row -->
+                <div class="row g-3 mt-1 pt-2 border-top">
+                  <div class="col-6">
+                    <label class="form-label fw-semibold text-dark small">Start Time <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-white text-muted"><i class="ri-time-line"></i></span>
+                      <input type="time" name="start_time" id="add_start_time" class="form-control" value="09:00" onchange="calculateTotalHours('addTaskForm')" required>
+                    </div>
+                    <div class="invalid-feedback"></div>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label fw-semibold text-dark small">End Time <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-white text-muted"><i class="ri-time-line"></i></span>
+                      <input type="time" name="end_time" id="add_end_time" class="form-control" value="18:00" onchange="calculateTotalHours('addTaskForm')" required>
+                    </div>
+                    <div class="invalid-feedback"></div>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label fw-semibold text-dark small" id="lbl_total_hours">Total Hours (Auto)</label>
+                    <input type="number" step="0.01" name="total_hours" id="add_total_hours" class="form-control bg-light" readonly placeholder="0.0">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label fw-semibold text-dark small">Actual Hours</label>
+                    <input type="number" step="0.01" name="actual_hours" id="add_actual_hours" class="form-control" placeholder="Enter actual hours">
+                  </div>
+                </div>
+
+              </div>
             </div>
            
             <div class="col-12">
@@ -1648,7 +1979,8 @@ var allEvents = [
             endTime: "{{ task.end_time|time:'H:i' }}",
             totalHours: "{{ task.total_hours|default:'' }}",
             actualHours: "{{ task.actual_hours|default:'' }}",
-            farmId: "{{ task.farm.id|default:'' }}"
+            farmId: "{{ task.farm.id|default:'' }}",
+            farmName: "{{ task.farm.land_name|default:''|escapejs }}"
         }
     },
     {% endfor %}
@@ -1667,6 +1999,8 @@ function initCalendar() {
             right: 'dayGridMonth,timeGridWeek,listMonth'
         },
         events: function(info, successCallback, failureCallback) {
+            const farmEl   = document.getElementById('filterFarm');
+            const farm     = farmEl ? farmEl.value.toLowerCase().trim() : '';
             const status   = document.getElementById('filterStatus').value;
             const priority = document.getElementById('filterPriority').value;
             const worker   = document.getElementById('filterWorker').value;
@@ -1679,13 +2013,14 @@ function initCalendar() {
             var filtered = allEvents.filter(event => {
                 const props = event.extendedProps;
                 
+                const okFarm     = !farm     || (props.farmName && (props.farmName.toLowerCase() === farm || props.farmName.toLowerCase().includes(farm)));
                 const okStatus   = !status   || props.status === status;
                 const okPriority = !priority || props.priority.includes(priority);
                 const okWorker   = !worker   || props.workerNamesStr.split(',').includes(worker);
                 const okTab      = activeTab === 'all' || props.status === activeTab;
                 const okSearch   = !query    || event.title.toLowerCase().includes(query) || (props.description && props.description.toLowerCase().includes(query));
 
-                return okStatus && okPriority && okWorker && okTab && okSearch;
+                return okFarm && okStatus && okPriority && okWorker && okTab && okSearch;
             });
             successCallback(filtered);
         },
@@ -1772,6 +2107,16 @@ function setViewMode(mode) {
         if (cardCont) cardCont.classList.remove('d-none');
     }
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    const addTaskModalEl = document.getElementById('addTaskModal');
+    if (addTaskModalEl) {
+        addTaskModalEl.addEventListener('shown.bs.modal', function () {
+            initRecurringPickers();
+        });
+    }
+});
+
 </script>
 
 <!-- Edit Task Modal -->
@@ -1849,33 +2194,71 @@ function setViewMode(mode) {
             <input type="hidden" name="work_timeline" id="edit_work_timeline" value="Full Day">
             <input type="hidden" name="task_date" id="edit_task_date">
 
-            <div class="col-6">
-              <label class="form-label">Start Date <span class="text-danger">*</span></label>
-              <input type="date" name="start_date" id="edit_start_date" class="form-control" onchange="calculateTotalHours('editTaskForm')" required>
-              <div class="invalid-feedback"></div>
-            </div>
-            <div class="col-6">
-              <label class="form-label">End Date <span class="text-danger">*</span></label>
-              <input type="date" name="end_date" id="edit_end_date" class="form-control" onchange="calculateTotalHours('editTaskForm')" required>
-              <div class="invalid-feedback"></div>
-            </div>
-            <div class="col-6">
-              <label class="form-label">Start Time <span class="text-danger">*</span></label>
-              <input type="time" name="start_time" id="edit_start_time" class="form-control" onchange="calculateTotalHours('editTaskForm')" required>
-              <div class="invalid-feedback"></div>
-            </div>
-            <div class="col-6">
-              <label class="form-label">End Time <span class="text-danger">*</span></label>
-              <input type="time" name="end_time" id="edit_end_time" class="form-control" onchange="calculateTotalHours('editTaskForm')" required>
-              <div class="invalid-feedback"></div>
-            </div>
-            <div class="col-6">
-              <label class="form-label">Total Hours (Auto)</label>
-              <input type="number" step="0.01" name="total_hours" id="edit_total_hours" class="form-control" readonly placeholder="0.0">
-            </div>
-            <div class="col-6">
-              <label class="form-label">Actual Hours</label>
-              <input type="number" step="0.01" name="actual_hours" id="edit_actual_hours" class="form-control" placeholder="Enter actual hours">
+            <!-- Edit Task Schedule & Hours Container (Same UI as Add Task with 1 date) -->
+            <div class="col-12">
+              <div class="card border rounded-3 p-3 bg-light bg-opacity-50">
+                <input type="hidden" name="start_date" id="edit_start_date" value="">
+                <input type="hidden" name="end_date" id="edit_end_date" value="">
+
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-dark mb-0 d-flex align-items-center">
+                    <i class="ri-calendar-event-line text-primary me-2 fs-5"></i>
+                    Schedule Date &amp; Time
+                  </label>
+                </div>
+
+                <!-- Calendar Picker Section (Same UI as Add Task, Single Date Mode) -->
+                <div class="p-3 bg-white border rounded-3 mb-2 shadow-xs">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-semibold text-dark small">
+                      <i class="ri-calendar-2-line text-success me-1"></i> Task Scheduled Date:
+                    </span>
+                    <span id="edit_selected_date_badge" class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2.5 py-1 fw-semibold" style="font-size: 12px; display: none;"></span>
+                  </div>
+
+                  <!-- Flatpickr single date input with button -->
+                  <div class="input-group mb-1">
+                    <span class="input-group-text bg-light text-primary"><i class="ri-calendar-todo-line"></i></span>
+                    <input type="text" id="edit_date_picker_input" class="form-control bg-white" placeholder="Click here to select date on calendar..." readonly style="cursor: pointer;" onclick="openEditCalendar()">
+                    <button class="btn btn-primary" type="button" onclick="openEditCalendar()">
+                      <i class="ri-calendar-event-line me-1"></i> Select Date
+                    </button>
+                  </div>
+                  <div class="invalid-feedback" id="edit_date_feedback"></div>
+                </div>
+
+                <!-- Time & Hours Row -->
+                <div class="row g-3 mt-1 pt-2 border-top">
+                  <div class="col-6">
+                    <label class="form-label fw-semibold text-dark small">Start Time <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-white text-muted"><i class="ri-time-line"></i></span>
+                      <input type="time" name="start_time" id="edit_start_time" class="form-control" value="09:00" onchange="calculateTotalHours('editTaskForm')" required>
+                    </div>
+                    <div class="invalid-feedback"></div>
+                  </div>
+
+                  <div class="col-6">
+                    <label class="form-label fw-semibold text-dark small">End Time <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-white text-muted"><i class="ri-time-line"></i></span>
+                      <input type="time" name="end_time" id="edit_end_time" class="form-control" value="18:00" onchange="calculateTotalHours('editTaskForm')" required>
+                    </div>
+                    <div class="invalid-feedback"></div>
+                  </div>
+
+                  <div class="col-6">
+                    <label class="form-label fw-semibold text-dark small">Total Hours (Auto)</label>
+                    <input type="number" step="0.01" name="total_hours" id="edit_total_hours" class="form-control bg-light" readonly placeholder="0.0">
+                  </div>
+
+                  <div class="col-6">
+                    <label class="form-label fw-semibold text-dark small">Actual Hours</label>
+                    <input type="number" step="0.01" name="actual_hours" id="edit_actual_hours" class="form-control" placeholder="Enter actual hours">
+                  </div>
+                </div>
+
+              </div>
             </div>
             <div class="col-6">
               <label class="form-label">Assign Worker</label>
@@ -1891,7 +2274,6 @@ function setViewMode(mode) {
                 <option value="Pending">Pending</option>
                 <option value="In Progress">In Progress</option>
                 <option value="Completed">Completed</option>
-                <option value="Scheduled">Scheduled</option>
               </select>
             </div>
           </div>
@@ -1908,7 +2290,7 @@ function setViewMode(mode) {
 </div>
 
 <!-- Quick Add Task Category Modal -->
-<div class="modal fade" id="quick_add_task_category_modal" tabindex="-1" style="z-index: 10700 !important;" data-bs-backdrop="false">
+<div class="modal fade" id="quick_add_task_category_modal" tabindex="-1" style="z-index: 10950 !important;" data-bs-backdrop="false">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
     <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
       <div class="modal-header bg-light py-2.5 px-3 border-bottom">
@@ -1954,7 +2336,7 @@ function setViewMode(mode) {
 </div>
 
 <!-- Quick Add Task Priority Modal -->
-<div class="modal fade" id="quick_add_task_priority_modal" tabindex="-1" style="z-index: 10700 !important;" data-bs-backdrop="false">
+<div class="modal fade" id="quick_add_task_priority_modal" tabindex="-1" style="z-index: 10950 !important;" data-bs-backdrop="false">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
     <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
       <div class="modal-header bg-light py-2.5 px-3 border-bottom">
@@ -1988,14 +2370,5 @@ function setViewMode(mode) {
     </div>
   </div>
 </div>
-
-<!-- Hidden split options template -->
-<select class="split-option-template d-none">
-  {% for split in crop_splits %}
-  <option value="{{ split.id }}" data-farm="{{ split.farm.id }}">
-    {{ split.crop.name|default:"Unknown" }} ({{ split.farm.land_name }})
-  </option>
-  {% endfor %}
-</select>
 
 {% endblock %}

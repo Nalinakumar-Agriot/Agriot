@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AgriOT SMTP Test Email</title>
+</head>
+<body style="margin: 0; padding: 20px; background-color: #F4F7EE; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #2D3748;">
+  <div style="max-width: 550px; margin: 0 auto; background: #FFF; border-radius: 12px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #E2E8F0;">
+    <div style="text-align: center; margin-bottom: 20px;">
+      <span style="display: inline-block; background: #DEF7EC; color: #03543F; font-size: 13px; font-weight: 700; padding: 6px 16px; border-radius: 20px;">
+        ✅ SMTP Connection Test Succeeded
+      </span>
+    </div>
+    <h2 style="color: #63771F; margin: 0 0 10px 0; text-align: center; font-size: 22px;">
+      AgriOT Mail Integration Test
+    </h2>
+    <p style="font-size: 15px; color: #4A5568; line-height: 1.6; text-align: center;">
+      Congratulations! Your SMTP settings (Host: <strong>{{ host }}</strong>, Port: <strong>{{ port }}</strong>) are verified and working properly.
+    </p>
+    <div style="background: #F8FAF2; border: 1px dashed #63771F; padding: 15px; border-radius: 8px; margin: 20px 0; font-size: 13px; color: #4A5568;">
+      <div><strong>Sender Email:</strong> {{ sender }}</div>
+      <div><strong>Sender Name:</strong> {{ sender_name }}</div>
+      <div><strong>Tested At:</strong> {{ timestamp }}</div>
+    </div>
+    <p style="font-size: 12px; color: #718096; text-align: center; margin: 0;">
+      This is an automated test message sent from AgriOT Smart Agriculture Platform.
+    </p>
+  </div>
+</body>
+</html>

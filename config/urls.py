@@ -18,16 +18,20 @@ api_info = openapi.Info(
     license=openapi.License(name="BSD License"),
 )
 
+schema_permission = permissions.AllowAny if settings.DEBUG else permissions.IsAuthenticated
+
 schema_view = get_schema_view(
     api_info,
-    public=True,
-    permission_classes=(permissions.AllowAny,),
+    public=settings.DEBUG,
+    permission_classes=(schema_permission,),
 )
 
 urlpatterns = [
-    path('', superadmin_login, name='home'),  # ✅ root = superadmin login
-    path('admin-panel/', include('apps.superadmin.urls')),
-    path('farmer/', include('apps.farmer.urls')),
+    # Admin Panel (baseurl/admin)
+    path('admin-panel/', include('apps.superadmin.urls')),  # Backward compatibility alias
+    path('admin/', include('apps.superadmin.urls')),
+
+    # Farmer APIs
     path('api/farmer/', include('apps.farmer.api_urls')),
     
     # Notifications API
@@ -42,6 +46,10 @@ urlpatterns = [
     path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+
+    # Farmer App (Farmer url : baseurl, plus backward-compatible /farmer/)
+    path('farmer/', include('apps.farmer.urls')),
+    path('', include('apps.farmer.urls')),
 ]
 
 if settings.DEBUG:

@@ -1,4 +1,78 @@
+from decimal import Decimal
+
 from rest_framework import serializers
+
+class FarmerRegistrationSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=150)
+    mobile = serializers.RegexField(r'^[6-9]\d{9}$', max_length=10)
+    email = serializers.EmailField(required=False, allow_blank=True, max_length=100)
+    gender = serializers.ChoiceField(
+        choices=('Male', 'Female', 'Other'),
+        error_messages={'required': 'Gender is required.'},
+    )
+    farmer_type = serializers.ChoiceField(
+        choices=('individual', 'company'),
+        error_messages={'required': 'Farmer category is required.'},
+    )
+    company_name = serializers.CharField(
+        max_length=255, required=False, allow_blank=True
+    )
+    state_id = serializers.IntegerField(
+        error_messages={'required': 'State is required.'}
+    )
+    district_id = serializers.IntegerField(
+        error_messages={'required': 'District is required.'}
+    )
+    taluk = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    village = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    pincode = serializers.CharField(max_length=6, required=False, allow_blank=True)
+    address = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Name is required.')
+        return value
+
+    def validate_email(self, value):
+        return value.strip().lower()
+
+    def validate_pincode(self, value):
+        value = (value or '').strip()
+        if value and (not value.isdigit() or len(value) > 6):
+            raise serializers.ValidationError(
+                'Pincode must be up to 6 digits.'
+            )
+        return value
+
+    def validate(self, attrs):
+        from apps.superadmin.models import City, State
+
+        farmer_type = attrs.get('farmer_type') or 'individual'
+        company_name = (attrs.get('company_name') or '').strip()
+        if farmer_type == 'company' and not company_name:
+            raise serializers.ValidationError({
+                'company_name': 'Company name is required for company registration.'
+            })
+        attrs['company_name'] = company_name if farmer_type == 'company' else ''
+        attrs['taluk'] = (attrs.get('taluk') or '').strip()
+        attrs['village'] = (attrs.get('village') or '').strip()
+        attrs['address'] = (attrs.get('address') or '').strip()
+
+        if not State.objects.filter(pk=attrs['state_id']).exists():
+            raise serializers.ValidationError({
+                'state_id': 'Selected state is not valid.'
+            })
+        if not City.objects.filter(pk=attrs['district_id']).exists():
+            raise serializers.ValidationError({
+                'district_id': 'Selected district is not valid.'
+            })
+        return attrs
+
+class FarmerRegistrationVerifyOTPSerializer(serializers.Serializer):
+    mobile = serializers.RegexField(r'^[6-9]\d{9}$', max_length=10)
+    otp = serializers.RegexField(r'^\d{6}$', max_length=6)
+
 
 class FarmerSendOTPSerializer(serializers.Serializer):
     mobile = serializers.CharField(max_length=10, min_length=10, help_text="10-digit mobile number")
@@ -102,8 +176,43 @@ class FarmerProfileDetailSerializer(serializers.Serializer):
         instance.save()
         return instance
 
+
+class ManagerProfileDetailSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    mobile_number = serializers.CharField()
+    email = serializers.EmailField(allow_blank=True, allow_null=True)
+    role = serializers.CharField()
+    designation = serializers.SerializerMethodField()
+    status = serializers.CharField()
+    gender = serializers.CharField(allow_blank=True, allow_null=True)
+    date_of_birth = serializers.DateField(allow_null=True)
+    date_of_joining = serializers.DateField(allow_null=True)
+    address = serializers.CharField(allow_blank=True, allow_null=True)
+    profile = serializers.SerializerMethodField()
+    date_registered = serializers.SerializerMethodField()
+    is_manager = serializers.BooleanField(source='is_role_manager')
+
+    def get_designation(self, obj):
+        return obj.designation.name if obj.designation else obj.role
+
+    def get_profile(self, obj):
+        return obj.profile_image.url if obj.profile_image else ''
+
+    def get_date_registered(self, obj):
+        return obj.created_at.strftime('%d-%b-%Y') if obj.created_at else ''
+
 class FarmerSubscriptionSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    farmer = serializers.IntegerField(source='farmer.id', read_only=True)
+    package = serializers.IntegerField(source='package.id', read_only=True, allow_null=True)
+    billing_cycle = serializers.CharField()
+    billing_cycle_label = serializers.SerializerMethodField()
+    auto_renew = serializers.BooleanField()
+    created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
     package_name = serializers.CharField(source='package.name', allow_null=True)
+    modules = serializers.JSONField(source='package.modules', allow_null=True)
     package_price = serializers.DecimalField(source='package.price', max_digits=10, decimal_places=2, allow_null=True)
     monthly_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
     payment_status = serializers.CharField()
@@ -119,6 +228,10 @@ class FarmerSubscriptionSerializer(serializers.Serializer):
     balance_crop_limit = serializers.SerializerMethodField()
     max_user_limit = serializers.CharField(source='package.my_users', allow_null=True)
     balance_user_limit = serializers.SerializerMethodField()
+
+    def get_billing_cycle_label(self, obj):
+        from apps.superadmin.subscription_utils import billing_cycle_label
+        return billing_cycle_label(obj.billing_cycle)
 
     def get_balance_acre_limit(self, obj):
         limit = obj.package.max_acre_support if obj.package else None
@@ -191,14 +304,67 @@ class FarmSerializer(serializers.ModelSerializer):
     district_name = serializers.CharField(source='district.name', read_only=True, allow_null=True)
     taluk_name = serializers.CharField(source='taluk.name', read_only=True, allow_null=True)
     crop_count = serializers.SerializerMethodField()
+    allocated_acres = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
+    delete_block_reason = serializers.SerializerMethodField()
 
     class Meta:
         model = Farm
         fields = '__all__'
         read_only_fields = ['farmer', 'created_at', 'updated_at']
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        manager_staff_id = self.context.get('manager_staff_id')
+        request = self.context.get('request')
+        if manager_staff_id is not None and request is not None and request.method == 'GET':
+            assigned_crop_ids = {
+                split.crop_id
+                for split in instance.splits.all()
+                if split.crop_id is not None
+            }
+            data['crops'] = sorted(assigned_crop_ids)
+            if data.get('crop') not in assigned_crop_ids:
+                data['crop'] = None
+        return data
+
     def get_crop_count(self, obj):
-        return obj.splits.exclude(stage__in=['Harvested', 'Sold']).count()
+        # Summarize from prefetched splits to avoid a query per farm.
+        return sum(
+            1 for s in obj.splits.all()
+            if str(s.stage or '').strip().lower() not in {
+                'inactive',
+                'harvested',
+                'sold',
+            }
+        )
+
+    def get_allocated_acres(self, obj):
+        """Total acreage allocated across crop splits (uses prefetched splits)."""
+        total = 0.0
+        for s in obj.splits.all():
+            if str(s.stage or '').strip().lower() == 'inactive':
+                continue
+            try:
+                total += float(s.acreage or 0)
+            except (TypeError, ValueError):
+                pass
+        return round(total, 4)
+
+    def _get_delete_block_reason(self, obj):
+        if not hasattr(self, "_farm_delete_block_reasons"):
+            self._farm_delete_block_reasons = {}
+        if obj.pk not in self._farm_delete_block_reasons:
+            from apps.farmer.deletion_rules import farm_delete_block_reason
+
+            self._farm_delete_block_reasons[obj.pk] = farm_delete_block_reason(obj)
+        return self._farm_delete_block_reasons[obj.pk]
+
+    def get_can_delete(self, obj):
+        return self._get_delete_block_reason(obj) is None
+
+    def get_delete_block_reason(self, obj):
+        return self._get_delete_block_reason(obj)
 
 from apps.farmer.models import CropSplit, FarmActivity, FarmTask
 
@@ -220,7 +386,11 @@ class RoundedDecimalField(serializers.DecimalField):
 
 class CropSplitSerializer(serializers.ModelSerializer):
     crop_name = serializers.CharField(source='crop.name', read_only=True, allow_null=True)
+    supervisor_ids = serializers.SerializerMethodField()
+    supervisor_names = serializers.SerializerMethodField()
     market_price = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
+    delete_block_reason = serializers.SerializerMethodField()
     crop_latitude = RoundedDecimalField(
         max_digits=18, decimal_places=8, allow_null=True, required=False)
     crop_longitude = RoundedDecimalField(
@@ -290,6 +460,37 @@ class CropSplitSerializer(serializers.ModelSerializer):
             return int(val) if val.is_integer() else val
         return 0
 
+    def get_supervisor_ids(self, obj):
+        return obj.supervisor_ids_list
+
+    def get_supervisor_names(self, obj):
+        return obj.supervisor_names
+
+    def _get_delete_block_reason(self, obj):
+        if not hasattr(self, "_crop_split_delete_block_reasons"):
+            self._crop_split_delete_block_reasons = {}
+        if obj.pk not in self._crop_split_delete_block_reasons:
+            from apps.farmer.deletion_rules import crop_split_delete_block_reason
+
+            self._crop_split_delete_block_reasons[obj.pk] = (
+                crop_split_delete_block_reason(obj)
+            )
+        return self._crop_split_delete_block_reasons[obj.pk]
+
+    def get_can_delete(self, obj):
+        return self._get_delete_block_reason(obj) is None
+
+    def get_delete_block_reason(self, obj):
+        return self._get_delete_block_reason(obj)
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        batches = ret.get('harvest_batches')
+        if batches and isinstance(batches, list):
+            from apps.farmer.harvest_batches import normalize_batch_numbers
+            ret['harvest_batches'] = normalize_batch_numbers(batches)
+        return ret
+
 class FarmActivitySerializer(serializers.ModelSerializer):
     inventory_item = serializers.IntegerField(required=False, write_only=True)
     crop_split_id = serializers.IntegerField(required=False, write_only=True)
@@ -349,6 +550,7 @@ from apps.farmer.models import LedgerTransaction, FarmerInventory
 class LedgerTransactionSerializer(serializers.ModelSerializer):
     balance_amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, write_only=True)
     crop_split_id = serializers.IntegerField(required=False, write_only=True)
+    add_to_inventory = serializers.BooleanField(required=False, write_only=True, default=False)
     # Mobile payloads send the FK as `farm_id`; ModelSerializer only exposes `farm`.
     farm_id = serializers.IntegerField(required=False, write_only=True)
 
@@ -365,6 +567,7 @@ class LedgerTransactionSerializer(serializers.ModelSerializer):
         if balance_amount is not None:
             validated_data['balance_due'] = balance_amount
         validated_data.pop('crop_split_id', None)
+        validated_data.pop('add_to_inventory', None)
         return validated_data
 
     def create(self, validated_data):
@@ -430,10 +633,23 @@ class FarmerInventorySerializer(serializers.ModelSerializer):
 from apps.farmer.models import FarmerStaff
 
 class FarmerStaffSerializer(serializers.ModelSerializer):
+    joining_date = serializers.DateField(source='date_of_joining', required=False, allow_null=True)
+    designation_name = serializers.CharField(
+        source='designation.name', read_only=True, allow_null=True
+    )
+
     class Meta:
         model = FarmerStaff
         fields = '__all__'
         read_only_fields = ['farmer', 'created_at']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Expose the joining_date alias in the serialized output alongside date_of_joining
+        if 'joining_date' not in self.fields:
+            self.fields['joining_date'] = serializers.DateField(
+                source='date_of_joining', required=False, allow_null=True
+            )
 
 from apps.superadmin.models import (
     MarketPriceIndex, DepotTerminal, DepotCropPricing, 
@@ -550,7 +766,7 @@ class RentalEquipmentSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class CropHarvestSerializer(serializers.Serializer):
-    yield_tons = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
+    yield_tons = serializers.DecimalField(max_digits=10, decimal_places=2, required=True, min_value=Decimal('0.01'))
     price_per_mt = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     total_sale_value = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
     batches_json = serializers.JSONField(required=False, allow_null=True, help_text='List of harvest batch objects')
@@ -769,16 +985,39 @@ class FarmerOutstandingSerializer(serializers.ModelSerializer):
         return round(float(obj.amount_total) - float(obj.amount_paid), 2)
 
 class CropSellSerializer(serializers.Serializer):
-    yield_tons = serializers.DecimalField(max_digits=10, decimal_places=2, required=True, help_text='Quantity to sell in tons')
-    price_per_mt = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True, help_text='Rate per metric ton')
-    total_sale_value = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True, help_text='Total amount for this sale')
-    customer_name = serializers.CharField(required=False, allow_blank=True, help_text='Customer name (must exist in your Customers list)')
-    paid_amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, default=0, help_text='Amount already paid by the customer')
-    batch_index = serializers.IntegerField(required=False, allow_null=True, help_text='Index of the batch to mark as sold')
-    unit = serializers.CharField(required=False, allow_blank=True, default='MT', help_text='Unit of measurement (e.g. MT, Kg, Ton)')
-    quality = serializers.CharField(required=False, allow_blank=True, default='Grade 1', help_text='Quality grade of the batch')
+    split_id = serializers.IntegerField(required=False, allow_null=True, help_text='Crop Split ID')
+    yield_tons = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True, min_value=Decimal('0.01'), help_text='Quantity to sell in tons')
+    price_per_mt = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True, min_value=Decimal('0.01'), help_text='Rate per metric ton')
+    total_sale_value = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True, min_value=Decimal('0.01'), help_text='Total amount for this sale')
+    customer_name = serializers.CharField(required=False, allow_blank=True, help_text='Customer name or Direct Customer')
+    direct_customer_name = serializers.CharField(required=False, allow_blank=True, help_text='Optional name for a direct customer')
+    direct_customer_phone = serializers.CharField(required=False, allow_blank=True, help_text='Optional 10 to 13 digit phone for a direct customer')
+    paid_amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True, default=None, min_value=0, help_text='Amount already paid by the customer')
+    batch_index = serializers.IntegerField(required=False, allow_null=True, min_value=0, help_text='Index of the batch to mark as sold')
+    unit = serializers.CharField(required=False, allow_blank=True, default='', help_text='Unit of measurement (e.g. MT, Kg, Ton)')
+    quality = serializers.CharField(required=False, allow_blank=True, default='', help_text='Quality grade of the batch')
     payment_method = serializers.CharField(required=False, allow_blank=True, default='Cash', help_text='Payment method (Cash, UPI, Bank Transfer, Credit)')
-    payment_status = serializers.CharField(required=False, allow_blank=True, default='Received', help_text='Payment status (Received, Pending)')
+    payment_status = serializers.CharField(required=False, allow_blank=True, default='', help_text='Payment status (Received, Pending)')
+
+    def to_internal_value(self, data):
+        # Support both web parameter names (yield, price, total, paid, customer) and DRF names
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+        if 'yield' in data and 'yield_tons' not in data:
+            data['yield_tons'] = data['yield']
+        if 'price' in data and 'price_per_mt' not in data:
+            data['price_per_mt'] = data['price']
+        if 'total' in data and 'total_sale_value' not in data:
+            data['total_sale_value'] = data['total']
+        if 'paid' in data and 'paid_amount' not in data:
+            data['paid_amount'] = data['paid']
+        if 'customer' in data and 'customer_name' not in data:
+            data['customer_name'] = data['customer']
+        return super().to_internal_value(data)
+
+    def validate(self, attrs):
+        if attrs.get('yield_tons') is None:
+            raise serializers.ValidationError({'yield_tons': 'Enter a valid quantity to sell.', 'error': 'Enter a valid quantity to sell.'})
+        return attrs
 
 class FarmerDocumentSerializer(serializers.ModelSerializer):
     file_url = serializers.SerializerMethodField()

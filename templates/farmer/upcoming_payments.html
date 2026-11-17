@@ -66,6 +66,7 @@
 {{ block.super }}
 <script>
 $(document).ready(function () {
+    $.fn.dataTable.ext.errMode = 'none';
     $('.datatable').each(function () {
         if ($.fn.dataTable.isDataTable(this)) {
             $(this).DataTable().destroy();
@@ -79,6 +80,7 @@ $(document).ready(function () {
                 emptyTable: "<div class='py-4 text-center text-muted'><i class='ri-inbox-line fs-2 d-block mb-1 text-secondary opacity-50'></i>No upcoming or pending customer payments found.</div>"
             }
         });
+        window.installFarmerTableFilters(this, 'payments');
     });
 });
 

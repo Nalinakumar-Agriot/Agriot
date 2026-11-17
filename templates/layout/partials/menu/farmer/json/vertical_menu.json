@@ -90,6 +90,12 @@
           "url": "farmer-advance-report"
         }
       ]
+    },
+    {
+      "url": "farmer-mail-settings",
+      "name": "Mail Settings",
+      "icon": "ri-mail-settings-line",
+      "i18n": "Mail Settings"
     }
   ]
 }

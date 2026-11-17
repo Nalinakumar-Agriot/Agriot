@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to AgriOT</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F4F7EE; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #2D3748; line-height: 1.6;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #F4F7EE; padding: 30px 15px;">
+    <tr>
+      <td align="center">
+        <!-- Main Card Container -->
+        <table role="presentation" width="100%" max-width="600" cellspacing="0" cellpadding="0" border="0" style="max-width: 600px; background-color: #FFFFFF; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(99, 119, 31, 0.08); border: 1px solid #E2E8F0;">
+          
+          <!-- Header Banner -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #63771F 0%, #465515 100%); padding: 36px 30px; text-align: center;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td align="center">
+                    <div style="display: inline-block; background-color: rgba(255, 255, 255, 0.2); padding: 8px 18px; border-radius: 30px; margin-bottom: 12px;">
+                      <span style="color: #FFFFFF; font-size: 13px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;">AgriOT Platform</span>
+                    </div>
+                    <h1 style="color: #FFFFFF; margin: 0 0 8px 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">
+                      Welcome to AgriOT! 🌾
+                    </h1>
+                    <p style="color: #E2EBC8; margin: 0; font-size: 15px; font-weight: 400;">
+                      Empowering Smart Agriculture &amp; Modern Farm Automation
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Body Content -->
+          <tr>
+            <td style="padding: 35px 30px 25px 30px;">
+              <p style="font-size: 16px; margin: 0 0 18px 0; color: #2D3748;">
+                Hello <strong>{{ farmer_name|default:"Farmer" }}</strong>,
+              </p>
+              <p style="font-size: 15px; margin: 0 0 24px 0; color: #4A5568; line-height: 1.7;">
+                Congratulations and welcome to the <strong>AgriOT</strong> community! Your farmer account has been registered successfully. You now have full access to intelligent crop tracking, farm activity logs, resources, and live market pricing.
+              </p>
+
+              <!-- Account Details Card -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #F8FAF2; border: 1px solid #E5EBD8; border-radius: 12px; margin-bottom: 25px; overflow: hidden;">
+                <tr>
+                  <td style="padding: 16px 20px; background-color: #EEF4E1; border-bottom: 1px solid #E2EBC8;">
+                    <strong style="color: #465515; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+                      📋 Your Account Details
+                    </strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 18px 20px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td style="padding: 6px 0; font-size: 14px; color: #718096; width: 40%;">Primary Mobile:</td>
+                        <td style="padding: 6px 0; font-size: 14px; color: #1A202C; font-weight: 600;">{{ mobile_number|default:"—" }}</td>
+                      </tr>
+                      {% if email %}
+                      <tr>
+                        <td style="padding: 6px 0; font-size: 14px; color: #718096;">Registered Email:</td>
+                        <td style="padding: 6px 0; font-size: 14px; color: #1A202C; font-weight: 600;">{{ email }}</td>
+                      </tr>
+                      {% endif %}
+                      <tr>
+                        <td style="padding: 6px 0; font-size: 14px; color: #718096;">Account Status:</td>
+                        <td style="padding: 6px 0; font-size: 14px;">
+                          <span style="display: inline-block; background-color: #DEF7EC; color: #03543F; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px;">
+                            Active &amp; Ready
+                          </span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Quick Next Steps -->
+              <h3 style="font-size: 16px; color: #2D3748; margin: 0 0 14px 0; font-weight: 700;">
+                🚀 Quick Steps to Get Started:
+              </h3>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 28px;">
+                <tr>
+                  <td style="padding: 8px 0; font-size: 14px; color: #4A5568;">
+                    <span style="display: inline-block; width: 24px; height: 24px; line-height: 24px; text-align: center; background-color: #63771F; color: #FFF; border-radius: 50%; font-size: 12px; font-weight: 700; margin-right: 8px;">1</span>
+                    <strong>Setup Your Farm:</strong> Add your land parcels and crop splits in <em>My Farms</em>.
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; font-size: 14px; color: #4A5568;">
+                    <span style="display: inline-block; width: 24px; height: 24px; line-height: 24px; text-align: center; background-color: #63771F; color: #FFF; border-radius: 50%; font-size: 12px; font-weight: 700; margin-right: 8px;">2</span>
+                    <strong>Track Daily Tasks:</strong> Schedule activities, irrigation, and worker assignments.
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; font-size: 14px; color: #4A5568;">
+                    <span style="display: inline-block; width: 24px; height: 24px; line-height: 24px; text-align: center; background-color: #63771F; color: #FFF; border-radius: 50%; font-size: 12px; font-weight: 700; margin-right: 8px;">3</span>
+                    <strong>Manage Finances &amp; Sales:</strong> Log your harvest yield and sales receipts effortlessly.
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Call to Action Button -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="text-align: center; margin-bottom: 20px;">
+                <tr>
+                  <td align="center">
+                    <a href="{{ login_url|default:'#' }}" target="_blank" style="display: inline-block; background-color: #63771F; color: #FFFFFF; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 34px; border-radius: 8px; box-shadow: 0 4px 12px rgba(99, 119, 31, 0.35);">
+                      Login to Your AgriOT Dashboard &rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="font-size: 13px; color: #718096; margin: 20px 0 0 0; text-align: center;">
+                Need assistance? Our support team is always ready to guide you.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #F8FAF2; border-top: 1px solid #E2E8F0; padding: 22px 30px; text-align: center;">
+              <p style="font-size: 12px; color: #718096; margin: 0 0 6px 0;">
+                &copy; {{ current_year|default:"2026" }} AgriOT Automation. All rights reserved.
+              </p>
+              <p style="font-size: 11px; color: #A0AEC0; margin: 0;">
+                This email was sent to {{ email|default:"your registered email" }}.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

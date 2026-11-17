@@ -1,0 +1,197 @@
+<style>
+  .input-group.admin-list-search {
+    box-sizing: border-box;
+    width: min(280px, 100%) !important;
+    max-width: 100% !important;
+    height: 38px;
+    min-width: 0;
+    border: 1px solid #d9dee3;
+    border-radius: 6px;
+    background: #fff;
+    overflow: hidden;
+    box-shadow: none;
+  }
+  .input-group.admin-list-search[hidden] {
+    display: none !important;
+  }
+  .admin-search-toggle,
+  .admin-search-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    padding: 0;
+    color: #697a8d;
+    background: #fff;
+    border: 1px solid #8592a3;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .admin-search-close {
+    position: relative;
+    z-index: 20;
+    height: 36px;
+    border: 0;
+    border-radius: 0;
+    pointer-events: auto !important;
+    touch-action: manipulation;
+  }
+  .admin-search-toggle[hidden] {
+    display: none;
+  }
+  .admin-search-toggle:hover,
+  .admin-search-close:hover {
+    color: #f1732a;
+    background: #fff3e8;
+  }
+  .admin-search-toggle:focus-visible,
+  .admin-search-close:focus-visible {
+    outline: 2px solid #f1732a;
+    outline-offset: -2px;
+  }
+  .input-group.admin-list-search:focus-within {
+    border-color: #f1732a;
+    box-shadow: 0 0 0 2px rgba(241, 115, 42, 0.12);
+  }
+  .input-group.admin-list-search > .input-group-text,
+  .input-group.admin-list-search > .form-control {
+    box-sizing: border-box;
+    height: 36px !important;
+    min-height: 0;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 0 12px;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  .input-group.admin-list-search > .form-control {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+  }
+  .admin-search-close > i {
+    pointer-events: none;
+  }
+  .input-group.admin-list-search > .input-group-text {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 38px;
+    padding: 0;
+  }
+  @media (max-width: 767.98px) {
+    .input-group.admin-list-search {
+      width: min(280px, 100%) !important;
+    }
+  }
+  .admin-quick-add .select2-container {
+    flex: 0 1 160px;
+    width: 160px !important;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .admin-quick-add .select2-container .select2-selection--single {
+    height: 38px !important;
+  }
+  .admin-quick-add .select2-container .select2-selection__arrow {
+    height: 36px !important;
+  }
+  .location-filters {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .location-filters > .select2-container {
+    width: 200px !important;
+    max-width: 100%;
+    flex: 0 1 200px;
+    min-width: 0;
+  }
+</style>
+<script>
+  window.closeAdminListSearch = function (closeButton, event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    var group = closeButton ? closeButton.closest('.admin-list-search') : null;
+    if (!group) return false;
+
+    var input = group.querySelector('.custom-search');
+    var toggle = group.previousElementSibling;
+    if (input) {
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Escape' }));
+    }
+
+    group.hidden = true;
+    if (toggle && toggle.classList.contains('admin-search-toggle')) {
+      toggle.hidden = false;
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.focus();
+    }
+    return false;
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.admin-list-search').forEach(function (group, index) {
+      var input = group.querySelector('.custom-search');
+      if (!input) return;
+
+      var id = group.id || 'admin-list-search-' + index;
+      group.id = id;
+      var toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'admin-search-toggle';
+      toggle.setAttribute('data-no-loader', 'true');
+      toggle.setAttribute('aria-label', 'Open search');
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.setAttribute('aria-controls', id);
+      toggle.innerHTML = '<i class="ri-search-line" aria-hidden="true"></i>';
+
+      var close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'admin-search-close';
+      close.setAttribute('data-no-loader', 'true');
+      close.setAttribute('aria-label', 'Close and clear search');
+      close.setAttribute('onclick', 'return window.closeAdminListSearch(this, event);');
+      close.innerHTML = '<i class="ri-close-line" aria-hidden="true"></i>';
+      group.appendChild(close);
+      group.parentNode.insertBefore(toggle, group);
+      group.hidden = !input.value;
+      toggle.hidden = !!input.value;
+      toggle.setAttribute('aria-expanded', input.value ? 'true' : 'false');
+
+      if (input.hasAttribute('data-server-search')) {
+        var searchTimer;
+        input.addEventListener('input', function () {
+          clearTimeout(searchTimer);
+          searchTimer = setTimeout(function () {
+            var url = new URL(window.location.href);
+            if (input.value.trim()) url.searchParams.set('q', input.value.trim());
+            else url.searchParams.delete('q');
+            url.searchParams.delete('page');
+            if (url.href !== window.location.href) window.location.href = url.toString();
+          }, 500);
+        });
+      }
+
+      toggle.addEventListener('click', function () {
+        group.hidden = false;
+        toggle.hidden = true;
+        toggle.setAttribute('aria-expanded', 'true');
+        input.focus();
+      });
+      function closeSearch() {
+        window.closeAdminListSearch(close);
+      }
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeSearch();
+      });
+    });
+  });
+</script>

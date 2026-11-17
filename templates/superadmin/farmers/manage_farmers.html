@@ -38,12 +38,40 @@
   white-space: nowrap;
 }
 .search-input-group.expanded {
-  max-width: 420px;
-  width: 420px;
+  max-width: 320px;
+  width: 320px;
   opacity: 1;
   margin-left: 8px;
 }
+.farmer-filter-item {
+  width: 180px;
+  max-width: 180px;
+}
+.farmer-sort-item {
+  width: 170px;
+}
+@media (max-width: 992px) {
+  .farmer-filter-item {
+    width: 160px;
+  }
+}
+@media (max-width: 768px) {
+  .farmer-filter-item {
+    flex: 1 1 calc(50% - 0.5rem);
+    width: auto;
+    max-width: 100%;
+    min-width: 140px;
+  }
+  .farmer-sort-item {
+    width: 100%;
+  }
+}
 @media (max-width: 576px) {
+  .farmer-filter-item {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: 100%;
+  }
   .search-input-group.expanded {
     max-width: 220px;
     width: 220px;
@@ -93,6 +121,9 @@ document.addEventListener('click', function (e) {
 });
 
 $(document).ready(function () {
+    if ($.fn.dataTable) {
+        $.fn.dataTable.ext.errMode = 'none';
+    }
     var table;
     $('.datatable').each(function () {
         if ($.fn.dataTable.isDataTable(this)) {
@@ -107,18 +138,25 @@ $(document).ready(function () {
         });
     });
 
+    // Status is rendered as a switch plus badge, so a column regex sees
+    // additional markup/text and cannot reliably match `Active` exactly.
+    // Filter from the visible badge value instead.
+    $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
+        if (!table || settings.nTable !== table.table().node()) return true;
+        var wantedStatus = ($('#statusFilter').val() || '').trim().toLowerCase();
+        if (!wantedStatus) return true;
+        var rowNode = table.row(dataIndex).node();
+        var rowStatus = $(rowNode).find('.farmer-status-value').text().trim().toLowerCase();
+        return rowStatus === wantedStatus;
+    });
+
     $('#farmerSearch').on('keyup', function() {
         if (table) table.search(this.value).draw();
     });
 
     $('#statusFilter').on('change', function() {
-        var val = $(this).val();
         if (table) {
-            if (val) {
-                table.column(4).search('^' + val + '$', true, false).draw();
-            } else {
-                table.column(4).search('').draw();
-            }
+            table.draw();
         }
     });
 
@@ -140,11 +178,61 @@ $(document).ready(function () {
         }
     });
 
+    // Initialize toolbar filter dropdowns with built-in search
+    function initFilterSelect2() {
+        $('select.select2-filter').each(function () {
+            var $this = $(this);
+            if ($this.data('select2')) {
+                $this.select2('destroy');
+            }
+            $this.select2({
+                dropdownParent: $this.parent(),
+                width: '100%',
+                minimumResultsForSearch: 0,
+                placeholder: $this.find('option:first').text() || 'Select'
+            });
+        });
+    }
+    initFilterSelect2();
+
+    // Modal Select2 Initializer with in-built search
+    function initModalSelect2($modal) {
+        $modal.find('select.select2').each(function () {
+            var $this = $(this);
+            if ($this.data('select2')) {
+                $this.select2('destroy');
+            }
+            $this.select2({
+                dropdownParent: $modal,
+                width: '100%',
+                minimumResultsForSearch: 0,
+                placeholder: $this.find('option[value=""]').first().text() || 'Select an option'
+            });
+        });
+    }
+
+    // Auto-focus search field inside Select2 whenever opened
+    $(document).on('select2:open', function () {
+        setTimeout(function () {
+            var searchField = document.querySelector('.select2-container--open .select2-search__field');
+            if (searchField) {
+                searchField.focus();
+            }
+        }, 50);
+    });
+
+    // Initialize Select2 on any modal show
+    $(document).on('shown.bs.modal', '.modal', function () {
+        initModalSelect2($(this));
+    });
+
     // Reset Add Farmer Form on Modal Close
     $('#add_farmer_modal').on('hidden.bs.modal', function () {
         $(this).find('form')[0].reset();
-        $(this).find('.select2').val('').trigger('change');
-        $(this).find('select[name="status"]').val('Active');
+        $(this).find('select.select2').each(function () {
+            $(this).val('').trigger('change.select2');
+        });
+        $(this).find('select[name="status"]').val('Active').trigger('change.select2');
     });
 });
 
@@ -156,29 +244,52 @@ $(document).on('click', '.delete-btn', function () {
     selectedRow = $(this).closest('tr');
 });
 
-$('#confirmDeleteBtn').on('click', function () {
-    if (selectedRow) {
-        selectedRow.remove();
-    }
-    $('#delete_farmer_modal').modal('hide');
-});
+// Real-time Farmer Status Toggle Switch
+$(document).on('change', '.farmer-status-toggle', function () {
+    const $toggle = $(this);
+    const farmerId = $toggle.data('id');
+    const farmerName = $toggle.data('name') || 'Farmer';
+    const isChecked = $toggle.is(':checked');
+    const newStatus = isChecked ? 'Active' : 'Inactive';
+    const $badge = $('.status-badge-' + farmerId);
 
-$('select[name="state"]').on('change', function() {
-    var stateId = $(this).val();
-    var districtSelect = $(this).closest('form').find('select[name="district"]');
-    districtSelect.empty().append('<option value="">Select District</option>');
-
-    if (stateId) {
-        $.ajax({
-            url: '{% url "ajax_get_cities" %}',
-            data: { 'state_id': stateId },
-            success: function(data) {
-                $.each(data, function(index, city) {
-                    districtSelect.append('<option value="' + city.id + '">' + city.name + '</option>');
-                });
+    $.ajax({
+        url: "{% url 'manage_farmer' %}",
+        type: 'POST',
+        data: {
+            'action': 'toggle_status',
+            'farmer_id': farmerId,
+            'status': newStatus,
+            'ajax': '1',
+            'csrfmiddlewaretoken': '{{ csrf_token }}'
+        },
+        success: function (res) {
+            if (res && res.status === 'success') {
+                $badge.text(newStatus);
+                if (newStatus === 'Active') {
+                    $badge.removeClass('bg-label-secondary text-secondary bg-label-danger text-danger').addClass('bg-label-success text-success');
+                } else {
+                    $badge.removeClass('bg-label-success text-success').addClass('bg-label-secondary text-secondary');
+                }
+                // Re-apply the active status filter after a successful toggle.
+                $('#statusFilter').trigger('change');
+                if (window.showAppToast) {
+                    window.showAppToast(farmerName + ' status updated to ' + newStatus, 'success');
+                }
+            } else {
+                $toggle.prop('checked', !isChecked);
+                if (window.showAppToast) {
+                    window.showAppToast((res && res.message) ? res.message : 'Failed to update status', 'danger');
+                }
             }
-        });
-    }
+        },
+        error: function () {
+            $toggle.prop('checked', !isChecked);
+            if (window.showAppToast) {
+                window.showAppToast('Failed to update status. Please try again.', 'danger');
+            }
+        }
+    });
 });
 </script>
 {% endblock page_js %}
@@ -202,51 +313,61 @@ $('select[name="state"]').on('change', function() {
 
 <!-- Main Table Card -->
 <div class="card border-0 shadow-sm rounded-4">
-    <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
-        <!-- Collapsible Search -->
-        <div class="d-flex align-items-center search-collapse-wrapper" id="search_collapse_wrapper">
-          <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="search_toggle_btn" onclick="toggleSearchBox()" style="width: 38px; height: 38px;">
-            <i class="ri-search-line"></i>
-          </button>
-          <div class="input-group search-input-group d-none" id="search_input_group">
-            <span class="input-group-text bg-white border-end-0">
-              <i class="ri-search-line text-muted"></i>
-            </span>
-            <input type="text"
-                id="farmerSearch"
-                class="form-control border-start-0"
-                placeholder="Search farmers, crops, or phones...">
-            <button class="btn btn-outline-secondary border-start-0" type="button" id="search_close_btn" onclick="closeSearchBox()">
-              <i class="ri-close-line"></i>
-            </button>
-          </div>
-        </div>
+    <div class="card-body p-3 border-bottom">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <!-- Left Toolbar: Search + Filter Dropdowns -->
+            <div class="d-flex align-items-center flex-wrap gap-2 flex-grow-1">
+                <!-- Collapsible Search -->
+                <div class="d-flex align-items-center search-collapse-wrapper" id="search_collapse_wrapper">
+                  <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="search_toggle_btn" onclick="toggleSearchBox()" style="width: 38px; height: 38px;" title="Search">
+                    <i class="ri-search-line"></i>
+                  </button>
+                  <div class="input-group search-input-group d-none" id="search_input_group">
+                    <span class="input-group-text bg-white border-end-0">
+                      <i class="ri-search-line text-muted"></i>
+                    </span>
+                    <input type="text"
+                        id="farmerSearch"
+                        class="form-control border-start-0"
+                        placeholder="Search farmers, crops, or phones...">
+                    <button class="btn btn-outline-secondary border-start-0" type="button" id="search_close_btn" onclick="closeSearchBox()">
+                      <i class="ri-close-line"></i>
+                    </button>
+                  </div>
+                </div>
 
-        <!-- Filter Dropdowns -->
-        <select class="form-select form-select-sm w-auto" id="regionFilter">
-            <option value="">All Regions</option>
-            {% for dist in unique_districts %}
-            <option value="{{ dist }}">{{ dist }}</option>
-            {% endfor %}
-        </select>
+                <!-- Region Filter -->
+                <div class="farmer-filter-item">
+                    <select class="form-select select2-filter" id="regionFilter">
+                        <option value="">All Regions</option>
+                        {% for dist in unique_districts %}
+                        <option value="{{ dist }}">{{ dist }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-        <select class="form-select form-select-sm w-auto" id="statusFilter">
-            <option value="">All Statuses</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-        </select>
+                <!-- Status Filter -->
+                <div class="farmer-filter-item">
+                    <select class="form-select select2-filter" id="statusFilter">
+                        <option value="">All Statuses</option>
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
 
-        <!-- Sort dropdown (Right aligned) -->
-        <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
-          <div class="dropdown" style="width: 180px;">
-            <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100 d-flex align-items-center justify-content-between" type="button" data-bs-toggle="dropdown" id="sortDropdownBtn">
-              <span><i class="ri-filter-3-line me-1"></i> Sort By</span>
-            </button>
-            <ul class="dropdown-menu w-100">
-              <li><a class="dropdown-item sort-filter" data-sort="name" href="#">Sort By Name</a></li>
-              <li><a class="dropdown-item sort-filter" data-sort="status" href="#">Sort By Status</a></li>
-            </ul>
-          </div>
+            <!-- Right Toolbar: Sort Dropdown -->
+            <div class="farmer-sort-item ms-auto">
+              <div class="dropdown w-100">
+                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100 d-flex align-items-center justify-content-between" type="button" data-bs-toggle="dropdown" id="sortDropdownBtn" style="height: 38px;">
+                  <span><i class="ri-filter-3-line me-1"></i> Sort By</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end w-100">
+                  <li><a class="dropdown-item sort-filter" data-sort="name" href="#">Sort By Name</a></li>
+                  <li><a class="dropdown-item sort-filter" data-sort="status" href="#">Sort By Status</a></li>
+                </ul>
+              </div>
+            </div>
         </div>
     </div>
 
@@ -267,11 +388,30 @@ $('select[name="state"]').on('change', function() {
                     <tr>
                         <td>
                             <div class="d-flex flex-column">
-                                <label class="fw-semibold text-black">{{ farmer.user.first_name }}</label>
-                                <div class="d-flex align-items-center justify-content-start gap-2 fs-8">
-                                    <small class="text-dark fw-normal"><i class="ri-map-pin-line me-1"></i>{{ farmer.district.name|default:"N/A" }} </small>
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <label class="fw-semibold text-black mb-0">{{ farmer.user.first_name }}</label>
+                                    {% if farmer.sub_details.is_expiring_soon %}
+                                        <span class="badge bg-label-warning text-warning fs-8 px-2 py-1 d-inline-flex align-items-center gap-1 shadow-xs" title="Renewal Due on {{ farmer.sub_details.end_date|date:'d M Y' }}">
+                                            <i class="ri-alarm-warning-line"></i> {{ farmer.sub_details.status_label }}
+                                        </span>
+                                    {% elif farmer.sub_details.has_no_plan %}
+                                        <span class="badge bg-label-secondary text-secondary fs-8 px-2 py-1 d-inline-flex align-items-center gap-1 shadow-xs" title="No Subscription Plan">
+                                            <i class="ri-information-line"></i> No Plan
+                                        </span>
+                                    {% elif farmer.sub_details.is_expired %}
+                                        <span class="badge bg-label-danger text-danger fs-8 px-2 py-1 d-inline-flex align-items-center gap-1 shadow-xs" title="Plan Expired on {{ farmer.sub_details.end_date|date:'d M Y' }}">
+                                            <i class="ri-close-circle-line"></i> Plan Expired
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <div class="d-flex align-items-center justify-content-start gap-2 fs-8 mt-1 flex-wrap">
+                                    <small class="text-dark fw-normal"><i class="ri-map-pin-line me-1"></i>{% if farmer.taluka %}{{ farmer.taluka }}, {% endif %}{{ farmer.district.name|default:"N/A" }} </small>
                                     <small class="bg-secondary badge badge-dot"></small>
                                     <small>{{ farmer.mobile_number }}</small>
+                                    {% if farmer.sub_details.has_subscription and not farmer.sub_details.is_expired and not farmer.sub_details.is_expiring_soon %}
+                                        <small class="bg-secondary badge badge-dot"></small>
+                                        <small class="text-muted"><i class="ri-shield-check-line text-success me-1"></i>{{ farmer.sub_details.package_name }}</small>
+                                    {% endif %}
                                 </div>
                             </div>
                         </td>
@@ -283,19 +423,30 @@ $('select[name="state"]').on('change', function() {
                         </td>
                         <td>
                             <label class="fs-8 fw-normal">
-
-                                <span class="{% if farmer.current_land_usage > farmer.package_land_limit %}text-danger{% else %}text-success{% endif %}">
-                                    {{ farmer.current_land_usage }}
-                                </span>  / <span class="text-success">{{ farmer.package_land_limit }} </span> Acres
+                                {% if farmer.is_land_unlimited %}
+                                    <span class="text-success">{{ farmer.current_land_usage }}</span> / <span class="text-success">Unlimited</span> Acres
+                                {% else %}
+                                    <span class="{% if farmer.current_land_usage > farmer.package_land_limit %}text-danger{% else %}text-success{% endif %}">
+                                        {{ farmer.current_land_usage }}
+                                    </span>  / <span class="text-success">{{ farmer.package_land_limit }} </span> Acres
+                                {% endif %}
                             </label>
                         </td>
                         <td><span class="badge bg-success-subtle text-success rounded-3 fs-8">₹ {{ farmer.total_earning }}</span></td>
                         <td>
-                            {% if farmer.status == 'Active' %}
-                            <span class="badge bg-label-success text-success rounded-3">Active</span>
-                            {% else %}
-                            <span class="badge bg-label-danger text-danger rounded-3">{{ farmer.status }}</span>
-                            {% endif %}
+                            <div class="form-check form-switch d-inline-flex align-items-center gap-2 mb-0" title="Click to toggle Active/Inactive">
+                                <input class="form-check-input farmer-status-toggle"
+                                       type="checkbox"
+                                       role="switch"
+                                       id="status_switch_{{ farmer.id }}"
+                                       data-id="{{ farmer.id }}"
+                                       data-name="{{ farmer.user.first_name }}"
+                                       {% if farmer.status == 'Active' %}checked{% endif %}
+                                       style="cursor: pointer; width: 2.3rem; height: 1.2rem;">
+                                <span class="farmer-status-value badge {% if farmer.status == 'Active' %}bg-label-success text-success{% else %}bg-label-secondary text-secondary{% endif %} rounded-3 status-badge-{{ farmer.id }}">
+                                    {{ farmer.status }}
+                                </span>
+                            </div>
                         </td>
                         <td class="text-end">
                             <button
@@ -325,7 +476,7 @@ $('select[name="state"]').on('change', function() {
 <div class="modal fade" id="add_farmer_modal" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
   <div class="modal-dialog modal-dialog-centered modal-md">
     <div class="modal-content">
-      <form method="POST" action="{% url 'manage_farmer' %}">
+      <form method="POST" action="{% url 'manage_farmer' %}" onsubmit="return AgriValidate.validate(this);">
       {% csrf_token %}
       <input type="hidden" name="action" value="create">
       <!-- Header -->
@@ -339,26 +490,29 @@ $('select[name="state"]').on('change', function() {
         <div class="row g-3">
           <!-- Full Name -->
           <div class="col-12">
-            <label class="form-label">Full Name</label>
-            <input type="text" name="full_name" class="form-control" placeholder="Ramakrishnan" required>
+            <label class="form-label" for="add_farmer_full_name">Full Name <span class="text-danger">*</span></label>
+            <input type="text" name="full_name" id="add_farmer_full_name" class="form-control" placeholder="Ramakrishnan" required minlength="2" maxlength="70" oninput="this.value = this.value.replace(/[^a-zA-Z\s.'-]/g, '')">
+            <div class="invalid-feedback"></div>
           </div>
 
           <!-- Phone -->
           <div class="col-md-6">
-            <label class="form-label">Phone Number</label>
-            <input type="text" name="phone" class="form-control" placeholder="+91 9876543210" required>
+            <label class="form-label" for="add_farmer_phone">Phone Number <span class="text-danger">*</span></label>
+            <input type="tel" name="phone" id="add_farmer_phone" class="form-control" placeholder="e.g. 9876543210 or +14155552671" minlength="7" maxlength="16" required oninput="let v = this.value.replace(/[^0-9+]/g, ''); if(v.indexOf('+') > 0) { v = v.replace(/\+/g, ''); } if(v.startsWith('+')) { v = '+' + v.slice(1).replace(/\+/g, ''); } this.value = v.slice(0, 16);">
+            <div class="invalid-feedback"></div>
           </div>
 
           <!-- Mail Id -->
           <div class="col-md-6">
-            <label class="form-label">Mail Id</label>
-            <input type="email" name="email" class="form-control" placeholder="mail@agriot.com">
+            <label class="form-label" for="add_farmer_email">Mail Id</label>
+            <input type="email" name="email" id="add_farmer_email" class="form-control" placeholder="mail@agriot.com">
+            <div class="invalid-feedback"></div>
           </div>
 
           <!-- State -->
           <div class="col-md-6">
-            <label class="form-label">State</label>
-            <select class="form-select select2" name="state" id="add_farmer_state">
+            <label class="form-label" for="add_farmer_state">State</label>
+            <select class="form-select select2" name="state" id="add_farmer_state" onchange="loadFarmerCities(this.value, 'add_farmer_district', 'add_farmer_taluk')">
               <option value="">Select State</option>
               {% for state in states %}
               <option value="{{ state.id }}">{{ state.name }}</option>
@@ -368,22 +522,31 @@ $('select[name="state"]').on('change', function() {
 
           <!-- District -->
           <div class="col-md-6">
-            <label class="form-label">District</label>
-            <select class="form-select select2" name="district" id="add_farmer_district">
+            <label class="form-label" for="add_farmer_district">District</label>
+            <select class="form-select select2" name="district" id="add_farmer_district" onchange="loadFarmerTaluks(this.value, 'add_farmer_taluk')">
               <option value="">Select District</option>
+            </select>
+          </div>
+
+          <!-- Taluk -->
+          <div class="col-md-6">
+            <label class="form-label" for="add_farmer_taluk">Taluk</label>
+            <select class="form-select select2" name="taluk" id="add_farmer_taluk">
+              <option value="">Select Taluk</option>
             </select>
           </div>
 
           <!-- Pincode -->
           <div class="col-md-6">
-            <label class="form-label">Pincode</label>
-            <input type="text" name="pincode" class="form-control" placeholder="Enter Pincode">
+            <label class="form-label" for="add_farmer_pincode">Pincode <span class="text-danger">*</span></label>
+            <input type="text" name="pincode" id="add_farmer_pincode" class="form-control" placeholder="Enter 6-digit Pincode" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6)" required maxlength="6" pattern="[0-9]{6}" inputmode="numeric">
+            <div class="invalid-feedback"></div>
           </div>
 
           <!-- Status -->
           <div class="col-md-6">
-            <label class="form-label">State Registry Status</label>
-            <select class="form-select" name="status">
+            <label class="form-label">Status</label>
+            <select class="form-select select2" name="status" id="add_farmer_status">
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </select>
@@ -407,7 +570,7 @@ $('select[name="state"]').on('change', function() {
 <div class="modal fade" id="edit_farmer_modal_{{ farmer.id }}" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
   <div class="modal-dialog modal-dialog-centered modal-md">
     <div class="modal-content">
-      <form method="POST" action="{% url 'manage_farmer' %}">
+      <form method="POST" action="{% url 'manage_farmer' %}" onsubmit="return AgriValidate.validate(this);">
       {% csrf_token %}
       <input type="hidden" name="action" value="update">
       <input type="hidden" name="farmer_id" value="{{ farmer.id }}">
@@ -422,26 +585,29 @@ $('select[name="state"]').on('change', function() {
         <div class="row g-3">
           <!-- Full Name -->
           <div class="col-12">
-            <label class="form-label">Full Name</label>
-            <input type="text" name="full_name" class="form-control" value="{{ farmer.user.first_name }}" required>
+            <label class="form-label" for="update_farmer_full_name_{{ farmer.id }}">Full Name <span class="text-danger">*</span></label>
+            <input type="text" name="full_name" id="update_farmer_full_name_{{ farmer.id }}" class="form-control" value="{{ farmer.user.first_name }}" required minlength="2" maxlength="70" oninput="this.value = this.value.replace(/[^a-zA-Z\s.'-]/g, '')">
+            <div class="invalid-feedback"></div>
           </div>
 
           <!-- Phone -->
           <div class="col-md-6">
-            <label class="form-label">Phone Number</label>
-            <input type="text" name="phone" class="form-control" value="{{ farmer.mobile_number }}" required>
+            <label class="form-label" for="update_farmer_phone_{{ farmer.id }}">Phone Number <span class="text-danger">*</span></label>
+            <input type="tel" name="phone" id="update_farmer_phone_{{ farmer.id }}" class="form-control" value="{{ farmer.mobile_number }}" minlength="7" maxlength="16" required oninput="let v = this.value.replace(/[^0-9+]/g, ''); if(v.indexOf('+') > 0) { v = v.replace(/\+/g, ''); } if(v.startsWith('+')) { v = '+' + v.slice(1).replace(/\+/g, ''); } this.value = v.slice(0, 16);">
+            <div class="invalid-feedback"></div>
           </div>
 
           <!-- Mail Id -->
           <div class="col-md-6">
-            <label class="form-label">Mail Id</label>
-            <input type="email" name="email" class="form-control" value="{{ farmer.user.email }}">
+            <label class="form-label" for="update_farmer_email_{{ farmer.id }}">Mail Id</label>
+            <input type="email" name="email" id="update_farmer_email_{{ farmer.id }}" class="form-control" value="{{ farmer.user.email }}">
+            <div class="invalid-feedback"></div>
           </div>
 
           <!-- State -->
           <div class="col-md-6">
-            <label class="form-label">State</label>
-            <select class="form-select select2" name="state" id="update_farmer_state_{{ farmer.id }}">
+            <label class="form-label" for="update_farmer_state_{{ farmer.id }}">State</label>
+            <select class="form-select select2" name="state" id="update_farmer_state_{{ farmer.id }}" onchange="loadFarmerCities(this.value, 'update_farmer_district_{{ farmer.id }}', 'update_farmer_taluk_{{ farmer.id }}')">
               <option value="">Select State</option>
               {% for state in states %}
               <option value="{{ state.id }}" {% if farmer.state_id == state.id %}selected{% endif %}>{{ state.name }}</option>
@@ -451,8 +617,8 @@ $('select[name="state"]').on('change', function() {
 
           <!-- District -->
           <div class="col-md-6">
-            <label class="form-label">District</label>
-            <select class="form-select select2" name="district" id="update_farmer_district_{{ farmer.id }}">
+            <label class="form-label" for="update_farmer_district_{{ farmer.id }}">District</label>
+            <select class="form-select select2" name="district" id="update_farmer_district_{{ farmer.id }}" onchange="loadFarmerTaluks(this.value, 'update_farmer_taluk_{{ farmer.id }}')">
               <option value="">Select District</option>
               {% for city in farmer.state.cities.all %}
               <option value="{{ city.id }}" {% if farmer.district_id == city.id %}selected{% endif %}>{{ city.name }}</option>
@@ -460,16 +626,32 @@ $('select[name="state"]').on('change', function() {
             </select>
           </div>
 
+          <!-- Taluk -->
+          <div class="col-md-6">
+            <label class="form-label" for="update_farmer_taluk_{{ farmer.id }}">Taluk</label>
+            <select class="form-select select2" name="taluk" id="update_farmer_taluk_{{ farmer.id }}">
+              <option value="">Select Taluk</option>
+              {% if farmer.taluks %}
+                {% for t in farmer.taluks %}
+                  <option value="{{ t.name }}" {% if farmer.taluka == t.name %}selected{% endif %}>{{ t.name }}</option>
+                {% endfor %}
+              {% elif farmer.taluka %}
+                <option value="{{ farmer.taluka }}" selected>{{ farmer.taluka }}</option>
+              {% endif %}
+            </select>
+          </div>
+
           <!-- Pincode -->
           <div class="col-md-6">
-            <label class="form-label">Pincode</label>
-            <input type="text" name="pincode" class="form-control" value="{{ farmer.pincode|default:'' }}">
+            <label class="form-label" for="update_farmer_pincode_{{ farmer.id }}">Pincode <span class="text-danger">*</span></label>
+            <input type="text" name="pincode" id="update_farmer_pincode_{{ farmer.id }}" class="form-control" value="{{ farmer.pincode|default:'' }}" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6)" required maxlength="6" pattern="[0-9]{6}" inputmode="numeric">
+            <div class="invalid-feedback"></div>
           </div>
 
           <!-- Status -->
           <div class="col-md-6">
             <label class="form-label">State Registry Status</label>
-            <select class="form-select" name="status">
+            <select class="form-select select2" name="status" id="update_farmer_status_{{ farmer.id }}">
               <option value="Active" {% if farmer.status == 'Active' %}selected{% endif %}>Active</option>
               <option value="Inactive" {% if farmer.status == 'Inactive' %}selected{% endif %}>Inactive</option>
             </select>
@@ -490,30 +672,70 @@ $('select[name="state"]').on('change', function() {
 
 <!-- Delete Farmer Modal -->
 {% for farmer in farmers %}
-<div class="modal fade" id="delete_farmer_modal_{{ farmer.id }}" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered modal-sm">
-    <div class="modal-content">
-      <form method="POST" action="{% url 'manage_farmer' %}">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="delete">
-      <input type="hidden" name="farmer_id" value="{{ farmer.id }}">
-      <div class="modal-header">
-        <h5 class="modal-title text-danger">Confirm Delete</h5>
+<div class="modal fade" id="delete_farmer_modal_{{ farmer.id }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-bottom">
+        <h5 class="modal-title text-danger d-flex align-items-center gap-2 fw-semibold">
+          <i class="ri-error-warning-line ri-20px"></i> Delete Farmer
+        </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
 
-      <div class="modal-body text-center">
-        <p class="mb-0">
-          Are you sure you want to delete
-          <strong>{{ farmer.user.first_name }}</strong>?
-        </p>
-      </div>
+      <div class="modal-body p-4">
+        <div class="text-center mb-3">
+          <div class="avatar avatar-md mx-auto mb-2 bg-danger-subtle text-danger rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px;">
+            <i class="ri-delete-bin-line ri-24px"></i>
+          </div>
+          <h5 class="fw-bold mb-1">Are you sure you want to delete {{ farmer.user.first_name }}?</h5>
+          <p class="text-muted fs-8 mb-0">
+            Deleting will permanently remove this farmer, along with all associated farms, crops, transactions, and user account. This action <strong class="text-danger">cannot be undone</strong>.
+          </p>
+        </div>
 
-      <div class="modal-footer justify-content-center">
-        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-danger">Yes, Delete</button>
+        <!-- Option to Deactivate Instead -->
+        <div class="alert alert-light-warning border border-warning-subtle rounded-3 p-3 mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+          <div class="d-flex align-items-center gap-2">
+            <i class="ri-information-line text-warning fs-5"></i>
+            <div>
+              <div class="fw-semibold text-dark fs-8">Prefer to keep records?</div>
+              <small class="text-muted">You can deactivate this farmer instead of deleting permanently.</small>
+            </div>
+          </div>
+          <form method="POST" action="{% url 'manage_farmer' %}" class="d-inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="deactivate">
+            <input type="hidden" name="farmer_id" value="{{ farmer.id }}">
+            <button type="submit" class="btn btn-sm btn-outline-warning text-nowrap fw-medium">
+              <i class="ri-pause-circle-line me-1"></i> Deactivate Instead
+            </button>
+          </form>
+        </div>
+
+        <!-- Permanent Delete Confirmation Checkbox Form -->
+        <form method="POST" action="{% url 'manage_farmer' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="farmer_id" value="{{ farmer.id }}">
+
+        <div class="form-check bg-light rounded-3 p-3 mb-3 border">
+          <input class="form-check-input perm-delete-check ms-0 me-2" 
+                 type="checkbox" 
+                 id="perm_delete_{{ farmer.id }}" 
+                 onchange="document.getElementById('perm_del_btn_{{ farmer.id }}').disabled = !this.checked;">
+          <label class="form-check-label text-dark fw-medium fs-8" for="perm_delete_{{ farmer.id }}">
+            I understand that deleting is permanent and wish to proceed with full deletion.
+          </label>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center pt-2">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger" id="perm_del_btn_{{ farmer.id }}" disabled>
+            <i class="ri-delete-bin-line me-1"></i> Permanently Delete
+          </button>
+        </div>
+        </form>
       </div>
-      </form>
     </div>
   </div>
 </div>
@@ -549,7 +771,7 @@ $('select[name="state"]').on('change', function() {
             <small>|</small>
             <small class="text-muted">
                 <i class="ri-map-pin-line me-1"></i>
-                <span id="profileRegion_{{ farmer.id }}">{{ farmer.district.name|default:"N/A" }}</span>
+                <span id="profileRegion_{{ farmer.id }}">{% if farmer.taluka %}{{ farmer.taluka }}, {% endif %}{{ farmer.district.name|default:"N/A" }}</span>
             </small>
         </div>
         <small class="text-muted">
@@ -563,10 +785,14 @@ $('select[name="state"]').on('change', function() {
         <div class="d-flex flex-column align-items-center gap-1">
             <label class="text-muted small">Land Holdings</label>
             <label class="fw-semibold fs-5" id="profileLand_{{ farmer.id }}">
-                <span class="text-success">{{ farmer.package_land_limit }}</span> /
-                <span class="{% if farmer.current_land_usage > farmer.package_land_limit %}text-danger{% else %}text-success{% endif %}">
-                    {{ farmer.current_land_usage }}
-                </span> Acres
+                {% if farmer.is_land_unlimited %}
+                    <span class="text-success">{{ farmer.current_land_usage }}</span> / <span class="text-success">Unlimited</span> Acres
+                {% else %}
+                    <span class="text-success">{{ farmer.package_land_limit }}</span> /
+                    <span class="{% if farmer.current_land_usage > farmer.package_land_limit %}text-danger{% else %}text-success{% endif %}">
+                        {{ farmer.current_land_usage }}
+                    </span> Acres
+                {% endif %}
             </label>
         </div>
         <div class="vr mx-3"></div>
@@ -581,6 +807,47 @@ $('select[name="state"]').on('change', function() {
         </div>
     </div>
     <hr>
+
+    <!-- Subscription Status Bar in Drawer -->
+    <div class="p-3 mb-3 rounded-3 {% if farmer.sub_details.has_no_plan %}bg-light border{% elif farmer.sub_details.is_expired %}bg-danger-subtle border border-danger-subtle{% elif farmer.sub_details.is_expiring_soon %}bg-warning-subtle border border-warning-subtle{% else %}bg-light border{% endif %}">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="ri-vip-crown-2-line fs-4 {% if farmer.sub_details.has_no_plan %}text-secondary{% elif farmer.sub_details.is_expired %}text-danger{% elif farmer.sub_details.is_expiring_soon %}text-warning{% else %}text-primary{% endif %}"></i>
+                <div>
+                    <div class="fw-semibold text-dark fs-7">
+                        {{ farmer.sub_details.package_name }}
+                    </div>
+                    <small class="text-muted">
+                        {% if farmer.sub_details.end_date %}
+                            Valid until: <strong>{{ farmer.sub_details.end_date|date:"d M Y" }}</strong>
+                        {% else %}
+                            No active subscription
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
+            <div>
+                {% if farmer.sub_details.is_expiring_soon %}
+                    <span class="badge bg-warning text-dark fs-8">
+                        <i class="ri-alarm-warning-line me-1"></i>{{ farmer.sub_details.status_label }}
+                    </span>
+                {% elif farmer.sub_details.has_no_plan %}
+                    <span class="badge bg-secondary fs-8">
+                        <i class="ri-information-line me-1"></i>No Plan
+                    </span>
+                {% elif farmer.sub_details.is_expired %}
+                    <span class="badge bg-danger fs-8">
+                        <i class="ri-close-circle-line me-1"></i>Plan Expired
+                    </span>
+                {% else %}
+                    <span class="badge bg-success fs-8">
+                        <i class="ri-check-line me-1"></i>{{ farmer.sub_details.status_label }}
+                    </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
     <!-- Tabs -->
     <ul class="nav nav-tabs custom-tabs border-bottom mb-3" id="farmerTabs_{{ farmer.id }}" role="tablist" style="overflow-x:auto; flex-wrap: nowrap; white-space: nowrap; padding-bottom: 5px;">
         <li class="nav-item">
@@ -655,25 +922,24 @@ $('select[name="state"]').on('change', function() {
                             </div>
                         </div>
                     </div>
-                    <div class="rounded-3 p-3 mt-3 d-flex justify-content-between text-center" style="background-color: #f0f0f0;">
-                        <div class="d-flex flex-column">
-                            <small class="text-muted">Soil pH</small>
-                            <label class="fw-semibold">{{ farm.soil_ph|default:"6.5" }}</label>
-                        </div>
-                        <div class="d-flex flex-column">
-                            <small class="text-muted">Nitrogen</small>
-                            <div class="text-primary fw-semibold">Optimal</div>
-                        </div>
-                        <div class="d-flex flex-column">
-                            <small class="text-muted">Last Watered</small>
-                            <div class="fw-semibold">1h ago</div>
-                        </div>
-                    </div>
                     <div class="d-flex justify-content-between align-items-center mt-3">
-                        <small class="text-muted">
+                        <small class="text-muted d-flex align-items-center">
+                            {% if farm.splits.exists or farm.crop or farm.crop_type %}
+                            <span class="badge bg-success rounded-circle me-1" style="width:6px;height:6px;"></span>
+                            <span class="text-success fw-medium">Active Cultivation</span>
+                            {% if farm.splits.count > 0 %}
+                            <span class="text-muted ms-1">({{ farm.splits.count }} crop{{ farm.splits.count|pluralize }})</span>
+                            {% endif %}
+                            {% else %}
                             <span class="badge bg-secondary rounded-circle me-1" style="width:6px;height:6px;"></span>
-                            Irrigation Valve Closed
+                            <span class="text-muted">Available Land</span>
+                            {% endif %}
                         </small>
+                        {% if farm.district or farm.state %}
+                        <small class="text-muted">
+                            <i class="ri-map-pin-line text-secondary me-0.5"></i>{{ farm.district.name|default:farm.state.name }}
+                        </small>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -786,5 +1052,93 @@ $('select[name="state"]').on('change', function() {
 {% endfor %}
 
 
+
+<script>
+function refreshSelect2($el) {
+    if (!$el || !$el.length) return;
+    if ($el.data('select2')) {
+        $el.select2('destroy');
+    }
+    var $modal = $el.closest('.modal');
+    $el.select2({
+        dropdownParent: $modal.length ? $modal : $el.parent(),
+        width: '100%',
+        minimumResultsForSearch: 0,
+        placeholder: $el.find('option[value=""]').first().text() || 'Select an option'
+    });
+}
+
+function loadFarmerCities(stateId, districtSelectId, talukSelectId) {
+    const $distSelect = $('#' + districtSelectId);
+    const $talukSelect = talukSelectId ? $('#' + talukSelectId) : null;
+    if (!$distSelect.length) return;
+
+    $distSelect.html('<option value="">Loading districts...</option>');
+    refreshSelect2($distSelect);
+
+    if ($talukSelect && $talukSelect.length) {
+        $talukSelect.html('<option value="">Select District First</option>');
+        refreshSelect2($talukSelect);
+    }
+
+    if (!stateId) {
+        $distSelect.html('<option value="">Select State First</option>');
+        refreshSelect2($distSelect);
+        return;
+    }
+
+    fetch(`{% url 'ajax_get_cities' %}?state_id=${stateId}`)
+        .then(res => res.json())
+        .then(res => {
+            let options = '<option value="">Select District</option>';
+            const list = Array.isArray(res) ? res : (res.data || []);
+            list.forEach(item => {
+                options += `<option value="${item.id}">${item.name}</option>`;
+            });
+            $distSelect.html(options).val('');
+            refreshSelect2($distSelect);
+        })
+        .catch(() => {
+            $distSelect.html('<option value="">Error loading districts</option>');
+            refreshSelect2($distSelect);
+        });
+}
+
+function loadFarmerTaluks(districtId, talukSelectId, selectedTaluk = '') {
+    const $talukSelect = $('#' + talukSelectId);
+    if (!$talukSelect.length) return;
+
+    $talukSelect.html('<option value="">Loading taluks...</option>');
+    refreshSelect2($talukSelect);
+
+    if (!districtId) {
+        $talukSelect.html('<option value="">Select District First</option>');
+        refreshSelect2($talukSelect);
+        return;
+    }
+
+    fetch(`{% url 'ajax_get_taluks' %}?district_id=${districtId}`)
+        .then(res => res.json())
+        .then(res => {
+            let options = '<option value="">Select Taluk</option>';
+            const list = Array.isArray(res) ? res : (res.data || []);
+            list.forEach(item => {
+                const isSel = (selectedTaluk && selectedTaluk === item.name) ? 'selected' : '';
+                options += `<option value="${item.name}" ${isSel}>${item.name}</option>`;
+            });
+            $talukSelect.html(options);
+            if (selectedTaluk) {
+                $talukSelect.val(selectedTaluk);
+            } else {
+                $talukSelect.val('');
+            }
+            refreshSelect2($talukSelect);
+        })
+        .catch(() => {
+            $talukSelect.html('<option value="">Error loading taluks</option>');
+            refreshSelect2($talukSelect);
+        });
+}
+</script>
 
 {% endblock %}

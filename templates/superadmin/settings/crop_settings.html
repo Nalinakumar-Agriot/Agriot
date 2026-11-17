@@ -25,6 +25,7 @@
 {% endblock vendor_js %}
 
 {% block page_css %}
+{% include "layout/partials/admin_search_styles.html" %}
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
 {% endblock page_css %}
@@ -129,7 +130,7 @@ $(document).ready(function () {
 </div>
 <div class="card mb-2">
     <div class="card-body d-flex gap-2 flex-wrap p-2">
-        <div class="input-group w-75">
+        <div class="input-group admin-list-search w-75">
             <span class="input-group-text bg-white">
                 <i class="ri-search-line"></i>
             </span>
@@ -143,7 +144,7 @@ $(document).ready(function () {
 <!-- Quick Add Bar -->
 <div class="card mb-2" style="border: 1.5px dashed #c4b5fd; background: linear-gradient(135deg, #faf5ff 0%, #fef3e8 100%);">
   <div class="card-body py-2 px-3">
-    <form method="POST" action="{% url 'crop_settings' %}" class="d-flex align-items-center gap-2 flex-wrap">
+    <form method="POST" action="{% url 'crop_settings' %}" class="admin-quick-add d-flex align-items-center gap-2 flex-wrap">
       {% csrf_token %}
       <input type="hidden" name="action" value="add">
       <input type="hidden" name="is_active" value="on">

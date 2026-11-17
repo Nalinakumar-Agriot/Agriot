@@ -10,11 +10,12 @@ class Profile(models.Model):
     ROLE_CHOICES = (
         ('superadmin', 'Superadmin'),
         ('farmer', 'Farmer'),
+        ('staff', 'Staff'),
     )
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='farmer')
     email = models.EmailField(max_length=100, unique=True, blank=True, null=True)
-    mobile_number = models.CharField(max_length=15, unique=True, blank=True, null=True)
+    mobile_number = models.CharField(max_length=25, unique=True, blank=True, null=True)
     profile_image = models.ImageField(upload_to='profiles/', blank=True, null=True)
     
     # Farmer specific fields
@@ -46,11 +47,18 @@ class Profile(models.Model):
     otp_expiry_at = models.DateTimeField(blank=True, null=True)
     is_verified = models.BooleanField(default=False)  # pyright: ignore[reportArgumentType]
     permissions = models.JSONField(default=list, blank=True)
+    fcm_token = models.TextField(blank=True, null=True, help_text="Firebase Cloud Messaging Device Token for Push Notifications")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         u: Any = self.user
         return str(u.username) if hasattr(u, 'username') else str(u)
+
+    @property
+    def name(self):
+        if self.user:
+            return self.user.get_full_name() or self.user.first_name or self.user.username
+        return self.company_name or self.mobile_number or "Farmer"
 
     @property
     def permissions_json(self):
@@ -68,9 +76,22 @@ class Profile(models.Model):
     @receiver(post_save, sender=User)
     def create_profile(sender, instance, created, **kwargs):
         if created:
-            email_val = instance.email if instance.email else None
-            role_val = 'superadmin' if instance.is_superuser else 'farmer'
-            Profile.objects.create(user=instance, email=email_val, role=role_val)
+            if not Profile.objects.filter(user=instance).exists():
+                email_val = instance.email if instance.email else None
+                if email_val and Profile.objects.filter(email=email_val).exists():
+                    email_val = None
+                if instance.is_superuser:
+                    role_val = 'superadmin'
+                else:
+                    try:
+                        from apps.farmer.models import FarmerStaff
+                        is_staff = FarmerStaff.objects.filter(
+                            models.Q(user=instance) | models.Q(mobile_number=instance.username)
+                        ).exists()
+                        role_val = 'staff' if is_staff else 'farmer'
+                    except Exception:
+                        role_val = 'farmer'
+                Profile.objects.create(user=instance, email=email_val, role=role_val)
 
 
     class Meta:
@@ -96,4 +117,3 @@ class SystemNotification(models.Model):
         u: Any = self.user
         user_name = str(u.username) if u and hasattr(u, 'username') else str(self.role_target)
         return f"{self.title} - {user_name}"
-

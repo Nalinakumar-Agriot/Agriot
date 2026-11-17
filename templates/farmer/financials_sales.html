@@ -83,6 +83,46 @@
       transform: translateX(0);
       pointer-events: auto;
   }
+  .filter-toolbar-btn {
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #4b5563;
+    border: 1px solid #e5e7eb;
+    background-color: #fff;
+    transition: all 0.2s ease-in-out;
+    padding: 6px 14px;
+    height: 38px;
+  }
+  .filter-toolbar-btn:hover,
+  .filter-toolbar-btn:focus,
+  .filter-toolbar-btn.show {
+    background-color: #f8f9fa;
+    border-color: #f69c55 !important;
+    color: #f69c55 !important;
+    box-shadow: 0 0 0 0.15rem rgba(246, 156, 85, 0.2) !important;
+  }
+  .dropdown-menu {
+    border-radius: 10px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+  }
+  .dropdown-menu .dropdown-item {
+    font-size: 0.84rem;
+    padding: 6px 14px;
+    color: #475569;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .dropdown-menu .dropdown-item:hover {
+    background-color: #f8f9fa;
+    color: #F69C55;
+  }
+  .dropdown-menu .dropdown-item.active,
+  .dropdown-menu .dropdown-item.active:hover {
+    background-color: #fcebd9 !important;
+    color: #c0622e !important;
+    font-weight: 600;
+  }
 </style>
 {% endblock page_css %}
 
@@ -93,6 +133,8 @@
 var salesDataTable = null;
 
 $(document).ready(function () {
+    $.fn.dataTable.ext.errMode = 'none';
+
     if ($.fn.dataTable.isDataTable('#salesTable')) {
         $('#salesTable').DataTable().destroy();
     }
@@ -100,7 +142,8 @@ $(document).ready(function () {
     salesDataTable = $('#salesTable').DataTable({
         pageLength: 10,
         lengthMenu: [5, 10, 25, 50],
-        responsive: true,
+        responsive: false,
+        autoWidth: false,
         order: [],
         language: {
             emptyTable: "<div class='py-4 text-center text-muted'><i class='ri-shopping-cart-2-line fs-2 d-block mb-1 text-secondary opacity-50'></i>No sales records found. Add one to get started.</div>"
@@ -113,25 +156,34 @@ $(document).ready(function () {
         var crops = [];
         
         salesDataTable.column(1).nodes().each(function(node) {
-            var text = $(node).find('.fw-semibold').text().trim();
+            var text = $(node).find('.text-dark').first().text().trim() || $(node).text().trim();
             if(text && !buyers.includes(text)) buyers.push(text);
         });
         
         salesDataTable.column(3).nodes().each(function(node) {
-            var text = $(node).text().trim();
+            var text = $(node).find('.text-dark').first().text().trim() || $(node).text().trim();
             if(text && !crops.includes(text)) crops.push(text);
         });
         
         buyers.sort().forEach(function(b) {
-            $('#salesBuyerFilter').append(new Option(b, b));
+            $('#salesBuyerFilterMenu').append(`<li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesBuyerFilter', '${b.replace(/'/g, "\\'")}', '${b.replace(/'/g, "\\'")}', this)">👤 ${b}</a></li>`);
         });
         
         crops.sort().forEach(function(c) {
-            $('#salesCropFilter').append(new Option(c, c));
+            $('#salesCropFilterMenu').append(`<li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesCropFilter', '${c.replace(/'/g, "\\'")}', '${c.replace(/'/g, "\\'")}', this)">🌱 ${c}</a></li>`);
         });
     }
     
     populateDynamicFilters();
+
+    window.applySalesFilter = function(filterId, val, text, el) {
+        document.getElementById(filterId).value = val;
+        var btnTextEl = document.getElementById(filterId + 'BtnText');
+        if (btnTextEl) btnTextEl.innerText = text;
+        $(el).closest('.dropdown-menu').find('.dropdown-item').removeClass('active');
+        $(el).addClass('active');
+        if (salesDataTable) salesDataTable.draw();
+    };
 
     // Consolidated Custom Search for All Filters
     $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
@@ -372,45 +424,88 @@ document.addEventListener('click', function (e) {
       </div>
     </div>
 
-    <!-- Filters -->
+    <!-- Filters with Theme Dropdown Styling -->
     <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
-      <select class="form-select form-select-sm w-auto" id="salesDateFilter">
-        <option value="">All Dates</option>
-        <option value="today">Today</option>
-        <option value="7days">Last 7 Days</option>
-        <option value="30days">Last 30 Days</option>
-        <option value="this_month">This Month</option>
-      </select>
+      <input type="hidden" id="salesDateFilter" value="">
+      <input type="hidden" id="salesBuyerFilter" value="">
+      <input type="hidden" id="salesCropFilter" value="">
+      <input type="hidden" id="salesFarmFilter" value="">
+      <input type="hidden" id="salesStatusFilter" value="">
+      <input type="hidden" id="salesAmountFilter" value="">
 
-      <select class="form-select form-select-sm w-auto" id="salesBuyerFilter">
-        <option value="">All Buyers</option>
-      </select>
+      <!-- Date Filter -->
+      <div class="dropdown">
+        <button class="btn filter-toolbar-btn dropdown-toggle d-flex align-items-center gap-1.5 px-3" type="button" data-bs-toggle="dropdown" id="salesDateFilterBtn">
+          <span id="salesDateFilterBtnText">All Dates</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1" style="max-height: 280px; overflow-y: auto;">
+          <li><a class="dropdown-item active" href="javascript:void(0);" onclick="applySalesFilter('salesDateFilter', '', 'All Dates', this)">All Dates</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesDateFilter', 'today', 'Today', this)">Today</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesDateFilter', '7days', 'Last 7 Days', this)">Last 7 Days</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesDateFilter', '30days', 'Last 30 Days', this)">Last 30 Days</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesDateFilter', 'this_month', 'This Month', this)">This Month</a></li>
+        </ul>
+      </div>
 
-      <select class="form-select form-select-sm w-auto" id="salesCropFilter">
-        <option value="">All Crops</option>
-      </select>
+      <!-- Buyer Filter -->
+      <div class="dropdown">
+        <button class="btn filter-toolbar-btn dropdown-toggle d-flex align-items-center gap-1.5 px-3" type="button" data-bs-toggle="dropdown" id="salesBuyerFilterBtn">
+          <span id="salesBuyerFilterBtnText">All Buyers</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1" id="salesBuyerFilterMenu" style="max-height: 280px; overflow-y: auto;">
+          <li><a class="dropdown-item active" href="javascript:void(0);" onclick="applySalesFilter('salesBuyerFilter', '', 'All Buyers', this)">All Buyers</a></li>
+        </ul>
+      </div>
+
+      <!-- Crop Filter -->
+      <div class="dropdown">
+        <button class="btn filter-toolbar-btn dropdown-toggle d-flex align-items-center gap-1.5 px-3" type="button" data-bs-toggle="dropdown" id="salesCropFilterBtn">
+          <span id="salesCropFilterBtnText">All Crops</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1" id="salesCropFilterMenu" style="max-height: 280px; overflow-y: auto;">
+          <li><a class="dropdown-item active" href="javascript:void(0);" onclick="applySalesFilter('salesCropFilter', '', 'All Crops', this)">All Crops</a></li>
+        </ul>
+      </div>
       
-      <select class="form-select form-select-sm w-auto" id="salesFarmFilter">
-        <option value="">All Farm Lands</option>
-        {% for f in farms %}
-        <option value="{{ f.land_name }}">{{ f.land_name }}</option>
-        {% endfor %}
-      </select>
+      <!-- Farm Land Filter -->
+      <div class="dropdown">
+        <button class="btn filter-toolbar-btn dropdown-toggle d-flex align-items-center gap-1.5 px-3" type="button" data-bs-toggle="dropdown" id="salesFarmFilterBtn">
+          <span id="salesFarmFilterBtnText">All Farm Lands</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1" style="max-height: 280px; overflow-y: auto;">
+          <li><a class="dropdown-item active" href="javascript:void(0);" onclick="applySalesFilter('salesFarmFilter', '', 'All Farm Lands', this)">All Farm Lands</a></li>
+          {% for f in farms %}
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesFarmFilter', '{{ f.land_name|escapejs }}', '{{ f.land_name|escapejs }}', this)">📍 {{ f.land_name }}</a></li>
+          {% endfor %}
+        </ul>
+      </div>
 
-      <select class="form-select form-select-sm w-auto" id="salesStatusFilter">
-        <option value="">All Statuses</option>
-        <option value="Received">Received</option>
-        <option value="Partial">Partial</option>
-        <option value="Pending">Pending</option>
-      </select>
+      <!-- Status Filter -->
+      <div class="dropdown">
+        <button class="btn filter-toolbar-btn dropdown-toggle d-flex align-items-center gap-1.5 px-3" type="button" data-bs-toggle="dropdown" id="salesStatusFilterBtn">
+          <span id="salesStatusFilterBtnText">All Statuses</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1" style="max-height: 280px; overflow-y: auto;">
+          <li><a class="dropdown-item active" href="javascript:void(0);" onclick="applySalesFilter('salesStatusFilter', '', 'All Statuses', this)">All Statuses</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesStatusFilter', 'Received', 'Received', this)">Received</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesStatusFilter', 'Partial', 'Partial', this)">Partial</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesStatusFilter', 'Pending', 'Pending', this)">Pending</a></li>
+        </ul>
+      </div>
 
-      <select class="form-select form-select-sm w-auto" id="salesAmountFilter">
-        <option value="">All Amounts</option>
-        <option value="0-5000">Under ₹5,000</option>
-        <option value="5000-20000">₹5,000 - ₹20,000</option>
-        <option value="20000-50000">₹20,000 - ₹50,000</option>
-        <option value="50000-">Over ₹50,000</option>
-      </select>
+      <!-- Amount Filter -->
+      <div class="dropdown">
+        <button class="btn filter-toolbar-btn dropdown-toggle d-flex align-items-center gap-1.5 px-3" type="button" data-bs-toggle="dropdown" id="salesAmountFilterBtn">
+          <span id="salesAmountFilterBtnText">All Amounts</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1" style="max-height: 280px; overflow-y: auto;">
+          <li><a class="dropdown-item active" href="javascript:void(0);" onclick="applySalesFilter('salesAmountFilter', '', 'All Amounts', this)">All Amounts</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesAmountFilter', '0-5000', 'Under ₹5,000', this)">Under ₹5,000</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesAmountFilter', '5000-20000', '₹5,000 - ₹20,000', this)">₹5,000 - ₹20,000</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesAmountFilter', '20000-50000', '₹20,000 - ₹50,000', this)">₹20,000 - ₹50,000</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applySalesFilter('salesAmountFilter', '50000-', 'Over ₹50,000', this)">Over ₹50,000</a></li>
+        </ul>
+      </div>
     </div>
   </div>
 
@@ -420,19 +515,19 @@ document.addEventListener('click', function (e) {
       <table class="table align-middle datatable mb-0" id="salesTable" data-page-length="10">
         <thead class="table-gray-200">
           <tr class="fs-8 fw-medium">
-            <th>Close Date</th>
-            <th>Buyer / Customer</th>
-            <th>Farm Land</th>
-            <th>Crop / Variety</th>
-            <th>Status</th>
-            <th>Amount</th>
-            <th class="text-end">Actions</th>
+            <th class="text-nowrap" style="min-width: 125px;">Close Date</th>
+            <th class="text-nowrap" style="min-width: 150px;">Buyer / Customer</th>
+            <th class="text-nowrap" style="min-width: 130px;">Farm Land</th>
+            <th class="text-nowrap" style="min-width: 150px;">Crop / Variety</th>
+            <th class="text-nowrap text-center" style="min-width: 100px;">Status</th>
+            <th class="text-nowrap" style="min-width: 175px;">Amount</th>
+            <th class="text-end text-nowrap pe-3" style="min-width: 180px;">Actions</th>
           </tr>
         </thead>
         <tbody class="fs-7 fw-medium text-black">
           {% for t in inflow %}
           <tr>
-            <td>
+            <td class="text-nowrap">
               <div class="d-flex align-items-center">
                 <i class="ri-calendar-2-line text-muted me-2"></i>
                 <span class="text-dark">{{ t.close_date|date:"Y-m-d" }}</span>
@@ -440,11 +535,11 @@ document.addEventListener('click', function (e) {
             </td>
             <td>
               <div class="d-flex flex-column">
-                <span class="fw-semibold text-dark">{{ t.description }}</span>
-                <small class="text-muted"><i class="ri-bank-card-line me-1"></i>{{ t.payment_method|default:'Bank Transfer' }}</small>
+                <span class="fw-semibold text-dark">{{ t.customer_name|default:'Customer' }}</span>
+                <small class="text-muted"><i class="ri-bank-card-line me-1"></i>{{ t.payment_method|default:'Cash' }}</small>
               </div>
             </td>
-            <td>
+            <td class="text-nowrap">
               {% if t.farm %}
                 <span class="text-dark"><i class="ri-map-pin-2-line text-success me-1"></i>{{ t.farm.land_name }}</span>
               {% else %}
@@ -452,49 +547,95 @@ document.addEventListener('click', function (e) {
               {% endif %}
             </td>
             <td>
-              <span class="badge bg-success-subtle border border-success text-success px-3 py-1 rounded-pill">
-                {{ t.category|default:'Harvest Trade' }}
-              </span>
+              <div class="d-flex flex-column">
+                <span class="fw-semibold text-dark">{{ t.crop_name_display|default:t.description }}</span>
+                {% if t.quantity %}
+                  <small class="text-muted">{{ t.quantity }} {{ t.unit|default:'Tons' }}</small>
+                {% elif t.category and t.category != 'Sales' and t.category != t.crop_name_display %}
+                  <span class="badge bg-success-subtle border border-success-subtle text-success px-2 py-0.5 rounded-pill" style="font-size: 10px; width: fit-content;">{{ t.category }}</span>
+                {% endif %}
+              </div>
             </td>
-            <td>
-              {% if t.status == 'Received' %}
-                <span class="badge border bg-success-subtle border-success text-success px-3 py-1 rounded-pill">
-                  Received
+            <td class="text-center text-nowrap">
+              {% if t.status == 'Received' or t.status == 'Paid' or t.balance_amount <= 0.001 %}
+                <span class="badge bg-success-subtle border border-success text-success px-2.5 py-1 rounded-pill fw-semibold">
+                  <i class="ri-checkbox-circle-line me-1"></i>Received
+                </span>
+              {% elif t.status == 'Partial' or t.paid_amount > 0 %}
+                <span class="badge bg-warning-subtle border border-warning text-warning px-2.5 py-1 rounded-pill fw-semibold">
+                  <i class="ri-time-line me-1"></i>Partial
                 </span>
               {% else %}
-                <span class="badge border bg-warning-subtle border-warning text-warning px-3 py-1 rounded-pill">
-                  {{ t.status|default:'Received' }}
+                <span class="badge bg-danger-subtle border border-danger text-danger px-2.5 py-1 rounded-pill fw-semibold">
+                  <i class="ri-error-warning-line me-1"></i>Pending
                 </span>
               {% endif %}
             </td>
-            <td>
-              <span class="fw-bold text-success fs-6">
-                +₹{{ t.amount|stringformat:".2f"|cut:"-" }}
-              </span>
-              {% if t.status == 'Partial' and t.balance_amount > 0 %}
-                <small class="d-block text-muted" style="font-size: 11px;">
-                  <span class="text-success">Paid: ₹{{ t.paid_amount|stringformat:".2f" }}</span> &bull; <span class="text-danger fw-semibold">Due: ₹{{ t.balance_amount|stringformat:".2f" }}</span>
-                </small>
-              {% elif t.status == 'Pending' or t.status == 'Unpaid' %}
-                <small class="d-block text-danger fw-semibold" style="font-size: 11px;">
-                  Due: ₹{{ t.amount|stringformat:".2f"|cut:"-" }}
-                </small>
-              {% endif %}
+            <td class="text-nowrap py-3">
+              <div class="d-flex flex-column justify-content-center" style="min-height: 52px;">
+                <span class="fw-bold text-success fs-6">
+                  +₹{{ t.amount_inr|default:t.amount }}
+                </span>
+                {% if t.balance_amount > 0.001 and t.paid_amount > 0.001 %}
+                  <div class="mt-1 d-flex align-items-center gap-1.5 flex-wrap">
+                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-0.5 rounded-pill fw-medium" style="font-size: 11px;">
+                      Paid: ₹{{ t.paid_inr|default:t.paid_amount }}
+                    </span>
+                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-0.5 rounded-pill fw-bold" style="font-size: 11px;">
+                      Due: ₹{{ t.balance_inr|default:t.balance_amount }}
+                    </span>
+                  </div>
+                {% elif t.balance_amount > 0.001 %}
+                  <div class="mt-1">
+                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-0.5 rounded-pill fw-bold" style="font-size: 11px;">
+                      <i class="ri-alert-line me-0.5"></i>Due: ₹{{ t.balance_inr|default:t.balance_amount }}
+                    </span>
+                  </div>
+                {% else %}
+                  <div class="mt-1">
+                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-0.5 rounded-pill fw-semibold" style="font-size: 11px;">
+                      <i class="ri-check-double-line me-0.5"></i>Fully Paid
+                    </span>
+                  </div>
+                {% endif %}
+              </div>
             </td>
-            <td class="text-end">
+            <td class="text-end text-nowrap pe-3">
               <div class="d-flex align-items-center justify-content-end gap-1">
+                {% if t.balance_amount > 0.001 or t.status == 'Partial' or t.status == 'Pending' or t.status == 'Unpaid' %}
+                <button type="button"
+                        class="btn btn-sm btn-success d-inline-flex align-items-center gap-1 shadow-sm px-2.5 py-1 fw-bold text-nowrap"
+                        style="font-size: 11px; border-radius: 8px;"
+                        title="Collect Payment / Settle Due"
+                        onclick="openSettleSaleDueModal(this)"
+                        data-id="{{ t.id }}"
+                        data-outstanding-id="{{ t.outstanding_id|default:'' }}"
+                        data-customer="{{ t.customer_name|default:'Customer'|escape }}"
+                        data-crop="{{ t.crop_name_display|default:t.description|escape }}"
+                        data-total="{{ t.amount|stringformat:'.2f'|cut:'-' }}"
+                        data-paid="{{ t.paid_amount|stringformat:'.2f' }}"
+                        data-balance="{{ t.balance_amount|stringformat:'.2f' }}">
+                  <i class="ri-hand-coin-line"></i>
+                  <span>Settle Due</span>
+                </button>
+                {% endif %}
                 <button type="button"
                         class="btn btn-sm btn-icon btn-outline-info"
                         title="View Sale Details"
                         onclick="openSaleViewModal(this)"
                         data-id="{{ t.id }}"
                         data-date="{{ t.close_date|date:'Y-m-d' }}"
-                        data-buyer="{{ t.description|escape }}"
-                        data-category="{{ t.category|default:'Harvest Trade'|escape }}"
+                        data-buyer="{{ t.customer_name|default:t.description|escape }}"
+                        data-customer="{{ t.customer_name|default:'Customer'|escape }}"
+                        data-crop="{{ t.crop_name_display|default:t.description|escape }}"
+                        data-category="{{ t.crop_name_display|default:t.category|default:'Harvest Trade'|escape }}"
                         data-farm="{{ t.farm.land_name|default:'General / All Farms'|escape }}"
                         data-quantity="{{ t.quantity|default:'--' }}"
                         data-unit="{{ t.unit|default:'Tons' }}"
                         data-amount="{{ t.amount|stringformat:'.2f'|cut:'-' }}"
+                        data-paid="{{ t.paid_amount|stringformat:'.2f' }}"
+                        data-balance="{{ t.balance_amount|stringformat:'.2f' }}"
+                        data-outstanding-id="{{ t.outstanding_id|default:'' }}"
                         data-payment="{{ t.payment_method|default:'Bank Transfer' }}"
                         data-status="{{ t.status|default:'Received' }}"
                         data-tags="{{ t.tags|default:''|escape }}"
@@ -520,13 +661,6 @@ document.addEventListener('click', function (e) {
                 </button>
                 {% endif %}
               </div>
-            </td>
-          </tr>
-          {% empty %}
-          <tr>
-            <td colspan="7" class="text-center text-muted py-5">
-              <i class="ri-shopping-cart-2-line display-4 text-muted opacity-50 mb-3 d-block"></i>
-              {% trans "No sales records found. Add one to get started." %}
             </td>
           </tr>
           {% endfor %}
@@ -671,6 +805,10 @@ document.addEventListener('click', function (e) {
         <span class="text-muted small"><i class="ri-bank-card-line me-1"></i>Payment Method: <strong id="viewSalePaymentMethod" class="text-dark">Bank Transfer</strong></span>
         <div class="d-flex gap-2">
           <button type="button" class="btn btn-light btn-sm px-3" data-bs-dismiss="modal">Close</button>
+          <!-- Settle Due Button in View Modal -->
+          <button type="button" class="btn btn-success btn-sm px-3 d-flex align-items-center gap-1 fw-bold" id="viewSaleSettleBtn" style="display: none;" onclick="settleFromViewModal()">
+            <i class="ri-hand-coin-line"></i> Settle Due
+          </button>
           <!-- Print Button -->
           <button type="button" class="btn btn-outline-secondary btn-sm px-3 d-flex align-items-center gap-1" onclick="printSaleInvoice()" title="Print Invoice">
             <i class="ri-printer-line"></i> Print
@@ -714,6 +852,103 @@ document.addEventListener('click', function (e) {
         </button>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- ================= SETTLE SALE PAYMENT MODAL ================= -->
+<div class="modal fade" id="settlePaymentModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header bg-success-subtle border-bottom py-3 px-4">
+        <h5 class="modal-title fw-bold text-success mb-0 d-flex align-items-center gap-2">
+          <i class="ri-hand-coin-line fs-4"></i>
+          <span>Collect Payment / Settle Due</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="settlePaymentForm" onsubmit="submitSettlePayment(event)">
+        <div class="modal-body p-4">
+          <input type="hidden" id="settle_transaction_id" name="transaction_id">
+          <input type="hidden" id="settle_outstanding_id" name="outstanding_id">
+          
+          <!-- Summary Box -->
+          <div class="p-3 rounded-3 bg-light border mb-3">
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-muted small">Customer / Buyer:</span>
+              <strong class="text-dark" id="settle_customer_name">--</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-muted small">Produce / Ref:</span>
+              <span class="text-dark small fw-semibold" id="settle_sale_ref">--</span>
+            </div>
+            <hr class="my-2">
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-muted small">Total Sale:</span>
+              <span class="fw-bold text-dark" id="settle_total_amount">₹0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-muted small">Already Paid:</span>
+              <span class="fw-semibold text-success" id="settle_paid_amount">₹0.00</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center pt-2 mt-1 border-top">
+              <span class="fw-bold text-danger">Pending Due:</span>
+              <span class="fs-5 fw-bold text-danger" id="settle_pending_amount">₹0.00</span>
+            </div>
+          </div>
+
+          <!-- Payment Mode / Type -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold text-dark small mb-1">Settlement Type</label>
+            <div class="d-flex gap-4 p-2 bg-light rounded-3 border">
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="radio" name="payment_type" id="payTypeFull" value="full" checked onchange="toggleSettleAmountInput()">
+                <label class="form-check-label fw-semibold text-dark small" for="payTypeFull">Full Settlement</label>
+              </div>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="radio" name="payment_type" id="payTypePartial" value="partial" onchange="toggleSettleAmountInput()">
+                <label class="form-check-label fw-semibold text-dark small" for="payTypePartial">Partial Payment</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold text-dark small mb-1">Collecting Amount (₹) <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text bg-white fw-bold text-success">₹</span>
+              <input type="number" step="0.01" min="0.01" class="form-control fw-bold fs-6 text-dark" id="settle_collect_amount" name="amount_paid" required>
+            </div>
+            <small class="text-muted" id="settle_amount_hint">Full remaining balance will be settled.</small>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold text-dark small mb-1">Payment Method</label>
+              <select class="form-select form-select-sm" id="settle_payment_method" name="payment_method">
+                <option value="Cash" selected>Cash</option>
+                <option value="UPI">UPI / GPay / PhonePe</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Cheque">Cheque</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold text-dark small mb-1">Payment Date</label>
+              <input type="date" class="form-control form-control-sm" id="settle_payment_date" name="payment_date" value="{{ today_str }}">
+            </div>
+          </div>
+
+          <div class="mb-1">
+            <label class="form-label fw-semibold text-dark small mb-1">Notes / Remarks (Optional)</label>
+            <input type="text" class="form-control form-control-sm" id="settle_notes" name="notes" placeholder="e.g. Cleared pending balance">
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-top py-2 px-4 d-flex justify-content-between">
+          <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success btn-sm fw-bold px-4 shadow-sm" id="btnSubmitSettle">
+            <i class="ri-check-line me-1"></i> Confirm & Collect Payment
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 </div>
@@ -1117,24 +1352,31 @@ document.addEventListener('click', function (e) {
     document.getElementById('viewSaleGrandTotal').textContent = "₹ " + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     // Parse Paid and Balance amounts
-    let paidAmt = amount;
-    let balAmt = 0;
-    let paidMatch = tags.match(/Paid:\s*₹?([\d\.]+)/);
-    let balMatch = tags.match(/Balance:\s*₹?([\d\.]+)/);
+    let paidAmt = btn.hasAttribute('data-paid') ? parseFloat(btn.getAttribute('data-paid')) : amount;
+    let balAmt = btn.hasAttribute('data-balance') ? parseFloat(btn.getAttribute('data-balance')) : 0;
+    
+    if (!btn.hasAttribute('data-paid') || isNaN(paidAmt)) {
+      let paidMatch = tags.match(/Paid:\s*₹?([\d\.]+)/);
+      let balMatch = tags.match(/Balance:\s*₹?([\d\.]+)/);
+      let pMatch = (buyer || '').match(/\[Paid:\s*₹?([\d.,]+),\s*Pending:\s*₹?([\d.,]+)\]/i);
 
-    if (paidMatch) {
-      paidAmt = parseFloat(paidMatch[1]);
-      if (balMatch) {
-        balAmt = parseFloat(balMatch[1]);
+      if (pMatch) {
+        paidAmt = parseFloat(pMatch[1].replace(/,/g, ''));
+        balAmt = parseFloat(pMatch[2].replace(/,/g, ''));
+      } else if (paidMatch) {
+        paidAmt = parseFloat(paidMatch[1]);
+        if (balMatch) {
+          balAmt = parseFloat(balMatch[1]);
+        } else {
+          balAmt = Math.max(0, amount - paidAmt);
+        }
+      } else if (status === 'Received') {
+        paidAmt = amount;
+        balAmt = 0;
       } else {
-        balAmt = Math.max(0, amount - paidAmt);
+        paidAmt = 0;
+        balAmt = amount;
       }
-    } else if (status === 'Received') {
-      paidAmt = amount;
-      balAmt = 0;
-    } else {
-      paidAmt = 0;
-      balAmt = amount;
     }
 
     document.getElementById('viewSalePaidAmount').textContent = "₹ " + paidAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1146,6 +1388,23 @@ document.addEventListener('click', function (e) {
         document.getElementById('viewSaleBalanceAmount').textContent = "₹ " + balAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       } else {
         balRow.style.display = 'none';
+      }
+    }
+
+    // Toggle Settle button in view modal
+    let settleBtn = document.getElementById('viewSaleSettleBtn');
+    if (settleBtn) {
+      if (balAmt > 0) {
+        settleBtn.style.display = 'inline-flex';
+        settleBtn.setAttribute('data-id', id);
+        settleBtn.setAttribute('data-outstanding-id', btn.getAttribute('data-outstanding-id') || '');
+        settleBtn.setAttribute('data-customer', btn.getAttribute('data-customer') || buyer);
+        settleBtn.setAttribute('data-crop', category || buyer);
+        settleBtn.setAttribute('data-total', amount);
+        settleBtn.setAttribute('data-paid', paidAmt);
+        settleBtn.setAttribute('data-balance', balAmt);
+      } else {
+        settleBtn.style.display = 'none';
       }
     }
 
@@ -1187,9 +1446,137 @@ document.addEventListener('click', function (e) {
       expenses, editUrl
     };
 
-
     let modal = new bootstrap.Modal(document.getElementById('view_sale_modal'));
     modal.show();
+  }
+
+  // ── Settle Sale Payment Functions ─────────────────────────────────────────
+  let currentSettleBalance = 0;
+  let currentSettleBtn = null;
+
+  function openSettleSaleDueModal(btn) {
+    currentSettleBtn = btn;
+    let id = btn.getAttribute('data-id');
+    let oId = btn.getAttribute('data-outstanding-id');
+    let customer = btn.getAttribute('data-customer') || 'Customer';
+    let crop = btn.getAttribute('data-crop') || 'Sale';
+    let total = parseFloat(btn.getAttribute('data-total') || '0');
+    let paid = parseFloat(btn.getAttribute('data-paid') || '0');
+    let balance = parseFloat(btn.getAttribute('data-balance') || '0');
+
+    if (balance <= 0 && total > paid) {
+      balance = total - paid;
+    }
+    currentSettleBalance = balance;
+
+    document.getElementById('settle_transaction_id').value = id || '';
+    document.getElementById('settle_outstanding_id').value = oId || '';
+    document.getElementById('settle_customer_name').textContent = customer;
+    document.getElementById('settle_sale_ref').textContent = crop;
+    document.getElementById('settle_total_amount').textContent = '₹' + total.toFixed(2);
+    document.getElementById('settle_paid_amount').textContent = '₹' + paid.toFixed(2);
+    document.getElementById('settle_pending_amount').textContent = '₹' + balance.toFixed(2);
+
+    document.getElementById('payTypeFull').checked = true;
+    let amtInput = document.getElementById('settle_collect_amount');
+    amtInput.value = balance.toFixed(2);
+    amtInput.readOnly = true;
+    document.getElementById('settle_amount_hint').textContent = 'Full remaining balance of ₹' + balance.toFixed(2) + ' will be settled.';
+
+    let modal = new bootstrap.Modal(document.getElementById('settlePaymentModal'));
+    modal.show();
+  }
+
+  function toggleSettleAmountInput() {
+    let isFull = document.getElementById('payTypeFull').checked;
+    let amtInput = document.getElementById('settle_collect_amount');
+    let hint = document.getElementById('settle_amount_hint');
+    if (isFull) {
+      amtInput.value = currentSettleBalance.toFixed(2);
+      amtInput.readOnly = true;
+      hint.textContent = 'Full remaining balance of ₹' + currentSettleBalance.toFixed(2) + ' will be settled.';
+    } else {
+      amtInput.readOnly = false;
+      amtInput.focus();
+      hint.textContent = 'Enter the partial amount being collected (Max: ₹' + currentSettleBalance.toFixed(2) + ').';
+    }
+  }
+
+  function settleFromViewModal() {
+    let viewModalEl = document.getElementById('view_sale_modal');
+    let viewModal = bootstrap.Modal.getInstance(viewModalEl);
+    if (viewModal) viewModal.hide();
+    let settleBtn = document.getElementById('viewSaleSettleBtn');
+    setTimeout(() => {
+      openSettleSaleDueModal(settleBtn);
+    }, 350);
+  }
+
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  function submitSettlePayment(e) {
+    e.preventDefault();
+    let form = document.getElementById('settlePaymentForm');
+    let formData = new FormData(form);
+
+    let submitBtn = document.getElementById('btnSubmitSettle');
+    let origText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing...';
+
+    fetch("{% url 'pay_customer_outstanding_api' %}", {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken') || ''
+      }
+    })
+    .then(res => res.json())
+    .then(data => {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = origText;
+      if (data.success) {
+        let modalEl = document.getElementById('settlePaymentModal');
+        let modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'success',
+            title: 'Payment Received!',
+            text: data.message || 'Payment recorded successfully.',
+            timer: 1600,
+            showConfirmButton: false
+          }).then(() => {
+            window.location.reload();
+          });
+        } else {
+          alert(data.message || 'Payment recorded successfully!');
+          window.location.reload();
+        }
+      } else {
+        alert('Error: ' + (data.error || 'Failed to record payment.'));
+      }
+    })
+    .catch(err => {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = origText;
+      console.error(err);
+      alert('An unexpected error occurred while recording payment.');
+    });
   }
 
   // ── Build invoice body content (shared by print + PDF) ──────────────────
@@ -1380,7 +1767,7 @@ document.addEventListener('click', function (e) {
 
     // Render into a hidden iframe for correct CSS + font rendering
     const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;background:#fff;';
+    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;min-height:200px;border:none;background:#fff;';
     document.body.appendChild(iframe);
 
     const iDoc = iframe.contentDocument || iframe.contentWindow.document;
@@ -1390,15 +1777,17 @@ document.addEventListener('click', function (e) {
   <meta charset="UTF-8">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, Helvetica, sans-serif; background: #fff; color: #1e293b; font-size: 13px; padding: 28px 32px; width: 794px; }
+    body { font-family: Arial, Helvetica, sans-serif; background: #fff; color: #1e293b; font-size: 13px; width: 794px; margin: 0; padding: 0; }
+    #invoice-container { width: 794px; padding: 24px 28px; background: #fff; }
   </style>
 </head>
-<body>${buildInvoiceBody(d)}</body></html>`);
+<body><div id="invoice-container">${buildInvoiceBody(d)}</div></body></html>`);
     iDoc.close();
 
     // Wait for iframe to fully render
     setTimeout(() => {
-      html2canvas(iDoc.body, {
+      const container = iDoc.getElementById('invoice-container') || iDoc.body;
+      html2canvas(container, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
@@ -1409,21 +1798,26 @@ document.addEventListener('click', function (e) {
         const imgData = canvas.toDataURL('image/jpeg', 0.98);
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-        const margin = 0;
         const pageW = pdf.internal.pageSize.getWidth();
         const pageH = pdf.internal.pageSize.getHeight();
-        const contentW = pageW - margin * 2;
+        const contentW = pageW;
         const contentH = (canvas.height * contentW) / canvas.width;
 
-        let yOffset = 0;
-        let remaining = contentH;
-        let first = true;
-        while (remaining > 0) {
-          if (!first) pdf.addPage();
-          pdf.addImage(imgData, 'JPEG', margin, margin - yOffset, contentW, contentH);
-          yOffset += (pageH - margin);
-          remaining -= (pageH - margin * 2);
-          first = false;
+        // If content fits comfortably on one page (or within 5mm margin of page height), keep it strictly 1 page
+        if (contentH <= pageH + 5) {
+          pdf.addImage(imgData, 'JPEG', 0, 0, contentW, Math.min(contentH, pageH));
+        } else {
+          // Multi-page only if content genuinely exceeds 1 full A4 page by more than 5mm
+          let yOffset = 0;
+          let remaining = contentH;
+          let first = true;
+          while (remaining > 5) {
+            if (!first) pdf.addPage();
+            pdf.addImage(imgData, 'JPEG', 0, -yOffset, contentW, contentH);
+            yOffset += pageH;
+            remaining -= pageH;
+            first = false;
+          }
         }
 
         pdf.save(filename);

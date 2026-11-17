@@ -34,6 +34,9 @@
 
 <script>
 $(document).ready(function () {
+    if ($.fn.dataTable) {
+        $.fn.dataTable.ext.errMode = 'none';
+    }
 
     $('.datatable').each(function () {
 
@@ -254,7 +257,6 @@ $(document).ready(function () {
                     </div>
                     <div class="d-flex flex-column">
                       <label class="text-dark fw-semibold fs-6">Basmati Rice Seeds (Pusa 1121)</label>
-                      <small class="me-2" style="font-size: 0.7rem;">ID Reference: inv-1</small>
                     </div>
                   </div>
                 </td>
@@ -301,7 +303,6 @@ $(document).ready(function () {
                     </div>
                     <div class="d-flex flex-column">
                       <label class="text-dark fw-semibold fs-6">Neem-Coated Urea (IFFCO)</label>
-                      <small class="me-2" style="font-size: 0.7rem;">ID Reference: inv-2</small>
                     </div>
                   </div>
                 </td>
@@ -349,7 +350,6 @@ $(document).ready(function () {
                     </div>
                     <div class="d-flex flex-column">
                       <label class="text-dark fw-semibold fs-6">Bio-Pesticide Neem Oil Extract</label>
-                      <small class="me-2" style="font-size: 0.7rem;">ID Reference: inv-3</small>
                     </div>
                   </div>
                 </td>
@@ -397,7 +397,6 @@ $(document).ready(function () {
                     </div>
                     <div class="d-flex flex-column">
                       <label class="text-dark fw-semibold fs-6">High-Speed Diesel for Tractors</label>
-                      <small class="me-2" style="font-size: 0.7rem;">ID Reference: inv-4</small>
                     </div>
                   </div>
                 </td>

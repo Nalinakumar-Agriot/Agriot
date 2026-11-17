@@ -25,6 +25,7 @@
 {% endblock vendor_js %}
 
 {% block page_css %}
+{% include "layout/partials/admin_search_styles.html" %}
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
 {% endblock page_css %}
@@ -101,7 +102,7 @@ $(document).ready(function () {
 </div>
 <div class="card mb-2">
     <div class="card-body d-flex gap-2 flex-wrap p-2">
-        <div class="input-group w-75">
+        <div class="input-group admin-list-search w-75">
             <span class="input-group-text bg-white">
                 <i class="ri-search-line"></i>
             </span>
@@ -187,12 +188,16 @@ $(document).ready(function () {
         <div class="modal-body">
           <div class="row g-3">
             <div class="col-12">
-              <label class="form-label">Document Type</label>
+              <label class="form-label">Document Type <span class="text-danger">*</span></label>
               <select name="document_type" class="form-select select3" required>
                 <option value="">Select Document Type</option>
+                {% for dt in doc_types %}
+                <option value="{{ dt.name }}">{{ dt.name }}</option>
+                {% empty %}
                 <option value="My Land">My Land</option>
                 <option value="My Expenses">My Expenses</option>
                 <option value="My Inventory">My Inventory</option>
+                {% endfor %}
               </select>
             </div>
             <div class="col-12">
@@ -238,12 +243,16 @@ $(document).ready(function () {
         <div class="modal-body">
           <div class="row g-3">
             <div class="col-12">
-              <label class="form-label">Document Type</label>
+              <label class="form-label">Document Type <span class="text-danger">*</span></label>
               <select name="document_type" id="edit_document_type" class="form-select select3" required>
                 <option value="">Select Document Type</option>
+                {% for dt in doc_types %}
+                <option value="{{ dt.name }}">{{ dt.name }}</option>
+                {% empty %}
                 <option value="My Land">My Land</option>
                 <option value="My Expenses">My Expenses</option>
                 <option value="My Inventory">My Inventory</option>
+                {% endfor %}
               </select>
             </div>
             <div class="col-12">

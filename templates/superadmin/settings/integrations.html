@@ -1,0 +1,303 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+
+{% block title %}Payment Integrations | Superadmin{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <!-- Header -->
+  <div class="card mb-4 border-0 shadow-sm" style="background: linear-gradient(135deg, #f7faf2 0%, #ffffff 100%); border-left: 5px solid #63771F !important;">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+      <div>
+        <h4 class="mb-1 text-dark fw-bold">
+          <i class="ri-plug-line me-2" style="color: #63771F;"></i>
+          Payment &amp; Gateway Integrations
+        </h4>
+        <p class="text-muted small mb-0">Manage Razorpay payment gateway credentials, webhooks, and auto-renewal processing.</p>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <a href="{% url 'payment_integrations' %}" class="btn btn-primary btn-sm active" style="background-color: #63771F; border-color: #63771F;">
+          <i class="ri-bank-card-line me-1"></i> Payment Gateways
+        </a>
+        <a href="{% url 'superadmin_mail_settings' %}" class="btn btn-outline-secondary btn-sm">
+          <i class="ri-mail-settings-line me-1"></i> Mail &amp; SMTP
+        </a>
+        <button type="submit" form="integrations-form" class="btn btn-primary btn-sm ms-2" style="background-color: #465515; border-color: #465515;">
+          <i class="ri-save-line me-1"></i> Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- Left Column: Razorpay Settings -->
+    <div class="col-lg-8">
+      <form id="integrations-form" method="POST" action="{% url 'payment_integrations' %}">
+        {% csrf_token %}
+
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+              <div class="p-2 rounded" style="background-color: rgba(99, 119, 31, 0.1);">
+                <i class="ri-bank-card-line fs-4" style="color: #63771F;"></i>
+              </div>
+              <div>
+                <h5 class="mb-0 fw-semibold text-dark">Razorpay Payment Gateway</h5>
+                <small class="text-muted">Accept UPI, Cards, NetBanking, and Auto-Debit Subscriptions</small>
+              </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-label-success px-3 py-2 rounded-pill font-monospace">TEST & LIVE MODE</span>
+            </div>
+          </div>
+
+          <div class="card-body pt-4">
+            <!-- Gateway Status Toggles -->
+            <div class="row g-3 mb-4 p-3 rounded" style="background-color: #fbfcf8; border: 1px solid #eef2e6;">
+              <div class="col-md-6">
+                <div class="form-check form-switch d-flex align-items-center gap-2 ps-0">
+                  <input class="form-check-input ms-0 me-2" type="checkbox" role="switch" id="razorpay_enabled" name="razorpay_enabled" {% if setting.razorpay_enabled %}checked{% endif %} style="width: 2.7em; height: 1.4em; cursor: pointer;">
+                  <div>
+                    <label class="form-check-label fw-semibold text-dark mb-0" for="razorpay_enabled" style="cursor: pointer;">
+                      Enable Razorpay Gateway
+                    </label>
+                    <div class="text-muted small">Allow farmers to purchase and upgrade plans via Razorpay</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="form-check form-switch d-flex align-items-center gap-2 ps-0">
+                  <input class="form-check-input ms-0 me-2" type="checkbox" role="switch" id="razorpay_auto_renew" name="razorpay_auto_renew" {% if setting.razorpay_auto_renew %}checked{% endif %} style="width: 2.7em; height: 1.4em; cursor: pointer;">
+                  <div>
+                    <label class="form-check-label fw-semibold text-dark mb-0" for="razorpay_auto_renew" style="cursor: pointer;">
+                      Subscription Auto-Renewal
+                    </label>
+                    <div class="text-muted small">Seamless recurring renewals without farmer lockout (100% automated)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Razorpay Key ID -->
+            <div class="mb-3">
+              <label class="form-label fw-semibold text-dark" for="razorpay_key_id">
+                Razorpay Key ID <span class="text-danger">*</span>
+              </label>
+              <div class="input-group">
+                <span class="input-group-text bg-light text-muted"><i class="ri-key-2-line"></i></span>
+                <input type="text" 
+                       id="razorpay_key_id" 
+                       name="razorpay_key_id" 
+                       class="form-control font-monospace" 
+                       value="{{ setting.razorpay_key_id|default:'rzp_test_Trc3reEy8k4YoJ' }}" 
+                       placeholder="rzp_test_..." 
+                       required>
+              </div>
+              <small class="form-text text-muted">Starts with <code>rzp_test_</code> (for testing) or <code>rzp_live_</code> (for production).</small>
+            </div>
+
+            <!-- Razorpay Key Secret -->
+            <div class="mb-3">
+              <label class="form-label fw-semibold text-dark" for="razorpay_key_secret">
+                Razorpay Key Secret <span class="text-danger">*</span>
+              </label>
+              <div class="input-group">
+                <span class="input-group-text bg-light text-muted"><i class="ri-lock-password-line"></i></span>
+                <input type="password" 
+                       id="razorpay_key_secret" 
+                       name="razorpay_key_secret" 
+                       class="form-control font-monospace" 
+                       value="{{ setting.razorpay_key_secret|default:'0ofru9WKnCbUgDoiCkH5mAlY' }}" 
+                       placeholder="Enter Key Secret" 
+                       required>
+                <button class="btn btn-outline-secondary" type="button" onclick="toggleSecretVisibility()">
+                  <i class="ri-eye-line" id="toggle-secret-icon"></i>
+                </button>
+              </div>
+              <small class="form-text text-muted">Used securely on backend server for order signature verification.</small>
+            </div>
+
+            <!-- Webhook Secret -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold text-dark" for="razorpay_webhook_secret">
+                Webhook Secret (Optional)
+              </label>
+              <div class="input-group">
+                <span class="input-group-text bg-light text-muted"><i class="ri-shield-keyhole-line"></i></span>
+                <input type="text" 
+                       id="razorpay_webhook_secret" 
+                       name="razorpay_webhook_secret" 
+                       class="form-control font-monospace" 
+                       value="{{ setting.razorpay_webhook_secret|default:'' }}" 
+                       placeholder="Optional Razorpay Webhook Secret">
+              </div>
+              <small class="form-text text-muted">Used to authenticate incoming payment webhook event notifications from Razorpay.</small>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 pt-3 border-top">
+              <a href="{% url 'general_settings' %}" class="btn btn-light">Back to General Settings</a>
+              <button type="submit" class="btn btn-primary" style="background-color: #63771F; border-color: #63771F;">
+                <i class="ri-check-line me-1"></i> Save Integration Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column: Auto-Renewal & Info Guides -->
+    <div class="col-lg-4">
+
+      <!-- Auto-Renewal Monitor Card -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3 border-bottom">
+          <h5 class="mb-0 fw-semibold text-dark d-flex align-items-center">
+            <i class="ri-repeat-2-line me-2 text-primary"></i>
+            Auto-Renewal Status
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between mb-3 p-3 rounded" style="background-color: rgba(99, 119, 31, 0.08);">
+            <div>
+              <div class="fw-semibold text-dark">Recurring Engine</div>
+              <small class="text-muted">Automatic subscription extensions</small>
+            </div>
+            {% if setting.razorpay_auto_renew %}
+            <span class="badge bg-success"><i class="ri-checkbox-circle-line me-1"></i> Enabled</span>
+            {% else %}
+            <span class="badge bg-secondary">Disabled</span>
+            {% endif %}
+          </div>
+
+          <p class="small text-muted mb-3">
+            When auto-renewal is enabled, whenever a farmer's plan reaches its expiry, the system extends their access for another cycle seamlessly. Farmers experience uninterrupted service with continuous automated renewals.
+          </p>
+
+          <button type="button" class="btn btn-outline-primary w-100 btn-sm" onclick="runAutoRenewalCheck()">
+            <i class="ri-play-circle-line me-1"></i> Run Auto-Renewal Cycle Now
+          </button>
+          <div id="autorenew-status-msg" class="mt-2 text-center small text-success fw-semibold" style="display: none;"></div>
+        </div>
+      </div>
+
+      <!-- Razorpay Webhook URL Card -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3 border-bottom">
+          <h5 class="mb-0 fw-semibold text-dark d-flex align-items-center">
+            <i class="ri-link-m me-2 text-info"></i>
+            Webhook Endpoint
+          </h5>
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">Configure this Webhook URL inside your Razorpay Dashboard under <strong>Settings &rarr; Webhooks</strong>:</p>
+          <div class="input-group mb-2">
+            <input type="text" id="webhook_url_input" class="form-control form-control-sm font-monospace bg-light" value="{{ webhook_url }}" readonly>
+            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyWebhookUrl()">
+              <i class="ri-file-copy-line" id="copy-icon"></i>
+            </button>
+          </div>
+          <small class="text-muted d-block">Recommended Events: <code>order.paid</code>, <code>payment.captured</code>, <code>subscription.charged</code></small>
+        </div>
+      </div>
+
+      <!-- Quick Credentials Verification -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <h6 class="fw-bold text-dark mb-2"><i class="ri-shield-check-line text-success me-1"></i> Active Razorpay Keys</h6>
+          <div class="small text-muted mb-1">Key ID:</div>
+          <div class="font-monospace small bg-light p-2 rounded mb-2 text-truncate">{{ setting.razorpay_key_id|default:'rzp_test_Trc3reEy8k4YoJ' }}</div>
+          <div class="small text-muted mb-1">Status:</div>
+          <div>
+            {% if setting.razorpay_enabled %}
+            <span class="badge bg-label-success">Active & Ready for Transactions</span>
+            {% else %}
+            <span class="badge bg-label-danger">Disabled</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggleSecretVisibility() {
+    const input = document.getElementById('razorpay_key_secret');
+    const icon = document.getElementById('toggle-secret-icon');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'ri-eye-off-line';
+    } else {
+        input.type = 'password';
+        icon.className = 'ri-eye-line';
+    }
+}
+
+function copyWebhookUrl() {
+    const copyText = document.getElementById("webhook_url_input");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(copyText.value);
+    const icon = document.getElementById('copy-icon');
+    icon.className = 'ri-check-line text-success';
+    setTimeout(() => {
+        icon.className = 'ri-file-copy-line';
+    }, 2000);
+}
+
+function runAutoRenewalCheck() {
+    const msg = document.getElementById('autorenew-status-msg');
+    const btn = document.getElementById('btn-run-autorenew');
+    if (msg) {
+        msg.style.display = 'block';
+        msg.innerText = 'Checking subscriptions...';
+        msg.className = 'mt-2 text-center small text-muted';
+    }
+    
+    fetch('{% url "trigger_auto_renew_check" %}?format=json', {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (msg) {
+            msg.innerText = data.message || 'Auto-renewal check completed.';
+            msg.className = data.success ? 'mt-2 text-center small text-success fw-semibold' : 'mt-2 text-center small text-danger fw-semibold';
+        }
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: data.success ? 'Auto-Renewal Check' : 'Notice',
+                text: data.message,
+                icon: data.success ? 'success' : 'info',
+                confirmButtonColor: '#63771F'
+            });
+        }
+    })
+    .catch(err => {
+        if (msg) {
+            msg.innerText = 'Error triggering auto-renew check.';
+            msg.className = 'mt-2 text-center small text-danger';
+        }
+    });
+}
+</script>
+{% endblock %}

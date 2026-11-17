@@ -1,0 +1,120 @@
+<style>
+  /* Select2's global initializer assigns 100% width to inline report filters. */
+  .report-toolbar > .select2-container,
+  .report-toolbar-actions > .select2-container,
+  .report-toolbar .form-select {
+    width: 180px !important;
+    max-width: 100%;
+    flex: 0 1 180px;
+    min-width: 0;
+  }
+  .report-toolbar .select2-container .select2-selection--single,
+  .report-toolbar .form-select,
+  .report-toolbar .btn {
+    min-height: 38px;
+  }
+  .report-toolbar .select2-container .select2-selection--single {
+    height: 38px !important;
+  }
+  .report-toolbar .select2-container .select2-selection--single .select2-selection__arrow {
+    height: 36px !important;
+  }
+  /* Attendance tabs occupy a separate row above the filters. */
+  .report-toolbar-attendance > .nav,
+  .report-toolbar-attendance > .report-toolbar-actions {
+    flex: 0 0 100%;
+    width: 100%;
+  }
+  .report-toolbar-attendance > .report-toolbar-actions {
+    margin-left: 0 !important;
+    justify-content: flex-start !important;
+  }
+  .report-toolbar .search-collapse-wrapper,
+  .report-toolbar-actions {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .report-toolbar .search-input-group.expanded {
+    width: 280px;
+    max-width: 100%;
+    margin-left: 0;
+  }
+  /* One border and one height for the complete search control. */
+  .report-toolbar .search-input-group {
+    box-sizing: border-box;
+    height: 38px;
+    padding: 0;
+    border: 1px solid #d9dee3;
+    border-radius: 6px;
+    background-color: #fff;
+    box-shadow: none;
+  }
+  .report-toolbar .search-input-group.d-none {
+    display: none !important;
+  }
+  .report-toolbar .search-input-group:focus-within {
+    border-color: #f1732a;
+    box-shadow: 0 0 0 2px rgba(241, 115, 42, 0.12);
+  }
+  .report-toolbar .search-input-group > .input-group-text,
+  .report-toolbar .search-input-group > .form-control,
+  .report-toolbar .search-input-group > .btn {
+    box-sizing: border-box;
+    height: 36px !important;
+    min-height: 0;
+    margin: 0 !important;
+    padding: 0 10px;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background-color: transparent !important;
+    line-height: normal;
+  }
+  .report-toolbar .search-input-group > .input-group-text,
+  .report-toolbar .search-input-group > .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 36px;
+    width: 36px;
+    padding: 0;
+  }
+  .report-toolbar .search-input-group > .btn:hover,
+  .report-toolbar .search-input-group > .btn:focus-visible {
+    color: #f1732a;
+    background-color: #fff3e8 !important;
+  }
+  .report-toolbar #search_toggle_btn {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .report-date-range {
+    height: 38px;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    max-width: 100%;
+  }
+  .report-date-range > small {
+    white-space: nowrap;
+  }
+  .report-date-range input[type="date"] {
+    min-width: 0;
+    flex: 1 1 125px;
+    height: 36px;
+    min-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  @media (max-width: 767.98px) {
+    .report-toolbar-actions {
+      flex: 1 1 100%;
+      justify-content: flex-start !important;
+      margin-left: 0 !important;
+    }
+    .report-date-range {
+      flex: 1 1 100%;
+    }
+  }
+</style>

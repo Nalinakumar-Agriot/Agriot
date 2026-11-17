@@ -64,6 +64,9 @@
 
 <script>
 $(document).ready(function () {
+    if ($.fn.dataTable) {
+        $.fn.dataTable.ext.errMode = 'none';
+    }
 
     $('.datatable').each(function () {
 

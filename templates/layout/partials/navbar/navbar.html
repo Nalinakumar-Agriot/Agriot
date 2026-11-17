@@ -41,6 +41,67 @@
       
         <ul class="navbar-nav flex-row align-items-center ms-md-auto">
 
+          <!-- Workspace Switcher (Farmer vs Manager) -->
+          {% if current_workspace %}
+          <li class="nav-item dropdown me-2 me-md-3">
+            <a class="nav-link dropdown-toggle btn btn-sm {% if current_workspace.type == 'farmer' %}btn-outline-success{% else %}btn-outline-warning{% endif %} d-flex align-items-center gap-2 rounded-pill px-3 py-1 fw-semibold shadow-sm"
+               href="javascript:void(0);" data-bs-toggle="dropdown" aria-expanded="false" style="border-width: 1.5px;">
+              {% if current_workspace.type == 'farmer' %}
+                <i class="ri-plant-fill text-success fs-5"></i>
+                <span class="d-none d-sm-inline">{{ current_workspace.title|truncatechars:18 }}</span>
+                <span class="badge bg-success text-white px-2 py-0.5 rounded-pill" style="font-size: 10px;">Owner</span>
+              {% else %}
+                <i class="ri-user-star-fill text-warning fs-5"></i>
+                <span class="d-none d-sm-inline">{{ current_workspace.title|truncatechars:18 }}</span>
+                <span class="badge bg-warning text-dark px-2 py-0.5 rounded-pill" style="font-size: 10px;">Manager</span>
+              {% endif %}
+              {% if has_multiple_workspaces or can_register_own_farm %}
+                <i class="ri-arrow-down-s-line"></i>
+              {% endif %}
+            </a>
+            {% if has_multiple_workspaces or can_register_own_farm %}
+            <ul class="dropdown-menu dropdown-menu-end shadow-lg rounded-3 py-2 border-0" style="min-width: 270px;">
+              <li class="dropdown-header text-uppercase small fw-bold text-muted px-3 py-1">
+                Active Workspace
+              </li>
+              {% for ws in user_workspaces %}
+              <li>
+                <a class="dropdown-item d-flex align-items-center justify-content-between py-2 px-3 {% if ws.is_active %}active bg-light text-primary fw-bold{% endif %}"
+                   href="{% url 'switch-workspace' ws.type ws.target_id %}">
+                  <div class="d-flex align-items-center gap-2">
+                    {% if ws.type == 'farmer' %}
+                      <div class="rounded-circle p-1 bg-success-subtle text-success d-flex align-items-center justify-content-center" style="width:28px;height:28px;">
+                        <i class="ri-plant-fill fs-6"></i>
+                      </div>
+                    {% else %}
+                      <div class="rounded-circle p-1 bg-warning-subtle text-warning d-flex align-items-center justify-content-center" style="width:28px;height:28px;">
+                        <i class="ri-user-star-fill fs-6"></i>
+                      </div>
+                    {% endif %}
+                    <div>
+                      <div class="small fw-semibold text-dark">{{ ws.title }}</div>
+                      <small class="text-muted" style="font-size: 11px;">{{ ws.role_label }}</small>
+                    </div>
+                  </div>
+                  {% if ws.is_active %}
+                    <i class="ri-check-line text-primary fw-bold fs-5"></i>
+                  {% endif %}
+                </a>
+              </li>
+              {% endfor %}
+              {% if can_register_own_farm %}
+              <li><hr class="dropdown-divider my-1"></li>
+              <li>
+                <a class="dropdown-item small text-success fw-semibold d-flex align-items-center gap-2 py-2 px-3" href="{% url 'farmer-register' %}">
+                  <i class="ri-add-circle-line fs-5"></i> Register My Own Farm
+                </a>
+              </li>
+              {% endif %}
+            </ul>
+            {% endif %}
+          </li>
+          {% endif %}
+
           <!-- Notification -->
           <li class="nav-item dropdown-notifications navbar-dropdown dropdown me-4 me-xl-1">
             <a class="nav-link dropdown-toggle hide-arrow btn btn-icon btn-text-secondary rounded-pill" href="javascript:void(0);" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
@@ -125,10 +186,20 @@
                       </div>
                     </div>
                     <div class="flex-grow-1">
-                      <h6 class="mb-0 small">{{ request.user.username| capfirst }}</h6>
-                      {% for group in request.user.groups.all %}
-                      <small class="text-body-secondary">{{group.name| capfirst }}</small>
-                      {% endfor %}
+                      <h6 class="mb-0 small fw-semibold">{{ request.user.get_full_name|default:request.user.first_name|default:request.user.username|capfirst }}</h6>
+                      {% if request.user.is_superuser %}
+                        <span class="badge bg-label-primary rounded-pill px-2 py-0 mt-1" style="font-size: 11px;">Super Admin</span>
+                      {% elif current_workspace.type == 'manager' or is_acting_as_manager or request.session.active_role == 'manager' %}
+                        <span class="badge bg-label-warning rounded-pill px-2 py-0 mt-1" style="font-size: 11px;"><i class="ri-shield-user-line me-1"></i>Manager</span>
+                      {% elif current_workspace.type == 'farmer' or request.user.profile.role == 'farmer' or 'farmer' in request.path %}
+                        <span class="badge bg-label-success rounded-pill px-2 py-0 mt-1" style="font-size: 11px;"><i class="ri-user-star-line me-1"></i>Farmer</span>
+                      {% else %}
+                        {% for group in request.user.groups.all %}
+                          <span class="badge bg-label-secondary rounded-pill px-2 py-0 mt-1" style="font-size: 11px;">{{ group.name|capfirst }}</span>
+                        {% empty %}
+                          <small class="text-body-secondary">User</small>
+                        {% endfor %}
+                      {% endif %}
                     </div>
                   </div>
                 </a>
@@ -136,7 +207,7 @@
               <li>
                 <div class="dropdown-divider"></div>
               </li>
-              {% if 'farmer' in request.path %}
+              {% if not is_admin_portal_user %}
               <li>
                 <a class="dropdown-item" href="{% url 'farmer-profile' %}#basic_info"> <i class="icon-base ri ri-user-3-line icon-22px me-3"></i><span class="align-middle">Profile</span> </a>
               </li>
@@ -146,16 +217,19 @@
               <li>
                 <a class="dropdown-item" href="{% url 'farmer-profile' %}#subscription"> <i class="icon-base ri ri-vip-crown-line icon-22px me-3"></i><span class="align-middle">Subscription</span> </a>
               </li>
+              <li>
+                <a class="dropdown-item" href="{% url 'farmer-profile' %}#mail_settings"> <i class="icon-base ri ri-mail-settings-line icon-22px me-3"></i><span class="align-middle">Mail Integration</span> </a>
+              </li>
               {% else %}
               <li>
-                <a class="dropdown-item" href="{% url 'pages-profile-user' %}"> <i class="icon-base ri ri-user-3-line icon-22px me-3"></i><span class="align-middle">Profile</span> </a>
+                <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#my_profile_update"> <i class="icon-base ri ri-user-3-line icon-22px me-3"></i><span class="align-middle">Profile</span> </a>
               </li>
               {% endif %}
               <li>
                 <div class="dropdown-divider"></div>
               </li>
               <li>
-                <form action="{% url 'logout' %}" method="post">
+                <form action="{% if is_admin_portal_user %}{% url 'logout' %}{% else %}{% url 'farmer-logout' %}{% endif %}" method="post">
                   {% csrf_token %}
                   <button type="submit" class="dropdown-item">
                     <i class="icon-base ri ri-logout-box-r-line icon-md me-3"></i>

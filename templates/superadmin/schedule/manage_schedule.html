@@ -311,12 +311,39 @@
                   </div>
                 </div>
 
-                <select id="categoryFilter" class="form-select form-select-sm w-auto">
-                    <option value="">All Categories</option>
+                <input type="hidden" id="categoryFilter" value="">
+                <div class="dropdown">
+                  <button class="btn dropdown-toggle d-flex align-items-center gap-2 px-3 rounded-3 fw-semibold filter-dropdown-btn" 
+                          type="button" 
+                          id="categoryFilterBtn" 
+                          data-bs-toggle="dropdown" 
+                          aria-expanded="false">
+                    <i class="ri-folder-line" style="color: #F69C55;"></i>
+                    <span id="categoryFilterLabel">All Categories</span>
+                  </button>
+                  <ul class="dropdown-menu shadow-lg border-0 py-1 rounded-3" aria-labelledby="categoryFilterBtn" style="min-width: 180px; max-height: 280px; overflow-y: auto;">
+                    <li>
+                      <a class="dropdown-item filter-dropdown-opt category-filter-opt d-flex align-items-center justify-content-between active" href="javascript:void(0)" data-val="">
+                        <span class="d-flex align-items-center gap-2">
+                          <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #94a3b8;"></span>
+                          <span class="cat-opt-text">All Categories</span>
+                        </span>
+                        <i class="ri-check-line check-mark"></i>
+                      </a>
+                    </li>
                     {% for cat in categories %}
-                    <option value="{{ cat.name }}">{{ cat.name }}</option>
+                    <li>
+                      <a class="dropdown-item filter-dropdown-opt category-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="{{ cat.name }}">
+                        <span class="d-flex align-items-center gap-2">
+                          <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #F69C55;"></span>
+                          <span class="cat-opt-text">{{ cat.name }}</span>
+                        </span>
+                        <i class="ri-check-line check-mark d-none"></i>
+                      </a>
+                    </li>
                     {% endfor %}
-                </select>
+                  </ul>
+                </div>
             </div>
         </div>
 
@@ -977,6 +1004,19 @@ function filterGuidelines() {
 $(document).ready(function() {
     $('#guideSearchInput').on('keyup', filterGuidelines);
     $('#categoryFilter').on('change', filterGuidelines);
+
+    $(document).on('click', '.category-filter-opt', function (e) {
+        e.preventDefault();
+        let val = $(this).data('val');
+        let label = $(this).find('.cat-opt-text').text().trim();
+        $('#categoryFilter').val(val).trigger('change');
+        $('#categoryFilterLabel').text(label);
+        $('.category-filter-opt').removeClass('active');
+        $('.category-filter-opt .check-mark').addClass('d-none');
+        $(this).addClass('active');
+        $(this).find('.check-mark').removeClass('d-none');
+        filterGuidelines();
+    });
 });
 
 function downloadSampleStagesExcel() {
@@ -1047,23 +1087,33 @@ function submitQuickCategoryModal() {
 
     var formData = new FormData();
     formData.append('name', name);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
     fetch("{% url 'ajax_quick_add_guideline_category' %}", {
         method: 'POST',
         body: formData,
         headers: {
-            'X-CSRFToken': getCookie('csrftoken'),
+            'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}',
             'X-Requested-With': 'XMLHttpRequest'
         }
     })
-    .then(r => r.json())
+    .then(async r => {
+        var contentType = r.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            var responseText = await r.text();
+            throw new Error('Quick Add returned HTTP ' + r.status + ' instead of JSON: ' + responseText.slice(0, 120));
+        }
+        var data = await r.json();
+        if (!r.ok) throw new Error(data.error || ('Quick Add failed with HTTP ' + r.status));
+        return data;
+    })
     .then(data => {
         if (submitBtn) submitBtn.disabled = false;
         if (data.success) {
             if (input) input.value = '';
             
             // Add option to all category selects & categoryFilter
-            var allSelects = document.querySelectorAll('.guideline-category-select');
+            var allSelects = document.querySelectorAll('select.guideline-category-select');
             allSelects.forEach(function(sel) {
                 var exists = false;
                 for (var i = 0; i < sel.options.length; i++) {
@@ -1082,7 +1132,7 @@ function submitQuickCategoryModal() {
             
             // Also add to categoryFilter in top bar if present
             var catFilter = document.getElementById('categoryFilter');
-            if (catFilter) {
+            if (catFilter && catFilter.tagName === 'SELECT') {
                 var filterExists = false;
                 for (var j = 0; j < catFilter.options.length; j++) {
                     if (catFilter.options[j].value == data.id || catFilter.options[j].text.toLowerCase() === data.name.toLowerCase()) {
@@ -1095,6 +1145,17 @@ function submitQuickCategoryModal() {
                     filterOpt.value = data.id;
                     filterOpt.text = data.name;
                     catFilter.appendChild(filterOpt);
+                }
+            } else if (catFilter) {
+                var filterMenu = document.querySelector('[aria-labelledby="categoryFilterBtn"]');
+                var existingFilter = filterMenu ? Array.from(filterMenu.querySelectorAll('.category-filter-opt')).find(function(item) {
+                    return (item.getAttribute('data-val') || '').toLowerCase() === data.name.toLowerCase();
+                }) : null;
+                if (filterMenu && !existingFilter) {
+                    var filterItem = document.createElement('li');
+                    filterItem.innerHTML = '<a class="dropdown-item filter-dropdown-opt category-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="' + data.name.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '">' +
+                        '<span class="d-flex align-items-center gap-2"><span class="rounded-circle" style="width:8px;height:8px;background-color:#F69C55;"></span><span class="cat-opt-text">' + data.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span></span><i class="ri-check-line check-mark"></i></a>';
+                    filterMenu.appendChild(filterItem);
                 }
             }
 
@@ -1151,22 +1212,22 @@ function submitQuickCategoryModal() {
     .catch(err => {
         if (submitBtn) submitBtn.disabled = false;
         console.error(err);
-        alert('An error occurred. Please try again.');
+        alert(err.message || 'An error occurred. Please try again.');
     });
 }
 
 function deleteQuickCategory(id, name) {
-    if (!confirm(`Are you sure you want to delete category "${name}"?`)) return;
-    
+    var proceed = function() {
     var formData = new FormData();
     formData.append('item_id', id);
     formData.append('name', name);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
     fetch("{% url 'ajax_quick_delete_guideline_category' %}", {
         method: 'POST',
         body: formData,
         headers: {
-            'X-CSRFToken': getCookie('csrftoken'),
+            'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}',
             'X-Requested-With': 'XMLHttpRequest'
         }
     })
@@ -1178,8 +1239,12 @@ function deleteQuickCategory(id, name) {
             
             // Remove from selects
             document.querySelectorAll('.guideline-category-select option[value="' + id + '"]').forEach(opt => opt.remove());
-            var filterOpt = document.querySelector('#categoryFilter option[value="' + id + '"]');
-            if (filterOpt) filterOpt.remove();
+            document.querySelectorAll('.category-filter-opt').forEach(function(filterOpt) {
+                if ((filterOpt.getAttribute('data-val') || '').toLowerCase() === name.toLowerCase()) {
+                    var filterRow = filterOpt.closest('li');
+                    if (filterRow) filterRow.remove();
+                }
+            });
             
             var list = document.getElementById('quick_category_list');
             if (list) {
@@ -1190,14 +1255,43 @@ function deleteQuickCategory(id, name) {
                     list.innerHTML = '<div class="text-center text-muted py-2 small" id="quick_category_empty">No categories found.</div>';
                 }
             }
+            if (window.Swal) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Deleted',
+                    text: '"' + name + '" was removed successfully.',
+                    timer: 1800,
+                    showConfirmButton: false
+                });
+            }
         } else {
-            alert(data.error || 'Failed to delete category.');
+            if (window.Swal) Swal.fire({ icon: 'error', title: 'Delete failed', text: data.error || 'Failed to delete category.' });
+            else alert(data.error || 'Failed to delete category.');
         }
     })
     .catch(err => {
         console.error(err);
-        alert('An error occurred while deleting.');
+        if (window.Swal) Swal.fire({ icon: 'error', title: 'Delete failed', text: 'An error occurred while deleting.' });
+        else alert('An error occurred while deleting.');
     });
+    };
+
+    if (window.Swal) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Delete farming section?',
+            text: 'Are you sure you want to delete "' + name + '"?',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, delete',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            reverseButtons: true,
+            focusCancel: true
+        }).then(function(result) {
+            if (result.isConfirmed) proceed();
+        });
+    }
 }
 </script>
 {% endblock %}

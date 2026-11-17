@@ -1,0 +1,94 @@
+<style>
+  /* Collapsible search controls shared by the admin and farmer portals. */
+  html body .search-collapse-wrapper {
+    min-width: 0;
+    max-width: 100%;
+  }
+  html body .search-collapse-wrapper > .search-input-group {
+    box-sizing: border-box;
+    height: 38px !important;
+    min-width: 0;
+    padding: 0;
+    border: 1px solid #d9dee3;
+    border-radius: 6px;
+    background: #fff;
+  }
+  html body .search-collapse-wrapper > .search-input-group.d-none {
+    display: none !important;
+  }
+  html body .search-collapse-wrapper > .search-input-group.expanded {
+    max-width: min(420px, calc(100vw - 7rem));
+    margin-left: 0;
+  }
+  html body .search-collapse-wrapper:has(> .search-input-group.expanded) > button:first-child {
+    display: none !important;
+  }
+  html body .search-collapse-wrapper > .search-input-group:focus-within {
+    border-color: #f1732a;
+    box-shadow: 0 0 0 2px rgba(241, 115, 42, 0.12);
+  }
+  html body .search-collapse-wrapper > .search-input-group > .input-group {
+    height: 36px;
+  }
+  html body .search-collapse-wrapper .search-input-group :is(.input-group-text, .form-control, .btn) {
+    box-sizing: border-box;
+    height: 36px !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    line-height: normal;
+  }
+  html body .search-collapse-wrapper .search-input-group :is(.input-group-text, .btn) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 36px;
+    width: 36px;
+    padding: 0;
+  }
+  html body .search-collapse-wrapper .search-input-group .form-control {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 10px;
+  }
+  html body .search-collapse-wrapper .search-input-group .btn:hover,
+  html body .search-collapse-wrapper .search-input-group .btn:focus-visible {
+    color: #f1732a;
+    background: #fff3e8 !important;
+  }
+  /* Standalone search input groups with a leading icon. */
+  html body .input-group:not(.search-input-group):not(.admin-list-search):has(> input[placeholder*="search" i]):has(> .input-group-text) {
+    box-sizing: border-box;
+    height: 38px;
+    max-width: 100%;
+    min-width: 0;
+    align-items: stretch;
+    border: 1px solid #d9dee3;
+    border-radius: 6px;
+    background: #fff;
+  }
+  html body .input-group:not(.search-input-group):not(.admin-list-search):has(> input[placeholder*="search" i]):has(> .input-group-text):focus-within {
+    border-color: #f1732a;
+    box-shadow: 0 0 0 2px rgba(241, 115, 42, 0.12);
+  }
+  html body .input-group:not(.search-input-group):not(.admin-list-search):has(> input[placeholder*="search" i]):has(> .input-group-text) > :is(.input-group-text, .form-control, .btn) {
+    box-sizing: border-box;
+    height: 36px !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  html body .input-group:not(.search-input-group):not(.admin-list-search):has(> input[placeholder*="search" i]) > .input-group-text {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 38px;
+    padding: 0;
+  }
+</style>

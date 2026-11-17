@@ -26,15 +26,496 @@
   <link rel="stylesheet" href="{% static 'vendor/css/core.css' %}" />
   <link rel="stylesheet" href="{% static 'vendor/css/core.css' %}">
   <link rel="stylesheet" href="{% static 'css/demo.css' %}" />
+  <link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+  <link rel="stylesheet" href="{% static 'vendor/libs/sweetalert2/sweetalert2.css' %}" />
 
   <style>
     html, body {
       overflow-x: hidden;
     }
+    /* Universal Nested & Quick Add Modals Stacking Fix */
+    .modal.stacked-modal,
+    .modal[id^="quick_add_"],
+    .modal[id*="quick_add"],
+    .modal[id^="farmer_quick_"] {
+      z-index: 10950 !important;
+      background-color: rgba(15, 23, 42, 0.55) !important;
+      backdrop-filter: blur(2px);
+    }
+    .modal.stacked-modal .modal-dialog,
+    .modal[id^="quick_add_"] .modal-dialog,
+    .modal[id*="quick_add"] .modal-dialog,
+    .modal[id^="farmer_quick_"] .modal-dialog {
+      z-index: 10955 !important;
+    }
+
+    /* Keep themed alerts above nested Quick Add modals and their backdrops. */
+    .swal2-container {
+      z-index: 12000 !important;
+    }
+    .swal2-popup {
+      position: relative;
+      z-index: 12001 !important;
+    }
+
+    /* Universal Button Loader Styling */
+    .btn-loading-state {
+      cursor: not-allowed !important;
+      opacity: 0.88 !important;
+      pointer-events: none !important;
+    }
+    .btn-loading-state .spinner-border-sm {
+      width: 0.85rem;
+      height: 0.85rem;
+      border-width: 0.15em;
+    }
+
+    /* Shared Farmer search/filter toolbar alignment */
+    .farmer-filter-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      flex-wrap: wrap;
+    }
+    .farmer-filter-toolbar .farmer-filter-search {
+      flex: 1 1 280px;
+      min-width: 240px;
+    }
+    .farmer-filter-toolbar .farmer-filter-controls {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      flex: 0 1 auto;
+      margin-left: auto;
+    }
+    .farmer-filter-toolbar .farmer-filter-controls > .form-select,
+    .farmer-filter-toolbar .farmer-filter-controls > .select2-container,
+    .farmer-filter-toolbar .farmer-filter-controls > .dropdown {
+      min-width: 160px;
+    }
+    .farmer-filter-toolbar .form-control,
+    .farmer-filter-toolbar .form-select,
+    .farmer-filter-toolbar .input-group-text,
+    .farmer-filter-toolbar .btn,
+    .farmer-filter-toolbar .select2-selection--single {
+      min-height: 38px;
+    }
+    @media (max-width: 767.98px) {
+      .farmer-filter-toolbar .farmer-filter-search,
+      .farmer-filter-toolbar .farmer-filter-controls {
+        width: 100%;
+        min-width: 0;
+        margin-left: 0;
+      }
+      .farmer-filter-toolbar .farmer-filter-controls {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+      .farmer-filter-toolbar .farmer-filter-controls > .form-select,
+      .farmer-filter-toolbar .farmer-filter-controls > .select2-container,
+      .farmer-filter-toolbar .farmer-filter-controls > .dropdown {
+        width: 100% !important;
+      }
+    }
+
+    /* Standard Select2 width & modal stacking (excluding input-groups & inline-styled selects) */
+    .form-group > .select2-container:not(.input-group .select2-container),
+    .col > .select2-container:not(.input-group .select2-container),
+    [class*="col-"] > .select2-container:not(.input-group .select2-container) {
+      width: 100% !important;
+    }
+
+    /* Base Select2 Container & Single Selection */
+    .select2-container .select2-selection--single {
+      height: 38px !important;
+      border: 1px solid #d9dee3 !important;
+      border-radius: 6px !important;
+      display: flex !important;
+      align-items: center !important;
+      padding: 0 10px !important;
+      background-color: #ffffff !important;
+      transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    }
+    .select2-container:hover .select2-selection--single {
+      border-color: #fed7aa !important;
+    }
+    .select2-container--default.select2-container--open .select2-selection--single,
+    .select2-container--default.select2-container--focus .select2-selection--single {
+      border-color: #f1732a !important;
+      box-shadow: 0 0 0 0.18rem rgba(241, 115, 42, 0.18) !important;
+    }
+    .select2-container .select2-selection--single .select2-selection__rendered {
+      padding-left: 2px !important;
+      padding-right: 28px !important;
+      color: #566a7f !important;
+      font-size: 13.5px !important;
+      line-height: normal !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+    }
+    .select2-container .select2-selection--single .select2-selection__placeholder {
+      color: #a1acb8 !important;
+    }
+    .select2-container .select2-selection--single .select2-selection__arrow {
+      height: 36px !important;
+      top: 1px !important;
+      right: 10px !important;
+      width: 20px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+    .select2-container .select2-selection--single .select2-selection__arrow b {
+      border-color: #8592a3 transparent transparent transparent !important;
+      border-width: 5px 4px 0 4px !important;
+      margin-left: -4px !important;
+      margin-top: -2px !important;
+      transition: transform 0.2s ease, border-color 0.2s ease !important;
+    }
+    .select2-container--default.select2-container--open .select2-selection--single .select2-selection__arrow b {
+      border-color: transparent transparent #f1732a transparent !important;
+      border-width: 0 4px 5px 4px !important;
+    }
+
+    /* Specific wider inline dropdowns */
+    #crop-card-stage-select + .select2-container,
+    .crop-card-stage-select-wrap .select2-container {
+      width: 175px !important;
+      min-width: 175px !important;
+    }
+
+    /* Universal Select2 & Native Select Disabled State (App-wide) */
+    select:disabled,
+    .form-select:disabled {
+      background-color: #f1f5f9 !important;
+      border-color: #e2e8f0 !important;
+      color: #64748b !important;
+      cursor: not-allowed !important;
+      opacity: 0.85 !important;
+    }
+    select:disabled + .select2-container,
+    select[disabled] + .select2-container,
+    .select2-container.select2-container--disabled,
+    .select2-container--default.select2-container--disabled {
+      cursor: not-allowed !important;
+    }
+    select:disabled + .select2-container .select2-selection--single,
+    select[disabled] + .select2-container .select2-selection--single,
+    .select2-container.select2-container--disabled .select2-selection--single,
+    .select2-container--default.select2-container--disabled .select2-selection--single {
+      background-color: #f1f5f9 !important;
+      border-color: #e2e8f0 !important;
+      cursor: not-allowed !important;
+      opacity: 0.85 !important;
+      box-shadow: none !important;
+    }
+    select:disabled + .select2-container .select2-selection--single .select2-selection__rendered,
+    select[disabled] + .select2-container .select2-selection--single .select2-selection__rendered,
+    .select2-container.select2-container--disabled .select2-selection--single .select2-selection__rendered,
+    .select2-container--default.select2-container--disabled .select2-selection--single .select2-selection__rendered {
+      color: #64748b !important;
+      cursor: not-allowed !important;
+      font-weight: 500 !important;
+    }
+    select:disabled + .select2-container .select2-selection--single .select2-selection__arrow,
+    select[disabled] + .select2-container .select2-selection--single .select2-selection__arrow,
+    .select2-container.select2-container--disabled .select2-selection--single .select2-selection__arrow,
+    .select2-container--default.select2-container--disabled .select2-selection--single .select2-selection__arrow {
+      opacity: 0.35 !important;
+      cursor: not-allowed !important;
+    }
+
+    /* Small / Compact Select2 (for .form-select-sm, badge selects, compact tables) */
+    .form-select-sm + .select2-container .select2-selection--single,
+    .select2-sm + .select2-container .select2-selection--single {
+      height: 31px !important;
+      padding: 0 8px !important;
+      border-radius: 6px !important;
+    }
+    .form-select-sm + .select2-container .select2-selection--single .select2-selection__rendered,
+    .select2-sm + .select2-container .select2-selection--single .select2-selection__rendered {
+      line-height: 29px !important;
+      font-size: 12.5px !important;
+      padding-right: 24px !important;
+    }
+    .form-select-sm + .select2-container .select2-selection--single .select2-selection__arrow,
+    .select2-sm + .select2-container .select2-selection--single .select2-selection__arrow {
+      height: 29px !important;
+      right: 6px !important;
+      width: 18px !important;
+    }
+
+    /* Bootstrap Input-Group Seamless Alignment with Select2 */
+    .input-group {
+      flex-wrap: nowrap !important;
+      display: flex !important;
+      align-items: stretch !important;
+    }
+    .input-group > .form-control {
+      flex: 1 1 auto !important;
+      width: 1% !important;
+      min-width: 0 !important;
+      height: 38px !important;
+    }
+    /* Keep icons, separators and action buttons level with grouped inputs. */
+    .input-group:not(.search-input-group):not(.admin-list-search) > .input-group-text,
+    .input-group:not(.search-input-group):not(.admin-list-search) > .btn {
+      box-sizing: border-box;
+      height: 38px;
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .input-group > .select2-container {
+      position: relative !important;
+      width: auto !important;
+      margin-bottom: 0 !important;
+    }
+    .input-group > select[style*="max-width"] + .select2-container,
+    .input-group > select[name*="unit"] + .select2-container,
+    .input-group > select[name$="_unit"] + .select2-container,
+    .input-group > select.rounded-end + .select2-container,
+    .input-group > .select2-container:last-child {
+      flex: 0 0 120px !important;
+      width: 120px !important;
+      max-width: 140px !important;
+      min-width: 90px !important;
+    }
+    .input-group > .form-control:not(:last-child) {
+      border-top-right-radius: 0 !important;
+      border-bottom-right-radius: 0 !important;
+    }
+    .input-group > .select2-container:last-child .select2-selection--single {
+      border-top-left-radius: 0 !important;
+      border-bottom-left-radius: 0 !important;
+      border-left: 0 !important;
+      height: 38px !important;
+    }
+    .input-group > .select2-container:first-child .select2-selection--single {
+      border-top-right-radius: 0 !important;
+      border-bottom-right-radius: 0 !important;
+      border-right: 0 !important;
+      height: 38px !important;
+    }
+    .input-group > .select2-container:not(:first-child):not(:last-child) .select2-selection--single {
+      border-radius: 0 !important;
+      border-left: 0 !important;
+      height: 38px !important;
+    }
+    .input-group > .select2-container--default.select2-container--open .select2-selection--single,
+    .input-group > .select2-container--default.select2-container--focus .select2-selection--single {
+      z-index: 5 !important;
+      border-left: 1px solid #f1732a !important;
+      margin-left: -1px !important;
+    }
+
+    /* Multiple Select2 Styling */
+    .select2-container--default .select2-selection--multiple {
+      min-height: 38px !important;
+      border: 1px solid #d9dee3 !important;
+      border-radius: 6px !important;
+      padding: 3px 8px !important;
+      background-color: #ffffff !important;
+      transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    }
+    .select2-container--default.select2-container--focus .select2-selection--multiple,
+    .select2-container--default.select2-container--open .select2-selection--multiple {
+      border-color: #f1732a !important;
+      box-shadow: 0 0 0 0.18rem rgba(241, 115, 42, 0.18) !important;
+    }
+    .select2-container--default .select2-selection--multiple .select2-selection__choice {
+      background-color: #fff3e8 !important;
+      border: 1px solid #fed7aa !important;
+      color: #ea580c !important;
+      border-radius: 4px !important;
+      padding: 2px 8px !important;
+      font-size: 12px !important;
+      font-weight: 500 !important;
+      margin-top: 3px !important;
+      margin-bottom: 3px !important;
+    }
+    .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+      color: #ea580c !important;
+      margin-right: 4px !important;
+      font-weight: bold !important;
+    }
+    .select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+      color: #c2410c !important;
+    }
+
+    /* Select2 Dropdown Popup - Never squeeze, no cut-off, no horizontal scrollbars */
+    .select2-dropdown {
+      min-width: 175px !important;
+      max-width: calc(100vw - 20px) !important;
+      border: 1.5px solid #f1732a !important;
+      border-radius: 8px !important;
+      box-shadow: 0 10px 25px rgba(241, 115, 42, 0.12), 0 4px 14px rgba(0, 0, 0, 0.08) !important;
+      z-index: 10999 !important;
+      background: #ffffff !important;
+      overflow: hidden !important;
+    }
+
+    /* Mobile & Small Screen Fluid Adaptation */
+    @media (max-width: 767.98px) {
+      .select2-dropdown {
+        min-width: 150px !important;
+        max-width: calc(100vw - 16px) !important;
+      }
+      .input-group {
+        flex-wrap: wrap !important;
+      }
+      .input-group > .form-control {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+        border-radius: 6px !important;
+        margin-bottom: 6px !important;
+      }
+      .input-group > .select2-container {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+        max-width: 100% !important;
+      }
+      .input-group > .select2-container .select2-selection--single {
+        border-radius: 6px !important;
+        border-left: 1px solid #d9dee3 !important;
+      }
+    }
+    .select2-container--open {
+      z-index: 10999 !important;
+    }
+    .select2-results {
+      overflow-x: hidden !important;
+    }
+    .select2-results__options {
+      overflow-x: hidden !important;
+      max-height: 250px !important;
+    }
+    .select2-search--dropdown {
+      padding: 8px !important;
+      background-color: #ffffff !important;
+    }
+    .select2-search--dropdown .select2-search__field {
+      border: 1px solid #fed7aa !important;
+      border-radius: 6px !important;
+      padding: 6px 10px !important;
+      font-size: 13px !important;
+      outline: none !important;
+      width: 100% !important;
+      transition: all 0.2s ease !important;
+    }
+    .select2-search--dropdown .select2-search__field:focus {
+      border-color: #f1732a !important;
+      box-shadow: 0 0 0 0.15rem rgba(241, 115, 42, 0.22) !important;
+    }
+    .select2-results__option {
+      white-space: nowrap !important;
+      text-overflow: ellipsis !important;
+      overflow: hidden !important;
+      padding: 8px 12px !important;
+      font-size: 13px !important;
+      border-radius: 6px !important;
+      margin: 2px 6px !important;
+      cursor: pointer !important;
+      transition: all 0.12s ease !important;
+    }
+    .select2-container--default .select2-results__option--highlighted[aria-selected],
+    .select2-container--default .select2-results__option--highlighted {
+      background-color: #f1732a !important;
+      color: #ffffff !important;
+    }
+    .select2-container--default .select2-results__option[aria-selected="true"] {
+      background-color: #fff3e8 !important;
+      color: #f1732a !important;
+      font-weight: 600 !important;
+    }
+    /* Toolbar filter variant for compact selects */
+    .select2-filter + .select2-container {
+      width: 100% !important;
+    }
+    .select2-filter + .select2-container .select2-selection--single {
+      height: 38px !important;
+      display: flex !important;
+      align-items: center !important;
+      font-size: 0.875rem !important;
+      border-radius: 0.375rem !important;
+      border-color: #d9dee3 !important;
+    }
+    .select2-filter + .select2-container .select2-selection--single .select2-selection__rendered {
+      line-height: 36px !important;
+      padding-left: 12px !important;
+      color: #697a8d !important;
+    }
+    .select2-filter + .select2-container .select2-selection--single .select2-selection__arrow {
+      height: 36px !important;
+      top: 1px !important;
+      right: 8px !important;
+    }
+
+    /* Global AgriOT Custom Filter Dropdown Styling */
+    .status-filter-btn,
+    .filter-dropdown-btn {
+      background-color: #ffffff !important;
+      border: 1px solid #fed7aa !important;
+      color: #334155 !important;
+      font-size: 0.875rem !important;
+      height: 38px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      border-radius: 8px !important;
+      transition: all 0.2s ease-in-out !important;
+    }
+    .status-filter-btn:hover,
+    .status-filter-btn:focus,
+    .status-filter-btn[aria-expanded="true"],
+    .filter-dropdown-btn:hover,
+    .filter-dropdown-btn:focus,
+    .filter-dropdown-btn[aria-expanded="true"] {
+      border-color: #F69C55 !important;
+      background-color: #fff7ed !important;
+      color: #ea580c !important;
+      box-shadow: 0 0 0 3px rgba(246, 156, 85, 0.15) !important;
+    }
+    .status-filter-opt,
+    .filter-dropdown-opt {
+      font-size: 0.85rem !important;
+      padding: 0.45rem 0.85rem !important;
+      border-radius: 6px !important;
+      color: #475569 !important;
+      transition: all 0.15s ease !important;
+    }
+    .status-filter-opt:hover,
+    .status-filter-opt:focus,
+    .filter-dropdown-opt:hover,
+    .filter-dropdown-opt:focus {
+      background-color: #fff7ed !important;
+      color: #ea580c !important;
+    }
+    .status-filter-opt.active,
+    .filter-dropdown-opt.active {
+      background-color: #ffedd5 !important;
+      color: #c2410c !important;
+      font-weight: 600 !important;
+    }
+    .status-filter-opt.active .check-mark,
+    .filter-dropdown-opt.active .check-mark {
+      color: #ea580c !important;
+    }
+
+    /* Form Select Focus Theme */
+    select.form-select:hover,
+    select.form-select:focus {
+      border-color: #F69C55 !important;
+      box-shadow: 0 0 0 0.18rem rgba(246, 156, 85, 0.18) !important;
+    }
   </style>
 
   {% block vendor_css %}{% endblock %}
   {% block page_css %}{% endblock %}
+  {% include "layout/partials/datatable_alignment_styles.html" %}
+  {% include "layout/partials/search_alignment_styles.html" %}
 </head>
 
 <body>
@@ -103,23 +584,32 @@
                           </div>
                         </div>
                         <div class="flex-grow-1">
-                          <h6 class="mb-0">{{ request.user.first_name|default:request.user.username|title }}</h6>
-                          <small class="text-muted">{% if request.user.is_superuser %}Super Admin{% else %}User{% endif %}</small>
+                          <h6 class="mb-0 fw-semibold">{{ request.user.get_full_name|default:request.user.first_name|default:request.user.username|title }}</h6>
+                          {% if request.user.is_superuser %}
+                            <span class="badge bg-label-primary rounded-pill px-2 py-0 mt-1" style="font-size: 11px;">Super Admin</span>
+                          {% elif is_admin_portal_user %}
+                            <span class="badge bg-label-primary rounded-pill px-2 py-0 mt-1">{{ request.user.profile.role|title }}</span>
+                          {% elif current_workspace.type == 'manager' or is_acting_as_manager or request.session.active_role == 'manager' %}
+                            <span class="badge bg-label-warning rounded-pill px-2 py-0 mt-1" style="font-size: 11px;"><i class="ri-shield-user-line me-1"></i>Manager</span>
+                          {% elif current_workspace.type == 'farmer' or request.user.profile.role == 'farmer' or 'farmer' in request.path %}
+                            <span class="badge bg-label-success rounded-pill px-2 py-0 mt-1" style="font-size: 11px;"><i class="ri-user-star-line me-1"></i>Farmer</span>
+                          {% else %}
+                            <span class="badge bg-label-secondary rounded-pill px-2 py-0 mt-1" style="font-size: 11px;">User</span>
+                          {% endif %}
                         </div>
                       </div>
                     </a>
                   </li>
                   <li><div class="dropdown-divider my-1"></div></li>
-                  {% if 'farmer' in request.path %}
+                  {% if not is_admin_portal_user %}
                   <li><a class="dropdown-item" href="{% url 'farmer-profile' %}#basic_info"><i class="ri-user-3-line ri-22px me-3"></i>Profile</a></li>
                   <li><a class="dropdown-item" href="{% url 'farmer-profile' %}#documents"><i class="ri-folder-shield-2-line ri-22px me-3"></i>Documentation</a></li>
                   <li><a class="dropdown-item" href="{% url 'farmer-profile' %}#subscription"><i class="ri-vip-crown-line ri-22px me-3"></i>Subscription</a></li>
                   {% else %}
                   <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#my_profile_update"><i class="ri-user-3-line ri-22px me-3"></i>Profile</a></li>
-                  <li><a class="dropdown-item" href="{% url 'manage_subscription' %}"><i class="ri-vip-crown-line ri-22px me-3"></i>Subscription</a></li>
                   {% endif %}
                   <li><div class="dropdown-divider my-1"></div></li>
-                  <li><a class="dropdown-item" href="{% if 'farmer' in request.path %}{% url 'farmer-logout' %}{% else %}{% url 'logout' %}{% endif %}"><i class="ri-logout-box-r-line ri-22px me-3"></i>Sign Out</a></li>
+                  <li><a class="dropdown-item" href="{% if not is_admin_portal_user %}{% url 'farmer-logout' %}{% else %}{% url 'logout' %}{% endif %}"><i class="ri-logout-box-r-line ri-22px me-3"></i>Sign Out</a></li>
                 </ul>
               </li>
             </ul>
@@ -130,6 +620,67 @@
         <!-- Content wrapper -->
         <div class="content-wrapper">
           <div class="container-fluid flex-grow-1 container-p-y" style="max-width: 100% !important">
+            {% if farmer_subscription_info %}
+              {% if farmer_subscription_info.has_no_plan %}
+              <div class="alert alert-info border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 rounded-4 p-3" role="alert" style="background-color: #e8f4fd; border-left: 4px solid #1877f2 !important;">
+                <div class="d-flex align-items-center gap-3">
+                  <div class="avatar avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                    <i class="ri-vip-crown-line ri-20px"></i>
+                  </div>
+                  <div>
+                    <h6 class="alert-heading mb-0 fw-bold text-primary">No Active Subscription Plan</h6>
+                    <small class="text-muted">
+                      You haven't activated a subscription plan yet. Choose a plan to unlock farm management, crop tracking, expenses, and all features.
+                    </small>
+                  </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <a href="{% url 'farmer-profile' %}#subscription" class="btn btn-sm btn-primary fw-semibold text-nowrap shadow-xs">
+                    <i class="ri-shopping-cart-2-line me-1"></i> Buy New Plan
+                  </a>
+                </div>
+              </div>
+              {% elif farmer_subscription_info.is_expired %}
+              <div class="alert alert-danger border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 rounded-4 p-3" role="alert">
+                <div class="d-flex align-items-center gap-3">
+                  <div class="avatar avatar-sm bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                    <i class="ri-lock-2-line ri-20px"></i>
+                  </div>
+                  <div>
+                    <h6 class="alert-heading mb-0 fw-bold text-danger">Subscription Plan Expired — View-Only Mode Active</h6>
+                    <small class="text-muted">
+                      Your plan ({{ farmer_subscription_info.package_name }}) ended on <strong>{{ farmer_subscription_info.end_date|date:"d M Y" }}</strong>. You can view all existing records, but adding, editing, or deleting data is locked.
+                    </small>
+                  </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <a href="{% url 'farmer-profile' %}#subscription" class="btn btn-sm btn-danger fw-semibold text-nowrap shadow-xs">
+                    <i class="ri-shopping-bag-3-line me-1"></i> Renew / Upgrade Plan
+                  </a>
+                </div>
+              </div>
+              {% elif farmer_subscription_info.is_expiring_soon %}
+              <div class="alert alert-warning border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 rounded-4 p-3" role="alert">
+                <div class="d-flex align-items-center gap-3">
+                  <div class="avatar avatar-sm bg-warning text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                    <i class="ri-alarm-warning-line ri-20px"></i>
+                  </div>
+                  <div>
+                    <h6 class="alert-heading mb-0 fw-bold text-dark">Plan Renewal Reminder</h6>
+                    <small class="text-dark">
+                      Your subscription (<strong>{{ farmer_subscription_info.package_name }}</strong>) will expire in <strong>{{ farmer_subscription_info.days_left }} day(s)</strong> on <strong>{{ farmer_subscription_info.end_date|date:"d M Y" }}</strong>. Please renew your plan to ensure uninterrupted operations.
+                    </small>
+                  </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <a href="{% url 'farmer-profile' %}#subscription" class="btn btn-sm btn-warning text-dark fw-bold text-nowrap shadow-xs">
+                    <i class="ri-refresh-line me-1"></i> Renew Now
+                  </a>
+                </div>
+              </div>
+              {% endif %}
+            {% endif %}
+
             {% block content %}{% endblock %}
           </div>
 
@@ -163,7 +714,7 @@
   <div class="modal fade" id="my_profile_update" data-bs-keyboard="false" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-focus="false">
     <div class="modal-dialog modal-dialog-centered modal-md">
       <div class="modal-content">
-        <form method="POST" action="{% url 'update_profile' %}" enctype="multipart/form-data">
+        <form method="POST" action="{% if is_admin_portal_user %}{% url 'update_my_profile' %}{% else %}{% url 'update_profile' %}{% endif %}" enctype="multipart/form-data">
           {% csrf_token %}
           <div class="modal-header">
             <h5 class="modal-title fw-semibold">Update Profile</h5>
@@ -211,7 +762,7 @@
           </div>
           <div class="col-12">
             <label class="form-label">Email Id</label>
-            <input type="email" name="email" class="form-control" placeholder="Enter Email Id" value="{{ request.user.profile.email|default:'' }}">
+            <input type="email" name="email" class="form-control" placeholder="Enter Email Id" value="{{ request.user.email|default:'' }}">
           </div>
         </div>
       </div>
@@ -261,7 +812,7 @@ function previewImage(input) {
               <div>
                 <div class="fw-semibold">{{ notification.title }}</div>
                 <div class="text-muted small">
-                  {{ notification.message|safe }}
+                  {{ notification.message }}
                 </div>
               </div>
               <small class="text-muted text-nowrap ms-2">{{ notification.created_at|timesince }}</small>
@@ -367,16 +918,23 @@ function previewImage(input) {
 
   <script>
   (function () {
+      if (window.jQuery && jQuery.fn && jQuery.fn.dataTable) {
+          jQuery.fn.dataTable.ext.errMode = 'none';
+      }
 
       if (!window.jQuery) {
-          console.error("jQuery not loaded ❌");
           return;
       }
 
       $(function () {
+          if ($.fn.dataTable) {
+              $.fn.dataTable.ext.errMode = 'none';
+          }
           $('.datatable').each(function () {
               let $table = $(this);
-
+              if ($.fn.dataTable.isDataTable(this)) {
+                  return;
+              }
               $table.DataTable({
                   pageLength: $table.data('page-length') || 5,
                   lengthMenu: [5, 10, 25, 50],
@@ -384,12 +942,169 @@ function previewImage(input) {
               });
           });
       });
-
   })();
   </script>
 
+  <script src="{% static 'vendor/libs/sweetalert2/sweetalert2.js' %}"></script>
+  <script>
+    window.confirmQuickDelete = function(name, itemLabel) {
+      var label = itemLabel || 'item';
+      return Swal.fire({
+        icon: 'warning',
+        title: 'Delete ' + label + '?',
+        text: 'Are you sure you want to delete "' + name + '"?',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, delete',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        reverseButtons: true,
+        focusCancel: true
+      }).then(function(result) { return result.isConfirmed; });
+    };
+  </script>
   {% block vendor_js %}{% endblock %}
   {% block page_js %}{% endblock %}
+
+  <!-- Universal AgriOT Theme Select2 Auto-Initializer for Entire Admin & Farmer Portals -->
+  <script>
+  (function () {
+    window.initAgriSelect2 = function(context) {
+      if (!window.jQuery || !jQuery.fn || !jQuery.fn.select2) return;
+      var $ctx = context ? $(context) : $(document);
+
+      // Target select elements across Admin and Farmer portals
+      // Excludes: DataTables page length selector, elements explicitly opted-out with .no-select2, SweetAlert selects, and templates
+      var selector = 'select:not(.no-select2):not([data-no-select2="true"]):not([name$="_length"]):not([name*="_length"]):not(.custom-select-raw):not(.dt-input):not(.swal2-select)';
+
+      $ctx.find(selector).each(function () {
+        var $el = $(this);
+        // Do not re-initialize already active Select2
+        if ($el.data('select2') || $el.hasClass('select2-hidden-accessible')) return;
+
+        // Skip hidden template tags
+        if ($el.closest('.d-none-template, template, .template-row').length) return;
+
+        var $modal = $el.closest('.modal, .offcanvas');
+        var placeholder = $el.attr('data-placeholder') || $el.attr('placeholder') || ($el.find('option[value=""]').length ? $el.find('option[value=""]').first().text() : ($el.find('option:first').length ? $el.find('option:first').text() : 'Select'));
+
+        // Smart width: if select has explicit inline width or is inside an inline group, respect style
+        var inlineStyle = $el.attr('style') || '';
+        var hasSpecificWidth = /width\s*:\s*\d+/i.test(inlineStyle) || $el.hasClass('form-select-sm') || $el.closest('.input-group').length > 0;
+        var s2Width = hasSpecificWidth ? 'style' : '100%';
+
+        // Smart search box: show search only if > 5 options or data-search="true"
+        var optionCount = $el.find('option').length;
+        var minResults = ($el.attr('data-search') === 'true' || optionCount > 5) ? 0 : Infinity;
+
+        $el.select2({
+          dropdownParent: $modal.length ? $modal : $(document.body),
+          width: s2Width,
+          minimumResultsForSearch: minResults,
+          placeholder: placeholder,
+          allowClear: false
+        });
+      });
+    };
+
+    $(document).ready(function () {
+      window.initAgriSelect2();
+    });
+
+    $(document).on('shown.bs.modal shown.bs.offcanvas', function (e) {
+      window.initAgriSelect2(e.target);
+    });
+
+    $(document).ajaxComplete(function () {
+      window.initAgriSelect2();
+    });
+
+    // Prevent opening any disabled select2 instance
+    $(document).on('select2:opening', function (e) {
+      if ($(e.target).prop('disabled') || $(e.target).is(':disabled') || $(e.target).attr('disabled')) {
+        e.preventDefault();
+      }
+    });
+
+    // Auto-focus search input & dynamic boundary collision detection to prevent viewport overflow
+    $(document).on('select2:open', function (e) {
+      var $select = $(e.target);
+      setTimeout(function () {
+        var dropdownEl = document.querySelector('.select2-container--open .select2-dropdown');
+        var searchInput = document.querySelector('.select2-container--open .select2-search__field');
+        if (searchInput) searchInput.focus();
+
+        if (dropdownEl && dropdownEl.parentElement) {
+          var container = dropdownEl.parentElement;
+          var rect = dropdownEl.getBoundingClientRect();
+          var viewportWidth = window.innerWidth;
+
+          // 1. Viewport right boundary auto-alignment
+          if (rect.right > viewportWidth - 10) {
+            var diff = rect.right - (viewportWidth - 10);
+            var curLeft = parseFloat(window.getComputedStyle(container).left) || 0;
+            container.style.left = Math.max(10, curLeft - diff) + 'px';
+          }
+
+          // 2. Drawer / Offcanvas boundary auto-alignment
+          var offcanvas = $select.closest('.offcanvas')[0];
+          if (offcanvas) {
+            var offRect = offcanvas.getBoundingClientRect();
+            rect = dropdownEl.getBoundingClientRect();
+            if (rect.right > offRect.right - 10) {
+              var offDiff = rect.right - (offRect.right - 10);
+              var curL = parseFloat(window.getComputedStyle(container).left) || 0;
+              container.style.left = Math.max(offRect.left + 10, curL - offDiff) + 'px';
+            }
+          }
+        }
+      }, 25);
+    });
+
+    $(window).on('resize', function() {
+      if ($('.select2-container--open').length) {
+        $('select.select2-hidden-accessible').select2('close');
+      }
+    });
+
+    // A dropdown from the page behind a newly opened dialog must not cover it.
+    $(document).on('show.bs.modal show.bs.offcanvas', function () {
+      $('select.select2-hidden-accessible').each(function () {
+        var instance = $(this).data('select2');
+        if (instance && instance.isOpen()) $(this).select2('close');
+      });
+    });
+
+    // Observe DOM mutations to auto-init dynamically inserted selects
+    if (window.MutationObserver) {
+      var domObserver = new MutationObserver(function(mutations) {
+        var hasSelect = false;
+        for (var i = 0; i < mutations.length; i++) {
+          if (mutations[i].addedNodes && mutations[i].addedNodes.length) {
+            for (var j = 0; j < mutations[i].addedNodes.length; j++) {
+              var node = mutations[i].addedNodes[j];
+              if (node.nodeType === 1 && (node.tagName === 'SELECT' || (node.querySelector && node.querySelector('select')))) {
+                hasSelect = true;
+                break;
+              }
+            }
+          }
+          if (hasSelect) break;
+        }
+        if (hasSelect) {
+          window.initAgriSelect2();
+        }
+      });
+      domObserver.observe(document.body, { childList: true, subtree: true });
+    }
+  })();
+  </script>
+
+  <script>
+    if (window.jQuery && jQuery.fn && jQuery.fn.dataTable) {
+        jQuery.fn.dataTable.ext.errMode = 'none';
+    }
+  </script>
   
   <!-- Common Toastify JS & Helper Function -->
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
@@ -414,11 +1129,20 @@ function previewImage(input) {
   <style>
   /* AgriOT Global Required Field Styles */
   .invalid-feedback {
-    display: block !important;
+    /* Bootstrap feedback must remain hidden until its field is actually invalid.
+       Forcing it visible here made every pre-rendered validation message show
+       as soon as a form was opened. */
+    display: none;
     font-size: 11.5px;
     color: #dc3545;
     margin-top: 4px;
     font-weight: 500;
+  }
+  /* Support both standalone controls and controls inside an input group. */
+  .is-invalid ~ .invalid-feedback,
+  .input-group:has(.is-invalid) + .invalid-feedback,
+  .invalid-feedback.agri-visible {
+    display: block !important;
   }
   .is-invalid {
     border-color: #dc3545 !important;
@@ -434,64 +1158,177 @@ function previewImage(input) {
   <script>
   /**
    * AgriOT Global Form Validator
-   * - Validates all inputs/selects/textareas with [required] or [data-required="true"]
-   * - Shows inline error message below the field
+   * - Validates [required], phone (10 digits starting with 6-9), email, name, pincode
+   * - Shows inline error message below field / input-group
    * - Auto-adds red * to labels of required fields
+   * - Highlights Select2 dropdown borders when invalid
    * - Auto-intercepts all <form> submissions
-   * - Buttons with data-validate-form="#formId" trigger validation on click
    */
   window.AgriValidate = (function() {
 
+    function getFeedbackContainer(el) {
+      return el.closest('.input-group') || el;
+    }
+
     function showError(el, msg) {
       el.classList.add('is-invalid');
-      let fb = el.parentElement.querySelector('.invalid-feedback');
+      const target = getFeedbackContainer(el);
+      let fb = target.nextElementSibling && target.nextElementSibling.classList.contains('invalid-feedback')
+               ? target.nextElementSibling
+               : target.parentElement.querySelector('.invalid-feedback');
       if (!fb) {
         fb = document.createElement('div');
         fb.className = 'invalid-feedback';
-        el.parentElement.appendChild(fb);
+        target.parentElement.appendChild(fb);
       }
       fb.textContent = msg || 'This field is required.';
+      fb.classList.add('agri-visible');
       fb.style.display = 'block';
+
+      if (el.tagName === 'SELECT') {
+        const s2 = el.nextElementSibling && el.nextElementSibling.classList.contains('select2-container')
+                   ? el.nextElementSibling.querySelector('.select2-selection')
+                   : null;
+        if (s2) s2.classList.add('is-invalid');
+      }
     }
 
     function clearError(el) {
       el.classList.remove('is-invalid');
-      const fb = el.parentElement && el.parentElement.querySelector('.invalid-feedback');
-      if (fb) { fb.textContent = ''; fb.style.display = ''; }
+      const target = getFeedbackContainer(el);
+      const fb = target.nextElementSibling && target.nextElementSibling.classList.contains('invalid-feedback')
+                 ? target.nextElementSibling
+                 : target.parentElement.querySelector('.invalid-feedback');
+      if (fb) {
+        fb.textContent = '';
+        fb.classList.remove('agri-visible');
+        fb.style.display = '';
+      }
+
+      if (el.tagName === 'SELECT') {
+        const s2 = el.nextElementSibling && el.nextElementSibling.classList.contains('select2-container')
+                   ? el.nextElementSibling.querySelector('.select2-selection')
+                   : null;
+        if (s2) s2.classList.remove('is-invalid');
+      }
     }
 
     function attachLiveClear(el) {
       if (el._agriValidateBound) return;
       el._agriValidateBound = true;
-      ['input', 'change'].forEach(evt => {
-        el.addEventListener(evt, function() { clearError(this); });
+      ['input', 'change', 'blur'].forEach(evt => {
+        el.addEventListener(evt, function() {
+          const val = (this.value || '').trim();
+          if (this.hasAttribute('required') && !val) return;
+
+          // Phone live check (7 to 15 digits)
+          if ((this.type === 'tel' || this.name === 'phone' || this.name.includes('mobile')) && val) {
+            const digits = val.replace(/[^0-9]/g, '');
+            if (digits.length >= 7 && digits.length <= 15) clearError(this);
+            return;
+          }
+          // Email live check
+          if (this.type === 'email' && val) {
+            if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) clearError(this);
+            return;
+          }
+          // Pincode live check
+          if (this.name === 'pincode' && val) {
+            if (/^\d{6}$/.test(val)) clearError(this);
+            return;
+          }
+          if (val) clearError(this);
+        });
       });
+    }
+
+    function validateField(el, form) {
+      if (el.type === 'hidden' || el.disabled) return true;
+      const val = (el.value || '').trim();
+      const isRequired = el.hasAttribute('required') || el.getAttribute('data-required') === 'true';
+
+      const labelEl = form.querySelector(`label[for="${el.id}"]`) ||
+                      el.closest('.col, .col-md-6, .col-12, .mb-3, .form-group')?.querySelector('label');
+      const labelText = labelEl ? labelEl.textContent.replace('*','').trim() : '';
+
+      // 1. Required check
+      if (isRequired && (!val || val === '' || (el.tagName === 'SELECT' && el.value === ''))) {
+        const msg = el.getAttribute('data-error-msg') ||
+                    (el.tagName === 'SELECT'
+                      ? (labelText ? `Please select ${labelText}.` : 'Please select an option.')
+                      : (labelText ? `${labelText} is required.` : 'This field is required.'));
+        showError(el, msg);
+        return false;
+      }
+
+      if (!val) {
+        clearError(el);
+        return true;
+      }
+
+      // 2. Phone / Mobile validation (7 to 15 digits, international compatible)
+      const isPhone = el.type === 'tel' || el.name === 'phone' || el.name.includes('mobile');
+      if (isPhone) {
+        const digits = val.replace(/[^0-9]/g, '');
+        if (digits.length < 7 || digits.length > 15) {
+          showError(el, 'Please enter a valid phone number (7 to 15 digits).');
+          return false;
+        }
+      }
+
+      // 3. Email validation
+      if (el.type === 'email' || el.name === 'email') {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+          showError(el, 'Please enter a valid email address.');
+          return false;
+        }
+      }
+
+      // 4. Full Name validation
+      if (el.name === 'full_name' || el.name === 'name') {
+        if (val.length < 2) {
+          showError(el, 'Full name must be at least 2 characters.');
+          return false;
+        }
+        if (/[\d]/.test(val)) {
+          showError(el, 'Full name should not contain numbers.');
+          return false;
+        }
+      }
+
+      // 5. Pincode validation
+      if (el.name === 'pincode') {
+        if (!/^\d{6}$/.test(val)) {
+          showError(el, 'Pincode must be exactly 6 digits.');
+          return false;
+        }
+      }
+
+      // 6. Minlength check
+      if (el.minLength > 0 && val.length < el.minLength) {
+        showError(el, `Must be at least ${el.minLength} characters.`);
+        return false;
+      }
+
+      clearError(el);
+      return true;
     }
 
     function validate(form) {
       if (!form) return true;
       let valid = true;
       let firstInvalid = null;
-      form.querySelectorAll('[data-required="true"], [required]').forEach(el => {
-        if (el.type === 'hidden' || el.disabled) return;
-        const val = (el.value || '').trim();
-        if (!val || val === '' || (el.tagName === 'SELECT' && el.value === '')) {
-          const labelEl = form.querySelector(`label[for="${el.id}"]`) ||
-                          el.closest('.col, .col-md-6, .col-12, .mb-3, .form-group')?.querySelector('label');
-          const labelText = labelEl ? labelEl.textContent.replace('*','').trim() : '';
-          const msg = el.getAttribute('data-error-msg') ||
-                      (el.tagName === 'SELECT'
-                        ? (labelText ? `Please select ${labelText}.` : 'Please select an option.')
-                        : (labelText ? `${labelText} is required.` : 'This field is required.'));
-          showError(el, msg);
-          if (!firstInvalid) firstInvalid = el;
-          valid = false;
-        } else {
-          clearError(el);
-        }
+
+      const elements = form.querySelectorAll('input, select, textarea');
+      elements.forEach(el => {
         attachLiveClear(el);
+        const ok = validateField(el, form);
+        if (!ok) {
+          valid = false;
+          if (!firstInvalid) firstInvalid = el;
+        }
       });
-      // Scroll to first invalid field
+
       if (firstInvalid) {
         firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
         firstInvalid.focus();
@@ -598,6 +1435,206 @@ function previewImage(input) {
             window.showAppToast("{{ message|escapejs }}", "{{ message.tags|default:'success' }}");
         {% endfor %}
     });
+  </script>
+  {% endif %}
+  <!-- Universal Stacked & Quick Add Modal z-index Controller -->
+  <script>
+  (function() {
+    document.addEventListener('show.bs.modal', function (event) {
+      var modal = event.target;
+      if (!modal || !modal.classList || !modal.classList.contains('modal')) return;
+
+      var openModals = Array.from(document.querySelectorAll('.modal.show')).filter(function(m) {
+        return m !== modal;
+      });
+
+      var isQuickAdd = (modal.id && (modal.id.indexOf('quick_add') !== -1 || modal.id.indexOf('quick_') !== -1));
+
+      if (openModals.length > 0 || isQuickAdd) {
+        var highestZ = 10750;
+        openModals.forEach(function(m) {
+          var curZ = parseInt(window.getComputedStyle(m).zIndex, 10) || 10750;
+          if (curZ > highestZ) highestZ = curZ;
+        });
+        var nextZ = Math.max(highestZ + 20, isQuickAdd ? 10950 : 10770);
+        modal.style.setProperty('z-index', String(nextZ), 'important');
+        modal.classList.add('stacked-modal');
+
+        var dialog = modal.querySelector('.modal-dialog');
+        if (dialog) {
+          dialog.style.setProperty('z-index', String(nextZ + 5), 'important');
+        }
+
+        setTimeout(function () {
+          var backdrops = document.querySelectorAll('.modal-backdrop');
+          if (backdrops.length > 1) {
+            backdrops.forEach(function (bd, idx) {
+              bd.style.setProperty('z-index', String(10740 + (idx * 20)), 'important');
+            });
+          }
+        }, 10);
+      }
+    });
+
+    document.addEventListener('hidden.bs.modal', function () {
+      var openModals = document.querySelectorAll('.modal.show');
+      if (openModals.length > 0) {
+        document.body.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+      }
+    });
+  })();
+  </script>
+
+  <!-- Subscription Required / Expired View-Only Action Interceptor -->
+  {% if farmer_subscription_info and not farmer_subscription_info.can_mutate %}
+  <style>
+    .view-only-locked-btn {
+      position: relative;
+    }
+  </style>
+  <script>
+  (function () {
+    function promptPlanRenewal() {
+      {% if farmer_subscription_info.has_no_plan %}
+      var title = 'Subscription Required';
+      var text = 'You do not have an active subscription plan yet. Please purchase a plan to start adding farms, crops, and managing your records.';
+      var confirmBtn = '<i class="ri-shopping-cart-2-line me-1"></i> Buy New Plan';
+      var fallbackAlert = 'You do not have an active subscription plan yet. Please purchase a plan to get started.';
+      {% else %}
+      var title = 'Plan Expired — View-Only Mode';
+      var text = 'Your Krishi subscription plan has ended. You can view all existing records, but creating, editing, or deleting data is locked. Please renew or purchase a plan to restore full access.';
+      var confirmBtn = '<i class="ri-shopping-bag-3-line me-1"></i> Renew / Purchase Plan';
+      var fallbackAlert = 'Your subscription plan has expired! Please renew or upgrade your plan to make changes.';
+      {% endif %}
+
+      if (window.Swal) {
+        Swal.fire({
+          title: title,
+          text: text,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: confirmBtn,
+          cancelButtonText: 'Dismiss',
+          confirmButtonColor: '#63771F'
+        }).then(function(res) {
+          if (res.isConfirmed) {
+            window.location.href = "{% url 'farmer-profile' %}#subscription";
+          }
+        });
+      } else {
+        alert(fallbackAlert);
+        window.location.href = "{% url 'farmer-profile' %}#subscription";
+      }
+    }
+
+    function isSafeElement(el) {
+      if (!el) return true;
+      // Never intercept elements inside subscription tab, catalog cards, or payment modals
+      if (el.closest('#subscription') || el.closest('.package-plan-card') || el.closest('#payment_view_modal')) return true;
+
+      var href = (el.getAttribute('href') || '').toLowerCase();
+      var target = (el.getAttribute('data-bs-target') || '').toLowerCase();
+      var dismiss = el.getAttribute('data-bs-dismiss');
+      var onclickAttr = (el.getAttribute('onclick') || '').toLowerCase();
+
+      // Subscription switch, plan purchase and renewal handlers
+      if (onclickAttr.includes('switchplan') || onclickAttr.includes('renewplan') || onclickAttr.includes('initiateplanorder') || onclickAttr.includes('selectplancard')) return true;
+
+      // Modals dismiss, pagination, search, logout, subscription switch
+      if (dismiss) return true;
+      if (href.includes('logout') || href.includes('subscription') || href.includes('switch_plan') || href.includes('verify_payment') || href.includes('send_otp')) return true;
+      if (target.includes('notificationoffcanvas') || el.closest('#notificationOffcanvas')) return true;
+      if (el.classList.contains('select2') || el.closest('.select2-container')) return true;
+      if (el.classList.contains('page-link') || el.getAttribute('data-bs-toggle') === 'tab' || el.getAttribute('data-bs-toggle') === 'collapse') return true;
+      if (el.id === 'search_toggle_btn' || el.id === 'search_close_btn' || el.classList.contains('admin-search-toggle') || el.classList.contains('admin-search-close') || el.classList.contains('sort-filter')) return true;
+      if (el.classList.contains('view-profile-btn') || target.includes('drawer') || target.includes('offcanvas')) return true;
+      return false;
+    }
+
+    function isLockTarget(el) {
+      if (!el || isSafeElement(el)) return false;
+
+      var href = (el.getAttribute('href') || '').toLowerCase();
+      var targetModal = (el.getAttribute('data-bs-target') || '').toLowerCase();
+      var text = (el.textContent || '').trim().toLowerCase();
+      var classes = el.className ? el.className.toString().toLowerCase() : '';
+      var icon = el.querySelector('i');
+      var iconClass = icon && icon.className ? icon.className.toLowerCase() : '';
+
+      // Delete, Edit, Add classes
+      if (classes.includes('delete') || classes.includes('btn-edit') || classes.includes('edit-btn') || classes.includes('btn-add') || classes.includes('add-btn')) {
+        return true;
+      }
+
+      // Target modal names
+      if (/add|edit|delete|create|quick_|sell|advance|harvest|pay/.test(targetModal)) {
+        return true;
+      }
+
+      // URLs that perform mutations
+      if (/\/(add|edit|delete|pay|advance|harvest|update_attendance|execute_paycheck)/.test(href)) {
+        return true;
+      }
+
+      // Submit buttons (excluding profile view tabs/search)
+      if (el.type === 'submit' && !el.closest('#farmerTabs') && !el.closest('#my_profile_update')) {
+        return true;
+      }
+
+      // Common button text patterns
+      if (/^(add |create |new |edit |delete |record |pay )/.test(text) || text === 'add' || text === 'delete' || text === 'edit' || text === 'save') {
+        return true;
+      }
+
+      // Icon matching
+      if (/ri-add|ri-pencil|ri-edit|ri-delete|ri-close-circle/.test(iconClass)) {
+        // If it's not a close/search button
+        if (!classes.includes('btn-close') && !classes.includes('close')) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    // Intercept clicks on locked triggers
+    document.addEventListener('click', function(e) {
+      var btn = e.target.closest('button, a, input[type="submit"]');
+      if (!btn) return;
+
+      if (isLockTarget(btn)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        promptPlanRenewal();
+        return false;
+      }
+    }, true);
+
+    // Intercept form submissions across the page
+    document.addEventListener('submit', function(e) {
+      var form = e.target;
+      var action = (form.getAttribute('action') || '').toLowerCase();
+      var method = (form.getAttribute('method') || 'GET').toUpperCase();
+
+      if (method === 'GET') return;
+      if (action.includes('logout') || action.includes('switch_plan') || action.includes('verify_payment') || action.includes('send_otp')) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      promptPlanRenewal();
+      return false;
+    }, true);
+
+    // Intercept AJAX 403 Forbidden responses
+    if (window.jQuery) {
+      $(document).ajaxError(function(event, jqXHR) {
+        if (jqXHR.status === 403 && jqXHR.responseJSON && jqXHR.responseJSON.expired) {
+          promptPlanRenewal();
+        }
+      });
+    }
+  })();
   </script>
   {% endif %}
 </body>

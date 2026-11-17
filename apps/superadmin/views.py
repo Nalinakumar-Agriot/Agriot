@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 from django.conf import settings
 from django.contrib import messages
@@ -13,6 +14,7 @@ from apps.superadmin.models import (
     Crop,
     CropType,
     DocumentCategory,
+    DocumentType,
     ExpenseType,
     ExpenseUnit,
     Designation,
@@ -40,9 +42,12 @@ from apps.superadmin.models import (
     CropVariety,
     CropQuality,
     MaintenanceSchedule,
+    HealthIndicator,
     State,
     Subscription,
+    Taluk,
 )
+from apps.superadmin.master_utils import get_or_reactivate_master
 
 
 def ajax_get_states(request):
@@ -50,13 +55,23 @@ def ajax_get_states(request):
     if country_id:
         states = State.objects.filter(country_id=country_id).values('id', 'name').order_by('name')
         return JsonResponse(list(states), safe=False)
-    return JsonResponse([], safe=False)
+    # Return all states if country_id is omitted or empty
+    states = State.objects.all().values('id', 'name').order_by('name')
+    return JsonResponse(list(states), safe=False)
 
 def ajax_get_cities(request):
     state_id = request.GET.get('state_id')
     if state_id:
         cities = City.objects.filter(state_id=state_id).values('id', 'name').order_by('name')
         return JsonResponse(list(cities), safe=False)
+    return JsonResponse([], safe=False)
+
+def ajax_get_taluks(request):
+    from apps.superadmin.models import Taluk
+    city_id = request.GET.get('city_id') or request.GET.get('district_id')
+    if city_id:
+        taluks = Taluk.objects.filter(city_id=city_id).values('id', 'name').order_by('name')
+        return JsonResponse(list(taluks), safe=False)
     return JsonResponse([], safe=False)
 
 # -------------------------
@@ -89,6 +104,7 @@ from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 
 from auth.models import Profile
+from auth.portals import admin_users, is_admin_user
 
 
 def get_admin_actor_name(request):
@@ -122,42 +138,69 @@ def log_admin_action(request, title, message, icon_class="ri-notification-3-line
 def login_view(request):
     error = None
     if request.method == "POST":
-        mobile = request.POST.get("mobile")
-        password = request.POST.get("password")
+        mobile = (request.POST.get("mobile") or "").strip()
+        password = (request.POST.get("password") or "").strip()
         remember_me = request.POST.get("remember_me")
 
-        try:
-            profile = Profile.objects.get(mobile_number=mobile)
-            if hasattr(profile, 'status') and str(profile.status) == "1":
-                error = "Your account has been suspended/locked. Access is disabled."
-            else:
-                user = authenticate(request, username=profile.user.username, password=password)
-                if user is not None:
-                    if not user.is_active:
-                        error = "Your account has been deactivated/suspended."
-                    else:
-                        login(request, user)
-                        if remember_me:
-                            request.session.set_expiry(1209600)  # 2 weeks
-                        else:
-                            request.session.set_expiry(0) # Browser close
+        from apps.superadmin.phone_utils import find_profile_by_phone, find_staff_by_phone
+        profile = find_profile_by_phone(mobile)
+        staff = find_staff_by_phone(mobile)
+        login_user = profile.user if profile else (staff.user if staff else User.objects.filter(username=mobile).first())
 
-                        # Create/Get auth token
-                        token, _ = Token.objects.get_or_create(user=user)  # type: ignore
+        def is_suspended_status(value):
+            value = str(value or '').strip().lower()
+            return value == '1' or 'suspend' in value or 'lock' in value
 
-                        response = redirect('superadmin-dashboard')
-                        if remember_me:
-                            response.set_cookie('saved_mobile', mobile, max_age=1209600)
-                            response.set_cookie('saved_password', password, max_age=1209600)
-                        else:
-                            response.delete_cookie('saved_mobile')
-                            response.delete_cookie('saved_password')
-
-                        return response
+        if (staff and is_suspended_status(staff.status)) or \
+                (profile and is_suspended_status(profile.status)) or \
+                (login_user and not login_user.is_active):
+            error = "This account is suspended. Please contact the administrator."
+        elif profile:
+            user = authenticate(request, username=profile.user.username, password=password)
+            if user is not None:
+                if not is_admin_user(user):
+                    error = "This account does not have administration access."
+                elif not user.is_active:
+                    error = "This account is suspended. Please contact the administrator."
                 else:
-                    error = "Invalid mobile number or password."
-        except Profile.DoesNotExist:
-            error = "Invalid mobile number or password."
+                    login(request, user)
+                    for key in ('active_role', 'active_farmer_id', 'active_staff_id'):
+                        request.session.pop(key, None)
+                    if remember_me:
+                        request.session.set_expiry(1209600)  # 2 weeks
+                    else:
+                        request.session.set_expiry(0) # Browser close
+
+                    # Create/Get auth token
+                    token, _ = Token.objects.get_or_create(user=user)  # type: ignore
+
+                    response = redirect('superadmin-dashboard')
+                    if remember_me:
+                        response.set_cookie('saved_mobile', mobile, max_age=1209600)
+                        response.set_cookie('saved_password', password, max_age=1209600)
+                    else:
+                        response.delete_cookie('saved_mobile')
+                        response.delete_cookie('saved_password')
+
+                    return response
+            else:
+                error = "Invalid mobile number or password."
+        else:
+            # Fallback to direct username authentication (e.g. 'admin')
+            user = authenticate(request, username=mobile, password=password)
+            if user is not None:
+                if not is_admin_user(user):
+                    error = "This account does not have administration access."
+                elif not user.is_active:
+                    error = "Your account has been deactivated/suspended."
+                else:
+                    login(request, user)
+                    for key in ('active_role', 'active_farmer_id', 'active_staff_id'):
+                        request.session.pop(key, None)
+                    token, _ = Token.objects.get_or_create(user=user)
+                    return redirect('superadmin-dashboard')
+            else:
+                error = "Invalid mobile number or password."
 
     template_config = getattr(settings, "TEMPLATE_CONFIG", {})
     theme = template_config.get("theme", "light") if isinstance(template_config, dict) else "light"
@@ -171,10 +214,12 @@ def logout_view(request):
     return redirect('home')
 
 def update_my_profile(request):
+    if not is_admin_user(request.user):
+        return JsonResponse({"error": "Administration access required."}, status=403)
     if request.method == "POST" and request.user.is_authenticated:
-        name = request.POST.get("name")
+        name = request.POST.get("name") or request.POST.get("first_name")
         email = request.POST.get("email")
-        favicon = request.FILES.get("favicon")
+        favicon = request.FILES.get("favicon") or request.FILES.get("profile_image")
 
         user = request.user
         if name:
@@ -198,7 +243,7 @@ def update_my_profile(request):
 
         messages.success(request, "Profile updated successfully!")
 
-    return redirect(request.META.get('HTTP_REFERER', 'superadmin-dashboard'))
+    return redirect('superadmin-dashboard')
 
 
 import random
@@ -209,18 +254,21 @@ from django.utils import timezone
 
 
 def send_otp_sms(mobile, otp_value):
-    SMS_TEMPLATE = {
-        'authkey': '155099Ajzgw9B8dfq6737236aP1',
-        'sender_id': 'ELYSIU',
-        'template_id': '1007049094377493090',
-        'country_code': '91',
-        'message_content': 'Dear User, Your One Time Password (OTP) for logging into the Elysium Academy Application is {#var#}'
-    }
+    import os
+    from apps.superadmin.phone_utils import format_phone_for_sms
+    authkey = os.environ.get('MSG91_AUTHKEY', '155099Ajzgw9B8dfq6737236aP1')
+    sender_id = os.environ.get('MSG91_SENDER_ID', 'ELYSIU')
+    template_id = os.environ.get('MSG91_TEMPLATE_ID', '1007049094377493090')
+    default_country_code = os.environ.get('MSG91_COUNTRY_CODE', '91')
+    message_template = os.environ.get(
+        'MSG91_MESSAGE_TEMPLATE',
+        'Dear User, Your One Time Password (OTP) for logging into the Elysium Academy Application is {#var#}'
+    )
 
-    formatted_mobile_number = SMS_TEMPLATE['country_code'] + str(mobile)
-    message_content = SMS_TEMPLATE['message_content'].replace("{#var#}", str(otp_value))
+    formatted_mobile_number = format_phone_for_sms(mobile, default_country_code=default_country_code)
+    message_content = message_template.replace("{#var#}", str(otp_value))
 
-    url = f"https://api.msg91.com/api/sendhttp.php?authkey={SMS_TEMPLATE['authkey']}&sender={SMS_TEMPLATE['sender_id']}&route=default&message={message_content}&mobiles={formatted_mobile_number}&DLT_TE_ID={SMS_TEMPLATE['template_id']}"
+    url = f"https://api.msg91.com/api/sendhttp.php?authkey={authkey}&sender={sender_id}&route=default&message={message_content}&mobiles={formatted_mobile_number}&DLT_TE_ID={template_id}"
 
     try:
         response = requests.get(url)
@@ -239,14 +287,15 @@ def send_otp_sms(mobile, otp_value):
 def forgot_password(request):
     error = None
     if request.method == "POST":
-        mobile = request.POST.get("mobile")
-        try:
-            profile = Profile.objects.get(mobile_number=mobile)
-
+        mobile = (request.POST.get("mobile") or "").strip()
+        from apps.superadmin.phone_utils import find_profile_by_phone
+        profile = find_profile_by_phone(mobile)
+        if profile:
             # Generate 6-digit OTP
             otp_value = random.randint(100000, 999999)
+            target_mobile = profile.mobile_number or mobile
 
-            success, message = send_otp_sms(mobile, otp_value)
+            success, message = send_otp_sms(target_mobile, otp_value)
 
             if success:
                 # OTP sent successfully
@@ -254,12 +303,11 @@ def forgot_password(request):
                 profile.otp_expiry_at = timezone.now() + timedelta(minutes=2.5)
                 profile.save()
 
-                request.session['reset_mobile'] = mobile
+                request.session['reset_mobile'] = target_mobile
                 return redirect('verify-otp')
             else:
                 error = message
-
-        except Profile.DoesNotExist:
+        else:
             error = "Mobile number not found."
 
     return render(request, "superadmin/forgot_password.html", {
@@ -273,18 +321,11 @@ def verify_otp(request):
     if not mobile:
         return redirect('forgot-password')
 
-    otp = None
-    try:
-        profile = Profile.objects.get(mobile_number=mobile)
-        otp = profile.otp
-    except Profile.DoesNotExist:
-        pass
-
     if request.method == "POST":
         otp_entered = request.POST.get("otp")
         try:
             profile = Profile.objects.get(mobile_number=mobile)
-            if profile.otp == otp_entered:
+            if profile.otp and profile.otp == otp_entered:
                 if profile.otp_expiry_at and profile.otp_expiry_at >= timezone.now():
                     # OTP is correct
                     request.session['otp_verified'] = True
@@ -298,7 +339,6 @@ def verify_otp(request):
 
     return render(request, "superadmin/verify_otp.html", {
         "error": error,
-        "otp": otp,
     })
 
 
@@ -324,16 +364,13 @@ def reset_password(request):
                 user = profile.user
                 user.set_password(new_password)
                 user.save()
-
                 # Clear token and session
                 profile.forget_password_token = None
                 profile.otp = None
                 profile.otp_expiry_at = None
                 profile.save()
-
                 del request.session['reset_mobile']
                 del request.session['otp_verified']
-
                 return redirect('home')
             except Profile.DoesNotExist:
                 error = "User not found."
@@ -451,68 +488,242 @@ def dashboard(request):
 # -------------------------
 
 def manage_farmer(request):
+    import re
     if request.method == "POST":
         action = request.POST.get("action")
+        try:
+            if action == "create":
+                full_name = (request.POST.get("full_name") or "").strip()
+                phone = (request.POST.get("phone") or "").strip()
+                email = (request.POST.get("email") or "").strip()
+                state_id = request.POST.get("state")
+                district_id = request.POST.get("district")
+                taluk_val = request.POST.get("taluk")
+                pincode = (request.POST.get("pincode") or "").strip()
+                status = request.POST.get("status")
 
-        if action == "create":
-            full_name = request.POST.get("full_name")
-            phone = request.POST.get("phone")
-            email = request.POST.get("email")
-            state_id = request.POST.get("state")
-            district_id = request.POST.get("district")
-            pincode = request.POST.get("pincode")
-            status = request.POST.get("status")
+                # Clean and validate phone number (international format: 7 to 15 digits, optional +)
+                clean_phone = re.sub(r'[^0-9+]', '', phone)
+                if clean_phone.count('+') > 1 or clean_phone.find('+') > 0:
+                    clean_phone = '+' + clean_phone.replace('+', '')
+                digits_only = re.sub(r'[^0-9]', '', clean_phone)
 
-            if not User.objects.filter(username=phone).exists():
-                user = User.objects.create_user(username=phone, first_name=full_name, email=email, password=phone)
-                profile = user.profile
-                profile.role = 'farmer'
-                profile.mobile_number = phone
-                if state_id: profile.state_id = state_id
-                if district_id: profile.district_id = district_id
-                profile.pincode = pincode
-                if status: profile.status = status
-                profile.save()
-                messages.success(request, "Farmer registered successfully!")
-            else:
-                messages.error(request, "A user with this phone number already exists.")
+                if not digits_only or len(digits_only) < 7 or len(digits_only) > 15:
+                    messages.error(request, "Please enter a valid phone number (7 to 15 digits).")
+                    return redirect('manage_farmer')
 
-        elif action == "update":
-            farmer_id = request.POST.get("farmer_id")
-            full_name = request.POST.get("full_name")
-            phone = request.POST.get("phone")
-            email = request.POST.get("email")
-            state_id = request.POST.get("state")
-            district_id = request.POST.get("district")
-            pincode = request.POST.get("pincode")
-            status = request.POST.get("status")
+                if not full_name or len(full_name) < 2:
+                    messages.error(request, "Please enter a valid full name (minimum 2 characters).")
+                    return redirect('manage_farmer')
 
-            try:
-                profile = Profile.objects.get(id=farmer_id, role='farmer')
-                user = profile.user
-                if full_name: user.first_name = full_name
-                if email: user.email = email
-                if phone: user.username = phone
-                user.save()
+                if email and not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
+                    messages.error(request, "Please enter a valid email address.")
+                    return redirect('manage_farmer')
 
-                if phone: profile.mobile_number = phone
-                if state_id: profile.state_id = state_id
-                if district_id: profile.district_id = district_id
-                if pincode is not None: profile.pincode = pincode
-                if status: profile.status = status
-                profile.save()
-                messages.success(request, "Farmer updated successfully!")
-            except Profile.DoesNotExist:
-                messages.error(request, "Farmer not found.")
+                if not re.fullmatch(r'[0-9]{6}', pincode):
+                    messages.error(request, "Pincode must be exactly 6 digits.")
+                    return redirect('manage_farmer')
 
-        elif action == "delete":
-            farmer_id = request.POST.get("farmer_id")
-            try:
-                profile = Profile.objects.get(id=farmer_id, role='farmer')
-                profile.user.delete()
-                messages.success(request, "Farmer deleted successfully!")
-            except Profile.DoesNotExist:
-                messages.error(request, "Farmer not found.")
+                phone = clean_phone
+
+                taluk_name = taluk_val
+                if taluk_val and taluk_val.isdigit():
+                    from apps.superadmin.models import Taluk
+                    t_obj = Taluk.objects.filter(id=taluk_val).first()
+                    if t_obj:
+                        taluk_name = t_obj.name
+
+                from django.db import transaction
+
+                if email and (User.objects.filter(email__iexact=email).exists() or Profile.objects.filter(email__iexact=email).exists()):
+                    messages.error(request, f"A user with email '{email}' already exists.")
+                    return redirect('manage_farmer')
+
+                from apps.superadmin.phone_utils import check_mobile_already_exists
+                is_phone_taken, phone_err = check_mobile_already_exists(phone)
+                if is_phone_taken:
+                    messages.error(request, phone_err)
+                    return redirect('manage_farmer')
+
+                if User.objects.filter(username=phone).exists():
+                    existing_user = User.objects.get(username=phone)
+                    if not hasattr(existing_user, 'profile'):
+                        with transaction.atomic():
+                            profile, _ = Profile.objects.get_or_create(user=existing_user)
+                            profile.role = 'farmer'
+                            profile.mobile_number = phone
+                            if email: profile.email = email
+                            if state_id: profile.state_id = state_id
+                            if district_id: profile.district_id = district_id
+                            if taluk_name: profile.taluka = taluk_name
+                            profile.pincode = pincode
+                            if status: profile.status = status
+                            profile.save()
+                            if full_name:
+                                existing_user.first_name = full_name
+                                existing_user.save()
+                        messages.success(request, "Farmer registered successfully!")
+                    else:
+                        messages.error(request, "A user with this phone number already exists.")
+                else:
+                    try:
+                        with transaction.atomic():
+                            user = User.objects.create_user(username=phone, first_name=full_name, email=email or None, password=phone)
+                            profile, _ = Profile.objects.get_or_create(user=user)
+                            profile.role = 'farmer'
+                            profile.mobile_number = phone
+                            if email: profile.email = email
+                            if state_id: profile.state_id = state_id
+                            if district_id: profile.district_id = district_id
+                            if taluk_name: profile.taluka = taluk_name
+                            profile.pincode = pincode
+                            if status: profile.status = status
+                            profile.save()
+                        try:
+                            if profile.email:
+                                from apps.superadmin.email_utils import send_welcome_email
+                                send_welcome_email(profile, request=request)
+                        except Exception as e:
+                            print(f"[Email Trigger Error - Welcome]: {e}")
+                        messages.success(request, "Farmer registered successfully!")
+                    except Exception as e:
+                        messages.error(request, f"Failed to register farmer: {str(e)}")
+
+            elif action == "update":
+                farmer_id = request.POST.get("farmer_id")
+                full_name = (request.POST.get("full_name") or "").strip()
+                phone = (request.POST.get("phone") or "").strip()
+                email = (request.POST.get("email") or "").strip()
+                state_id = request.POST.get("state")
+                district_id = request.POST.get("district")
+                taluk_val = request.POST.get("taluk")
+                pincode = (request.POST.get("pincode") or "").strip()
+                status = request.POST.get("status")
+
+                clean_phone = re.sub(r'[^0-9+]', '', phone)
+                if clean_phone.count('+') > 1 or clean_phone.find('+') > 0:
+                    clean_phone = '+' + clean_phone.replace('+', '')
+                digits_only = re.sub(r'[^0-9]', '', clean_phone)
+
+                if not digits_only or len(digits_only) < 7 or len(digits_only) > 15:
+                    messages.error(request, "Please enter a valid phone number (7 to 15 digits).")
+                    return redirect('manage_farmer')
+
+                if not full_name or len(full_name) < 2:
+                    messages.error(request, "Please enter a valid full name.")
+                    return redirect('manage_farmer')
+
+                if email and not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
+                    messages.error(request, "Please enter a valid email address.")
+                    return redirect('manage_farmer')
+
+                if not re.fullmatch(r'[0-9]{6}', pincode):
+                    messages.error(request, "Pincode must be exactly 6 digits.")
+                    return redirect('manage_farmer')
+
+                phone = clean_phone
+
+                taluk_name = taluk_val
+                if taluk_val and taluk_val.isdigit():
+                    from apps.superadmin.models import Taluk
+                    t_obj = Taluk.objects.filter(id=taluk_val).first()
+                    if t_obj:
+                        taluk_name = t_obj.name
+
+                try:
+                    profile = Profile.objects.get(id=farmer_id, role='farmer')
+                    user = profile.user
+
+                    from apps.superadmin.phone_utils import check_mobile_already_exists
+                    is_phone_taken, phone_err = check_mobile_already_exists(
+                        phone,
+                        exclude_user_id=user.id,
+                        exclude_profile_id=profile.id
+                    )
+                    if is_phone_taken:
+                        messages.error(request, phone_err)
+                        return redirect('manage_farmer')
+
+                    if User.objects.filter(username=phone).exclude(id=user.id).exists():
+                        messages.error(request, "Another user with this phone number already exists.")
+                        return redirect('manage_farmer')
+
+                    if email and Profile.objects.filter(email__iexact=email).exclude(id=profile.id).exists():
+                        messages.error(request, f"Another farmer with email '{email}' already exists.")
+                        return redirect('manage_farmer')
+
+                    if full_name: user.first_name = full_name
+                    if email:
+                        user.email = email
+                        profile.email = email
+                    if phone: user.username = phone
+                    user.save()
+
+                    if phone: profile.mobile_number = phone
+                    if state_id: profile.state_id = state_id
+                    if district_id: profile.district_id = district_id
+                    if taluk_name is not None: profile.taluka = taluk_name
+                    if pincode is not None: profile.pincode = pincode
+                    if status: profile.status = status
+                    profile.save()
+                    messages.success(request, "Farmer updated successfully!")
+                except Profile.DoesNotExist:
+                    messages.error(request, "Farmer not found.")
+
+            elif action == "deactivate":
+                farmer_id = request.POST.get("farmer_id")
+                try:
+                    profile = Profile.objects.get(id=farmer_id, role='farmer')
+                    profile.status = 'Inactive'
+                    profile.save()
+                    messages.success(request, f"{profile.user.first_name} has been deactivated successfully.")
+                except Profile.DoesNotExist:
+                    messages.error(request, "Farmer not found.")
+                return redirect('manage_farmer')
+
+            elif action == "toggle_status":
+                farmer_id = request.POST.get("farmer_id")
+                new_status = request.POST.get("status")
+                try:
+                    profile = Profile.objects.get(id=farmer_id, role='farmer')
+                    if not new_status:
+                        new_status = 'Inactive' if profile.status == 'Active' else 'Active'
+                    profile.status = new_status
+                    profile.save()
+                    from django.http import JsonResponse
+                    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.POST.get('ajax') == '1':
+                        return JsonResponse({'status': 'success', 'new_status': profile.status, 'message': f'Status updated to {profile.status}'})
+                    messages.success(request, f"Farmer status updated to {profile.status}!")
+                except Profile.DoesNotExist:
+                    from django.http import JsonResponse
+                    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.POST.get('ajax') == '1':
+                        return JsonResponse({'status': 'error', 'message': 'Farmer not found'}, status=404)
+                    messages.error(request, "Farmer not found.")
+                return redirect('manage_farmer')
+
+            elif action == "delete":
+                farmer_id = request.POST.get("farmer_id")
+                try:
+                    profile = Profile.objects.get(id=farmer_id, role='farmer')
+                    user = profile.user
+                    from django.db.models.signals import post_delete
+                    from apps.farmer.models import notify_on_delete
+                    post_delete.disconnect(notify_on_delete)
+                    try:
+                        if user:
+                            user.delete()
+                        else:
+                            profile.delete()
+                        messages.success(request, "Farmer deleted successfully!")
+                    finally:
+                        post_delete.connect(notify_on_delete)
+                except Profile.DoesNotExist:
+                    messages.error(request, "Farmer not found.")
+                except Exception as e:
+                    messages.error(request, f"Error deleting farmer: {str(e)}")
+
+        except Exception as e:
+            messages.error(request, f"Operation failed: {str(e)}")
 
         return redirect('manage_farmer')
 
@@ -528,8 +739,6 @@ def manage_farmer(request):
     from apps.farmer.models import CropSplit, Farm, LedgerTransaction
     from apps.superadmin.models import Subscription
 
-    import re
-
     for farmer in farmers:
         # Get total physical acreage from Farm lands owned by this farmer
         farms = Farm.objects.filter(farmer=farmer)
@@ -543,18 +752,27 @@ def manage_farmer(request):
                 except (ValueError, TypeError):
                     pass
 
-        current_usage = total_physical_acres
+        from apps.superadmin.subscription_utils import get_farmer_subscription_details
+        sub_details = get_farmer_subscription_details(farmer)
+        farmer.sub_details = sub_details
 
         # Package land limit
-        active_sub = Subscription.objects.filter(farmer=farmer, subscription_status='active').order_by('-id').first()
+        active_sub = sub_details['subscription'] if not sub_details['is_expired'] else None
         max_acre_support = active_sub.package.max_acre_support if active_sub and active_sub.package and active_sub.package.max_acre_support else 0
-        try:
-            max_limit = float(max_acre_support)
-        except (ValueError, TypeError):
-            max_limit = 0.0
+        if str(max_acre_support).strip().lower() == 'unlimited':
+            farmer.package_land_limit = "Unlimited"
+            farmer.is_land_unlimited = True
+            farmer.land_usage_exceeded = False
+        else:
+            try:
+                max_limit = float(max_acre_support)
+            except (ValueError, TypeError):
+                max_limit = 0.0
+            farmer.package_land_limit = round(max_limit, 2)
+            farmer.is_land_unlimited = False
+            farmer.land_usage_exceeded = (total_physical_acres > max_limit) if max_limit > 0 else False
 
-        farmer.package_land_limit = round(max_limit, 2)
-        farmer.current_land_usage = round(current_usage, 2)
+        farmer.current_land_usage = round(total_physical_acres, 2)
 
         if total_physical_acres > 0:
             farmer.total_land_size = f"{round(total_physical_acres, 2)} Acres"
@@ -590,6 +808,17 @@ def manage_farmer(request):
             farmer.total_earning = ",".join([int_part[:-3][max(i-2, 0):i] for i in range(len(int_part[:-3]), 0, -2)][::-1]) + "," + int_part[-3:] + "." + parts[1]
         else:
             farmer.total_earning = inflow_str
+
+        # Attach taluks for preloading in edit modal
+        from apps.superadmin.models import Taluk
+        if farmer.district_id:
+            farmer.taluks = list(Taluk.objects.filter(city_id=farmer.district_id).order_by('name').values('id', 'name'))
+        else:
+            farmer.taluks = []
+
+        # Attach subscription details (expiry status, days left, reminder flag)
+        from apps.superadmin.subscription_utils import get_farmer_subscription_details
+        farmer.sub_details = get_farmer_subscription_details(farmer)
 
     return render(request, "superadmin/farmers/manage_farmers.html", {
         "states": states,
@@ -870,25 +1099,72 @@ def advance_report(request):
 # PACKAGE MANAGEMENT
 # -------------------------
 def manage_package(request):
+    import re
+    def clean_limit_str(val):
+        if val is None or not str(val).strip():
+            return "Unlimited"
+        s = str(val).strip()
+        if s.lower() == "unlimited":
+            return "Unlimited"
+        m = re.search(r'[\d\.]+', s)
+        return m.group() if m else "Unlimited"
+
+    def clean_int_limit_str(val):
+        if val is None or not str(val).strip():
+            return "Unlimited"
+        s = str(val).strip()
+        if s.lower() == "unlimited":
+            return "Unlimited"
+        m = re.search(r'\d+', s)
+        return m.group() if m else "Unlimited"
+
     if request.method == "POST":
         action = request.POST.get("action")
 
         if action == "create":
             name = request.POST.get("name")
-            price = request.POST.get("price")
-            max_acre_support = request.POST.get("max_acre_support")
+            original_price = request.POST.get("original_price")
+            try:
+                orig_price_val = float(original_price) if original_price else None
+            except (ValueError, TypeError):
+                orig_price_val = None
+
+            price = request.POST.get("price") or 0.0
+            try:
+                base_price = float(price)
+            except (ValueError, TypeError):
+                base_price = 0.0
+
+            if not orig_price_val or orig_price_val < base_price:
+                orig_price_val = base_price
+
+            price_quarterly = round(base_price * 3, 2)
+            price_yearly = round(base_price * 12, 2)
+
+            max_acre_support = clean_limit_str(request.POST.get("max_acre_support"))
             description = request.POST.get("description")
-            my_land = request.POST.get("my_land")
-            my_crop = request.POST.get("my_crop")
-            my_users = request.POST.get("my_users")
+            discount = request.POST.get("discount", "").strip()
+            show_badge = request.POST.get("show_badge") in ["on", "true", "1", True]
+            badge_text = request.POST.get("badge_text", "POPULAR").strip()
+            if not badge_text:
+                badge_text = "POPULAR"
+            my_land = clean_int_limit_str(request.POST.get("my_land"))
+            my_crop = clean_int_limit_str(request.POST.get("my_crop"))
+            my_users = clean_int_limit_str(request.POST.get("my_users"))
             modules = request.POST.getlist("modules")
             features = request.POST.getlist("featureList[]")
 
             Package.objects.create(
                 name=name,
-                price=price or 0.0,
+                original_price=orig_price_val,
+                price=base_price,
+                price_quarterly=price_quarterly,
+                price_yearly=price_yearly,
                 max_acre_support=max_acre_support,
                 description=description,
+                discount=discount,
+                show_badge=show_badge,
+                badge_text=badge_text,
                 my_land=my_land,
                 my_crop=my_crop,
                 my_users=my_users,
@@ -903,12 +1179,32 @@ def manage_package(request):
             if pkg_id:
                 pkg = Package.objects.get(id=pkg_id)
                 pkg.name = request.POST.get("name")
+                original_price = request.POST.get("original_price")
+                try:
+                    pkg.original_price = float(original_price) if original_price else None
+                except (ValueError, TypeError):
+                    pkg.original_price = None
+
                 pkg.price = request.POST.get("price") or 0.0
-                pkg.max_acre_support = request.POST.get("max_acre_support")
+                try:
+                    base_price = float(pkg.price)
+                except (ValueError, TypeError):
+                    base_price = 0.0
+                pkg.price = base_price
+                if not pkg.original_price or float(pkg.original_price) < base_price:
+                    pkg.original_price = base_price
+
+                pkg.price_quarterly = round(base_price * 3, 2)
+                pkg.price_yearly = round(base_price * 12, 2)
+                pkg.max_acre_support = clean_limit_str(request.POST.get("max_acre_support"))
                 pkg.description = request.POST.get("description")
-                pkg.my_land = request.POST.get("my_land")
-                pkg.my_crop = request.POST.get("my_crop")
-                pkg.my_users = request.POST.get("my_users")
+                pkg.discount = request.POST.get("discount", "").strip()
+                pkg.show_badge = request.POST.get("show_badge") in ["on", "true", "1", True]
+                b_text = request.POST.get("badge_text", "").strip()
+                pkg.badge_text = b_text if b_text else "POPULAR"
+                pkg.my_land = clean_int_limit_str(request.POST.get("my_land"))
+                pkg.my_crop = clean_int_limit_str(request.POST.get("my_crop"))
+                pkg.my_users = clean_int_limit_str(request.POST.get("my_users"))
                 pkg.modules = request.POST.getlist("modules")
 
                 # Check for features list logic depending on which form was submitted
@@ -937,20 +1233,16 @@ def manage_package(request):
         {'icon': 'ri-plant-line',              'name': 'Farms',                   'active': True},
         {'icon': 'ri-store-2-line',            'name': 'Market & Resources Hub',  'active': True},
         {'icon': 'ri-task-line',               'name': 'Task',                    'active': True},
-        {'icon': 'ri-money-dollar-circle-line','name': 'Financials & Sales',      'active': True},
-        {'icon': 'ri-archive-line',            'name': 'Inventory',               'active': False},
-        {'icon': 'ri-bank-card-line',          'name': 'Outstanding',             'active': False},
-        {'icon': 'ri-team-line',               'name': 'Employee Management',     'active': False},
-        {'icon': 'ri-group-line',              'name': 'Users Management',        'active': False},
-        {'icon': 'ri-book-open-line',          'name': 'Smart Farming Guide',     'active': True},
-        {'icon': 'ri-folder-shield-2-line',    'name': 'My Documents',            'active': True},
-        {'icon': 'ri-user-line',               'name': 'Profile & Subscription',  'active': True},
+        {'icon': 'ri-money-dollar-circle-line','name': 'Sales',                   'active': True},
+        {'icon': 'ri-archive-line',            'name': 'Inventory',               'active': True},
+        {'icon': 'ri-wallet-3-line',           'name': 'Expenses',                'active': True},
+        {'icon': 'ri-team-line',               'name': 'Employee',                'active': True},
+        {'icon': 'ri-file-chart-line',         'name': 'Reports',                 'active': True},
     ]
 
     mega_static = [
-        'Dashboards', 'Farms', 'Market & Resources Hub', 'Task', 'Task Management',
-        'Financials & Sales', 'Inventory', 'Outstanding', 'Employee Management',
-        'Users Management', 'Smart Farming Guide', 'My Documents', 'Profile & Subscription',
+        'Dashboard', 'Dashboards', 'Farms', 'Market & Resources Hub', 'Task', 'Task Management',
+        'Sales', 'Inventory', 'Expenses', 'Employee', 'Reports',
     ]
 
     from django.db.models import Sum
@@ -991,6 +1283,46 @@ def manage_package(request):
 def manage_package_revenue(request):
     return render(request, "superadmin/packages/revenue_report.html")
 
+def toggle_package_status(request):
+    if request.method == "POST":
+        package_id = request.POST.get("package_id")
+        cycle = (request.POST.get("cycle") or "monthly").lower().strip()
+        is_active = request.POST.get("is_active") in ["true", "1", True]
+
+        pkg = Package.objects.filter(id=package_id).first()
+        if not pkg:
+            return JsonResponse({"status": "error", "message": "Package not found."}, status=404)
+
+        if cycle == "quarterly":
+            pkg.is_active_quarterly = is_active
+        elif cycle in ["yearly", "annual"]:
+            pkg.is_active_yearly = is_active
+        elif cycle == "master":
+            pkg.is_active = is_active
+        else:
+            pkg.is_active_monthly = is_active
+
+        if not pkg.is_active_monthly and not pkg.is_active_quarterly and not pkg.is_active_yearly:
+            pkg.is_active = False
+        else:
+            pkg.is_active = True
+
+        pkg.save()
+
+        cycle_label = "Quarterly" if cycle == "quarterly" else ("Annual" if cycle in ["yearly", "annual"] else "Monthly")
+        status_label = "Active" if is_active else "Inactive"
+
+        return JsonResponse({
+            "status": "success",
+            "message": f"{pkg.name} is now {status_label} for {cycle_label} billing cycle.",
+            "is_active_monthly": pkg.is_active_monthly,
+            "is_active_quarterly": pkg.is_active_quarterly,
+            "is_active_yearly": pkg.is_active_yearly,
+            "is_active": pkg.is_active
+        })
+
+    return JsonResponse({"status": "error", "message": "Invalid request method."}, status=405)
+
 
 # -------------------------
 # SUBSCRIPTION
@@ -1005,38 +1337,77 @@ def manage_subscription(request):
             auto_renew = request.POST.get("auto_renew") == "on"
             payment_status = request.POST.get("payment_status")
             subscription_status = request.POST.get("subscription_status")
+            billing_cycle = request.POST.get("billing_cycle", "monthly").lower()
 
             if farmer_id and package_id:
                 farmer = Profile.objects.get(id=farmer_id)
                 package = Package.objects.get(id=package_id)
-                from django.utils.dateparse import parse_date
+
+                def parse_date_flexible(val):
+                    if not val:
+                        return None
+                    val = str(val).strip()
+                    from datetime import datetime
+                    for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%Y/%m/%d'):
+                        try:
+                            return datetime.strptime(val, fmt).date()
+                        except ValueError:
+                            pass
+                    from django.utils.dateparse import parse_date
+                    return parse_date(val)
 
                 req_start = request.POST.get("start_date")
                 req_end = request.POST.get("end_date")
 
-                start_date = parse_date(req_start) if req_start else None
+                start_date = parse_date_flexible(req_start)
                 if not start_date:
                     start_date = timezone.now().date()
 
-                end_date = parse_date(req_end) if req_end else None
+                end_date = parse_date_flexible(req_end)
                 if not end_date:
-                    end_date = start_date + timedelta(days=30)
+                    if billing_cycle == 'yearly':
+                        end_date = start_date + timedelta(days=365)
+                    elif billing_cycle == 'quarterly':
+                        end_date = start_date + timedelta(days=90)
+                    else:
+                        end_date = start_date + timedelta(days=30)
+
+                monthly_amt = request.POST.get("monthly_amount")
+                try:
+                    if monthly_amt:
+                        monthly_amt = float(monthly_amt)
+                    elif billing_cycle == 'yearly' and package.price_yearly:
+                        monthly_amt = float(package.price_yearly)
+                    elif billing_cycle == 'quarterly' and package.price_quarterly:
+                        monthly_amt = float(package.price_quarterly)
+                    else:
+                        monthly_amt = float(package.price)
+                except (ValueError, TypeError):
+                    monthly_amt = float(package.price)
 
                 if subscription_status == "active":
                     Subscription.objects.filter(farmer=farmer, subscription_status='active').update(subscription_status='cancelled')
 
-                Subscription.objects.create(
+                new_sub = Subscription.objects.create(
                     farmer=farmer,
                     package=package,
-                    monthly_amount=package.price,
+                    monthly_amount=monthly_amt,
+                    billing_cycle=billing_cycle,
                     auto_renew=auto_renew,
                     payment_status=payment_status,
                     subscription_status=subscription_status,
                     start_date=start_date,
                     end_date=end_date
                 )
+                try:
+                    if farmer.email:
+                        from apps.superadmin.email_utils import send_package_purchase_email
+                        send_package_purchase_email(new_sub, is_upgrade=False, amount=monthly_amt, request=request)
+                except Exception as e:
+                    print(f"[Email Trigger Error - Package Purchase]: {e}")
                 messages.success(request, "Subscription created successfully!")
-            return redirect('manage_package')
+            referer = request.META.get('HTTP_REFERER')
+            return redirect(referer if referer else 'manage_subscription')
 
         elif action == "update_auto_renew":
             sub_id = request.POST.get("subscription_id")
@@ -1044,7 +1415,8 @@ def manage_subscription(request):
             if sub_id:
                 Subscription.objects.filter(id=sub_id).update(auto_renew=auto_renew)
                 messages.success(request, "Auto renewal updated!")
-            return redirect('manage_package')
+            referer = request.META.get('HTTP_REFERER')
+            return redirect(referer if referer else 'manage_subscription')
 
         elif action == "update_payment_status":
             sub_id = request.POST.get("subscription_id")
@@ -1052,14 +1424,16 @@ def manage_subscription(request):
             if sub_id and payment_status:
                 Subscription.objects.filter(id=sub_id).update(payment_status=payment_status)
                 messages.success(request, f"Payment status updated to {payment_status}!")
-            return redirect('manage_package')
+            referer = request.META.get('HTTP_REFERER')
+            return redirect(referer if referer else 'manage_subscription')
 
         elif action == "delete":
             sub_id = request.POST.get("subscription_id")
             if sub_id:
                 Subscription.objects.filter(id=sub_id).delete()
                 messages.success(request, "Subscription deleted!")
-            return redirect('manage_package')
+            referer = request.META.get('HTTP_REFERER')
+            return redirect(referer if referer else 'manage_subscription')
 
     farmers = Profile.objects.filter(role='farmer').select_related('user')
     packages = Package.objects.all()
@@ -1174,20 +1548,20 @@ def ajax_quick_add_crop(request):
 
             if not crop_name:
                 return JsonResponse({"success": False, "error": "Crop name is required."})
-            if Crop.objects.filter(name__iexact=crop_name).exists():
-                return JsonResponse({"success": False, "error": f"Crop '{crop_name}' already exists."})
-
             crop_type = None
             if crop_type_id:
                 crop_type = CropType.objects.filter(id=crop_type_id).first()
             if not crop_type:
                 crop_type = CropType.objects.first()
 
-            crop = Crop.objects.create(
+            crop, created = get_or_reactivate_master(
+                Crop,
                 name=crop_name,
-                crop_type=crop_type,
-                is_active=True
+                defaults={"crop_type": crop_type, "is_active": True},
             )
+            if crop_type and crop.crop_type_id != crop_type.id:
+                crop.crop_type = crop_type
+                crop.save(update_fields=["crop_type"])
             return JsonResponse({"success": True, "crop": {"id": crop.id, "name": crop.name}})
         except Exception as e:
             return JsonResponse({"success": False, "error": str(e)})
@@ -1840,15 +2214,15 @@ def add_crop_blueprint(request):
         else:
             messages.success(request, f'Scheduler "{name}" created successfully.')
 
-        return redirect(f'/admin-panel/schedule/?blueprint_id={blueprint.id}#scheduleTab')
-    return redirect('/admin-panel/schedule/#scheduleTab')
+        return redirect(f'/admin/schedule/?blueprint_id={blueprint.id}#scheduleTab')
+    return redirect('/admin/schedule/#scheduleTab')
 
 def delete_crop_blueprint(request):
     if request.method == 'POST':
         blueprint_id = request.POST.get('blueprint_id')
         CropBlueprint.objects.filter(id=blueprint_id).delete()
         messages.success(request, 'Scheduler deleted successfully.')
-    return redirect('/admin-panel/schedule/#scheduleTab')
+    return redirect('/admin/schedule/#scheduleTab')
 
 def add_blueprint_stage(request):
     if request.method == 'POST':
@@ -1866,8 +2240,8 @@ def add_blueprint_stage(request):
             priority_level=priority
         )
         messages.success(request, 'Step added successfully.')
-        return redirect(f'/admin-panel/schedule/?blueprint_id={blueprint_id}#scheduleTab')
-    return redirect('/admin-panel/schedule/#scheduleTab')
+        return redirect(f'/admin/schedule/?blueprint_id={blueprint_id}#scheduleTab')
+    return redirect('/admin/schedule/#scheduleTab')
 
 def edit_blueprint_stage(request):
     if request.method == 'POST':
@@ -1882,8 +2256,8 @@ def edit_blueprint_stage(request):
             stage.priority_level = request.POST.get('priority_level')
             stage.save()
             messages.success(request, 'Step updated successfully.')
-        return redirect(f'/admin-panel/schedule/?blueprint_id={blueprint_id}#scheduleTab')
-    return redirect('/admin-panel/schedule/#scheduleTab')
+        return redirect(f'/admin/schedule/?blueprint_id={blueprint_id}#scheduleTab')
+    return redirect('/admin/schedule/#scheduleTab')
 
 def delete_blueprint_stage(request):
     if request.method == 'POST':
@@ -1891,8 +2265,8 @@ def delete_blueprint_stage(request):
         blueprint_id = request.POST.get('blueprint_id')
         BlueprintStage.objects.filter(id=stage_id).delete()
         messages.success(request, 'Step deleted successfully.')
-        return redirect(f'/admin-panel/schedule/?blueprint_id={blueprint_id}#scheduleTab')
-    return redirect('/admin-panel/schedule/#scheduleTab')
+        return redirect(f'/admin/schedule/?blueprint_id={blueprint_id}#scheduleTab')
+    return redirect('/admin/schedule/#scheduleTab')
 
 
 
@@ -1989,7 +2363,7 @@ def ajax_quick_add_guideline_category(request):
         name = request.POST.get("name", "").strip()
         if not name:
             return JsonResponse({"success": False, "error": "Category name cannot be empty."})
-        obj, created = GuidelineCategory.objects.get_or_create(
+        obj, created = get_or_reactivate_master(GuidelineCategory,
             name=name,
             defaults={"description": f"Auto-created category: {name}", "is_active": True}
         )
@@ -2023,7 +2397,7 @@ def ajax_quick_add_service_class(request):
         name = request.POST.get("name", "").strip()
         if not name:
             return JsonResponse({"success": False, "error": "Service Class name cannot be empty."})
-        obj, created = LocationCategory.objects.get_or_create(
+        obj, created = get_or_reactivate_master(LocationCategory,
             name=name,
             defaults={"description": f"Auto-created service class: {name}", "is_active": True}
         )
@@ -2057,7 +2431,7 @@ def ajax_quick_add_designation(request):
         name = request.POST.get("name", "").strip()
         if not name:
             return JsonResponse({"success": False, "error": "Designation name cannot be empty."})
-        obj, created = Designation.objects.get_or_create(
+        obj, created = get_or_reactivate_master(Designation,
             name=name,
             defaults={"description": f"Auto-created designation: {name}", "is_active": True}
         )
@@ -2087,7 +2461,7 @@ def ajax_quick_add_worker_skill(request):
         name = request.POST.get("name", "").strip()
         if not name:
             return JsonResponse({"success": False, "error": "Skill name cannot be empty."})
-        obj, created = ManPowerWorkType.objects.get_or_create(
+        obj, created = get_or_reactivate_master(ManPowerWorkType,
             name=name,
             defaults={"description": f"Auto-created skill: {name}", "is_active": True}
         )
@@ -2117,7 +2491,7 @@ def ajax_quick_add_wage_unit(request):
         name = request.POST.get("name", "").strip()
         if not name:
             return JsonResponse({"success": False, "error": "Unit name cannot be empty."})
-        obj, created = ExpenseUnit.objects.get_or_create(
+        obj, created = get_or_reactivate_master(ExpenseUnit,
             name=name,
             defaults={"description": f"Auto-created unit: {name}", "is_active": True}
         )
@@ -2458,6 +2832,9 @@ def manage_guidelines(request):
 # USERS
 # -------------------------
 def manage_users(request):
+    if not is_admin_user(request.user):
+        return JsonResponse({"error": "Administration access required."}, status=403)
+    users = admin_users()
     if request.method == "POST":
         action = request.POST.get("action")
 
@@ -2506,6 +2883,9 @@ def manage_users(request):
             mobile = request.POST.get("mobile", "").strip()
             password = request.POST.get("password", "").strip()
             role = request.POST.get("role", "").strip()
+            if role.lower() in {'farmer', 'staff'}:
+                messages.error(request, "Choose an administration role, not a farm role.")
+                return redirect('manage_users')
             status = request.POST.get("status")  # '0' for Active, '1' for Suspended
 
             perm_all = request.POST.get('perm_all') == 'true'
@@ -2517,10 +2897,13 @@ def manage_users(request):
             assigned_permissions = ["ALL"] if perm_all else (selected_perms if isinstance(selected_perms, list) else [])
 
             if name and email and mobile and password:
+                from apps.superadmin.phone_utils import check_mobile_already_exists
+                is_mobile_taken, mobile_err = check_mobile_already_exists(mobile)
+
                 if User.objects.filter(email=email).exists():
                     messages.error(request, "A user with this email already exists.")
-                elif Profile.objects.filter(mobile_number=mobile).exists():
-                    messages.error(request, "A user with this mobile number already exists.")
+                elif is_mobile_taken:
+                    messages.error(request, mobile_err)
                 else:
                     user = User.objects.create_user(username=email, email=email, first_name=name, password=password)
                     user.is_active = (status == "0")
@@ -2539,7 +2922,7 @@ def manage_users(request):
 
         elif action == "edit":
             user_id = request.POST.get("id")
-            user = User.objects.get(id=user_id)
+            user = get_object_or_404(users, id=user_id)
 
             if user.email == 'admin@agriot.com':
                 messages.error(request, "You cannot modify the primary Superadmin account.")
@@ -2550,6 +2933,9 @@ def manage_users(request):
             mobile = request.POST.get("mobile", "").strip()
             password = request.POST.get("password", "").strip()
             role = request.POST.get("role", "").strip()
+            if role.lower() in {'farmer', 'staff'}:
+                messages.error(request, "Choose an administration role, not a farm role.")
+                return redirect('manage_users')
             status = request.POST.get("status")
 
             perm_all = request.POST.get('perm_all') == 'true'
@@ -2561,10 +2947,17 @@ def manage_users(request):
             assigned_permissions = ["ALL"] if perm_all else (selected_perms if isinstance(selected_perms, list) else [])
 
             if name and email and mobile:
+                from apps.superadmin.phone_utils import check_mobile_already_exists
+                is_mobile_taken, mobile_err = check_mobile_already_exists(
+                    mobile,
+                    exclude_user_id=user_id,
+                    exclude_profile_id=getattr(user, 'profile', None).id if hasattr(user, 'profile') else None
+                )
+
                 if User.objects.filter(email=email).exclude(id=user_id).exists():
                     messages.error(request, "A user with this email already exists.")
-                elif Profile.objects.filter(mobile_number=mobile).exclude(user_id=user_id).exists():
-                    messages.error(request, "A user with this mobile number already exists.")
+                elif is_mobile_taken:
+                    messages.error(request, mobile_err)
                 else:
                     user.first_name = name
                     user.email = email
@@ -2573,6 +2966,7 @@ def manage_users(request):
                         user.set_password(password)
                     user.is_active = (status == "0")
                     user.save()
+
 
                     profile = user.profile
                     profile.role = role if role else 'admin'
@@ -2586,7 +2980,7 @@ def manage_users(request):
 
         elif action == "delete":
             user_id = request.POST.get("id")
-            user = User.objects.get(id=user_id)
+            user = get_object_or_404(users, id=user_id)
             if user.email == 'admin@agriot.com':
                 messages.error(request, "You cannot delete the primary Superadmin account.")
             else:
@@ -2597,11 +2991,11 @@ def manage_users(request):
 
         return redirect("manage_users")
 
-    # Fetch users who are not farmers (or all users based on your preference, assuming superadmin manages staff here)
-    staff_users = User.objects.exclude(profile__role='farmer').order_by('-date_joined')
+    # Only administration accounts belong in this list and its role options.
+    staff_users = users.order_by('-date_joined')
 
     # Get all distinct roles dynamically
-    roles = set(User.objects.exclude(profile__role='farmer').values_list('profile__role', flat=True))
+    roles = set(users.values_list('profile__role', flat=True))
     roles = [r for r in roles if r]  # filter empty roles
 
     admin_permissions = [
@@ -2613,6 +3007,7 @@ def manage_users(request):
         "Workers Availability",
         "Rental Availability",
         "Guidelines Management",
+        "Documents",
         "Users Management",
         "Reports",
         "Settings"
@@ -2629,6 +3024,12 @@ def manage_users(request):
 # SETTINGS
 # -------------------------
 def general_settings(request):
+    if request.method == "POST":
+        from apps.farmer.validation import pincode_error
+        error = pincode_error(request)
+        if error is not None:
+            return error
+
     setting = GeneralSetting.objects.first()
     if not setting:
         setting = GeneralSetting.objects.create()
@@ -2652,6 +3053,17 @@ def general_settings(request):
         setting.cin = request.POST.get('cin', setting.cin)
         setting.weather_api_key = request.POST.get('weather_api_key', setting.weather_api_key)
 
+        # Razorpay settings if present in request
+        if 'razorpay_key_id' in request.POST:
+            setting.razorpay_key_id = request.POST.get('razorpay_key_id', '').strip()
+        if 'razorpay_key_secret' in request.POST:
+            setting.razorpay_key_secret = request.POST.get('razorpay_key_secret', '').strip()
+        if 'razorpay_webhook_secret' in request.POST:
+            setting.razorpay_webhook_secret = request.POST.get('razorpay_webhook_secret', '').strip()
+        if 'has_razorpay_section' in request.POST:
+            setting.razorpay_enabled = request.POST.get('razorpay_enabled') in ['on', 'true', '1']
+            setting.razorpay_auto_renew = request.POST.get('razorpay_auto_renew') in ['on', 'true', '1']
+
         country_id = request.POST.get('country')
         if country_id:
             try:
@@ -2672,6 +3084,17 @@ def general_settings(request):
                 setting.city = City.objects.get(id=city_id)
             except City.DoesNotExist:
                 pass
+        elif 'city' in request.POST:
+            setting.city = None
+
+        taluk_id = request.POST.get('taluk')
+        if taluk_id:
+            try:
+                setting.taluk = Taluk.objects.get(id=taluk_id)
+            except Taluk.DoesNotExist:
+                pass
+        elif 'taluk' in request.POST:
+            setting.taluk = None
 
         setting.save()
         messages.success(request, 'General Settings updated successfully!')
@@ -2681,13 +3104,144 @@ def general_settings(request):
     countries = Country.objects.all().order_by('name')
     states = State.objects.filter(country=setting.country).order_by('name') if setting.country else State.objects.none()
     cities = City.objects.filter(state=setting.state).order_by('name') if setting.state else City.objects.none()
+    taluks = Taluk.objects.filter(city=setting.city).order_by('name') if setting.city else Taluk.objects.none()
 
     return render(request, "superadmin/settings/general_settings.html", {
         "setting": setting,
         "countries": countries,
         "states": states,
-        "cities": cities
+        "cities": cities,
+        "taluks": taluks
     })
+
+
+def payment_integrations(request):
+    setting = GeneralSetting.objects.first()
+    if not setting:
+        setting = GeneralSetting.objects.create()
+
+    if request.method == "POST":
+        setting.razorpay_key_id = request.POST.get("razorpay_key_id", "").strip()
+        setting.razorpay_key_secret = request.POST.get("razorpay_key_secret", "").strip()
+        setting.razorpay_webhook_secret = request.POST.get("razorpay_webhook_secret", "").strip()
+        setting.razorpay_enabled = request.POST.get("razorpay_enabled") in ["on", "true", "1"]
+        setting.razorpay_auto_renew = request.POST.get("razorpay_auto_renew") in ["on", "true", "1"]
+        setting.save()
+        messages.success(request, "Razorpay payment integration & auto-renewal settings saved successfully!")
+        return redirect("payment_integrations")
+
+    webhook_url = request.build_absolute_uri("/payment/razorpay/webhook/")
+    return render(request, "superadmin/settings/integrations.html", {
+        "setting": setting,
+        "webhook_url": webhook_url,
+    })
+
+
+def trigger_auto_renew_check(request):
+    from apps.superadmin.razorpay_utils import process_all_auto_renewals
+    result = process_all_auto_renewals()
+    if request.headers.get("x-requested-with") == "XMLHttpRequest" or request.GET.get("format") == "json":
+        return JsonResponse(result)
+    if result.get("success"):
+        messages.success(request, result.get("message", "Auto-renewal check completed."))
+    else:
+        messages.warning(request, result.get("message", "Auto-renewal could not be run."))
+    return redirect("payment_integrations")
+
+
+def superadmin_mail_settings(request):
+    from apps.superadmin.models import SMTPSettings
+    config = SMTPSettings.objects.filter(is_default=True).first()
+    if not config:
+        config = SMTPSettings.objects.filter(user__isnull=True).first()
+    if not config:
+        config = SMTPSettings.objects.create(
+            is_default=True,
+            email_host="smtp.gmail.com",
+            email_port=587,
+            email_use_tls=True,
+            email_use_ssl=False,
+            from_name="AgriOT Platform",
+            is_active=True
+        )
+
+    if request.method == "POST":
+        config.email_host = request.POST.get("email_host", "smtp.gmail.com").strip()
+        try:
+            config.email_port = int(request.POST.get("email_port", 587))
+        except (ValueError, TypeError):
+            config.email_port = 587
+        config.email_host_user = request.POST.get("email_host_user", "").strip()
+        pwd = request.POST.get("email_host_password", "").strip()
+        if pwd:
+            config.email_host_password = pwd
+        security = request.POST.get("security_mode", "tls")
+        config.email_use_tls = (security == "tls")
+        config.email_use_ssl = (security == "ssl")
+        config.from_email = request.POST.get("from_email", "").strip() or config.email_host_user
+        config.from_name = request.POST.get("from_name", "AgriOT Platform").strip()
+        config.is_active = request.POST.get("is_active") in ["on", "true", "1"]
+        config.is_default = True
+        config.save()
+        messages.success(request, "SuperAdmin SMTP Mail settings saved successfully!")
+        return redirect("superadmin_mail_settings")
+
+    return render(request, "superadmin/settings/mail_settings.html", {
+        "config": config,
+    })
+
+
+def superadmin_test_mail(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "message": "POST method required."}, status=405)
+
+    from apps.superadmin.models import SMTPSettings
+    from apps.superadmin.email_utils import test_smtp_connection
+
+    config = SMTPSettings.objects.filter(is_default=True).first()
+    if not config:
+        config = SMTPSettings.objects.filter(user__isnull=True).first()
+
+    if not config or not config.email_host_user or not config.email_host_password:
+        return JsonResponse({"success": False, "message": "Please configure and save your SMTP Email & App Password before testing."}, status=400)
+
+    test_recipient = (request.POST.get("test_email") or "").strip()
+    if not test_recipient:
+        return JsonResponse({"success": False, "message": "Please provide a valid recipient email address."}, status=400)
+
+    success, message = test_smtp_connection(config, test_recipient)
+    return JsonResponse({"success": success, "message": message})
+
+
+def superadmin_preview_email(request, template_type):
+    from django.http import HttpResponse
+    import datetime
+    from django.utils import timezone
+    sample_context = {
+        'farmer_name': "Ramesh Kumar",
+        'mobile_number': "+91 98765 43210",
+        'email': "ramesh.farmer@example.com",
+        'package_name': "Pro AgriOT Plan",
+        'max_acre_support': "50",
+        'billing_cycle': "Monthly",
+        'amount': "2,499.00",
+        'start_date': timezone.now().strftime("%d %b %Y"),
+        'end_date': (timezone.now() + datetime.timedelta(days=30)).strftime("%d %b %Y"),
+        'login_url': request.build_absolute_uri('/farmer/'),
+        'dashboard_url': request.build_absolute_uri('/farmer/dashboard/'),
+        'is_upgrade': True,
+        'current_year': timezone.now().year,
+    }
+    if template_type == "welcome":
+        return render(request, "emails/welcome_email.html", sample_context)
+    elif template_type == "renewal":
+        return render(request, "emails/renewal_email.html", sample_context)
+    elif template_type == "upgrade":
+        return render(request, "emails/package_upgrade_email.html", sample_context)
+    else:
+        return HttpResponse("Unknown template type", status=404)
+
+
 def product_unit(request):
     if request.method == "POST":
         action = request.POST.get("action")
@@ -3047,7 +3601,51 @@ def document_category(request):
         return redirect("document_category")
 
     categories = DocumentCategory.objects.all().order_by("-created_at")
-    return render(request, "superadmin/settings/document_category.html", {"categories": categories})
+    doc_types = DocumentType.objects.filter(is_active=True).order_by("name")
+    return render(request, "superadmin/settings/document_category.html", {"categories": categories, "doc_types": doc_types})
+
+
+def document_type(request):
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "add":
+            name = request.POST.get("name", "").strip()
+            if DocumentType.objects.filter(name__iexact=name).exists():
+                messages.error(request, "Document Type with this name already exists!")
+                return redirect(request.path)
+            description = request.POST.get("description", "").strip()
+            is_active = request.POST.get("is_active") == "on"
+            if name:
+                DocumentType.objects.create(name=name, description=description, is_active=is_active)
+                messages.success(request, "Document Type added successfully!")
+            else:
+                messages.error(request, "Document Type cannot be empty.")
+        elif action == "edit":
+            dt_id = request.POST.get("id")
+            dt = DocumentType.objects.get(id=dt_id)
+            name = request.POST.get("name", "").strip()
+            if name:
+                if DocumentType.objects.filter(name__iexact=name).exclude(id=dt_id).exists():
+                    messages.error(request, "Document Type with this name already exists!")
+                    return redirect(request.path)
+                dt.name = name
+                dt.description = request.POST.get("description", "").strip()
+                dt.is_active = request.POST.get("is_active") == "on"
+                dt.save()
+                messages.success(request, "Document Type updated successfully!")
+            else:
+                messages.error(request, "Document Type cannot be empty.")
+        elif action == "delete":
+            dt_id = request.POST.get("id")
+            DocumentType.objects.filter(id=dt_id).delete()
+            messages.success(request, "Document Type deleted successfully!")
+
+        return redirect("document_type")
+
+    doc_types = DocumentType.objects.all().order_by("-created_at")
+    return render(request, "superadmin/settings/document_type.html", {"doc_types": doc_types})
+
+
 def product_type(request):
     if request.method == "POST":
         action = request.POST.get("action")
@@ -3175,12 +3773,235 @@ def harvesting_frequency(request):
 
 
 def ajax_get_taluks(request):
-    city_id = request.GET.get('city_id')
-    from .models import Taluk
+    city_id = request.GET.get('city_id') or request.GET.get('district_id')
+    from apps.superadmin.models import Taluk
     if city_id:
         taluks = Taluk.objects.filter(city_id=city_id).values('id', 'name').order_by('name')
         return JsonResponse(list(taluks), safe=False)
     return JsonResponse([], safe=False)
+
+
+def state_settings(request):
+    from apps.superadmin.models import State, Country
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "add":
+            name = (request.POST.get("name") or "").strip()
+            country_id = request.POST.get("country_id") or request.POST.get("country")
+            status = request.POST.get("status", "1")
+            if not name:
+                messages.error(request, "State name is required!")
+                return redirect(request.path)
+            if State.objects.filter(name__iexact=name).exists():
+                messages.error(request, f"State '{name}' already exists!")
+                return redirect(request.path)
+            country = Country.objects.filter(id=country_id).first() if country_id else Country.objects.first()
+            if not country:
+                country = Country.objects.create(name="India", sort_name="IN", phone_code="+91", status="1")
+            State.objects.create(name=name, country=country, status=status)
+            messages.success(request, f"State '{name}' added successfully!")
+
+        elif action == "edit":
+            state_id = request.POST.get("id")
+            name = (request.POST.get("name") or "").strip()
+            country_id = request.POST.get("country_id") or request.POST.get("country")
+            status = request.POST.get("status", "1")
+            if not name:
+                messages.error(request, "State name cannot be empty!")
+                return redirect(request.path)
+            if State.objects.filter(name__iexact=name).exclude(id=state_id).exists():
+                messages.error(request, f"Another State with name '{name}' already exists!")
+                return redirect(request.path)
+            st = get_object_or_404(State, id=state_id)
+            st.name = name
+            if country_id:
+                c = Country.objects.filter(id=country_id).first()
+                if c:
+                    st.country = c
+            st.status = status
+            st.save()
+            messages.success(request, f"State '{name}' updated successfully!")
+
+        elif action == "delete":
+            state_id = request.POST.get("id")
+            st = get_object_or_404(State, id=state_id)
+            state_name = st.name
+            st.delete()
+            messages.success(request, f"State '{state_name}' deleted successfully!")
+
+        return redirect("state_settings")
+
+    from django.core.paginator import Paginator
+    from django.db.models import Count
+    query = request.GET.get('q', '').strip()
+    states_query = State.objects.select_related('country').order_by('name', 'id')
+    if query:
+        states_query = states_query.filter(name__icontains=query)
+    page_obj = Paginator(states_query, 25).get_page(request.GET.get('page'))
+    counts = dict(City.objects.filter(state_id__in=[state.id for state in page_obj]).values_list('state_id').annotate(total=Count('id')))
+    for state in page_obj:
+        state.cities_count = counts.get(state.id, 0)
+    params = request.GET.copy()
+    params.pop('page', None)
+    return render(request, "superadmin/settings/state.html", {
+        "states": page_obj, "page_obj": page_obj, "query": query,
+        "page_query": params.urlencode(),
+        "countries": Country.objects.all().order_by('name'),
+    })
+
+
+def city_settings(request):
+    from apps.superadmin.models import State, City
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "add":
+            name = (request.POST.get("name") or "").strip()
+            state_id = request.POST.get("state_id") or request.POST.get("state")
+            status = request.POST.get("status", "1")
+            if not name:
+                messages.error(request, "District / City name is required!")
+                return redirect(request.path)
+            if not state_id:
+                messages.error(request, "Please select a State!")
+                return redirect(request.path)
+            state = get_object_or_404(State, id=state_id)
+            if City.objects.filter(name__iexact=name, state=state).exists():
+                messages.error(request, f"District / City '{name}' already exists in {state.name}!")
+                return redirect(request.path)
+            City.objects.create(name=name, state=state, status=status)
+            messages.success(request, f"District / City '{name}' added successfully!")
+
+        elif action == "edit":
+            city_id = request.POST.get("id")
+            name = (request.POST.get("name") or "").strip()
+            state_id = request.POST.get("state_id") or request.POST.get("state")
+            status = request.POST.get("status", "1")
+            if not name:
+                messages.error(request, "Name cannot be empty!")
+                return redirect(request.path)
+            ct = get_object_or_404(City, id=city_id)
+            if state_id:
+                st = get_object_or_404(State, id=state_id)
+                if City.objects.filter(name__iexact=name, state=st).exclude(id=city_id).exists():
+                    messages.error(request, f"District / City '{name}' already exists in {st.name}!")
+                    return redirect(request.path)
+                ct.state = st
+            ct.name = name
+            ct.status = status
+            ct.save()
+            messages.success(request, f"District / City '{name}' updated successfully!")
+
+        elif action == "delete":
+            city_id = request.POST.get("id")
+            ct = get_object_or_404(City, id=city_id)
+            city_name = ct.name
+            ct.delete()
+            messages.success(request, f"District / City '{city_name}' deleted successfully!")
+
+        return redirect("city_settings")
+
+    from django.core.paginator import Paginator
+    from django.db.models import Count
+    selected_state = request.GET.get('state', '')
+    selected_state = selected_state if selected_state.isdigit() else ''
+    query = request.GET.get('q', '').strip()
+    cities_query = City.objects.select_related('state').order_by('state__name', 'name', 'id')
+    if selected_state:
+        cities_query = cities_query.filter(state_id=selected_state)
+    if query:
+        cities_query = cities_query.filter(name__icontains=query)
+    page_obj = Paginator(cities_query, 25).get_page(request.GET.get('page'))
+    counts = dict(Taluk.objects.filter(city_id__in=[city.id for city in page_obj]).values_list('city_id').annotate(total=Count('id')))
+    for city in page_obj:
+        city.taluks_count = counts.get(city.id, 0)
+    params = request.GET.copy()
+    params.pop('page', None)
+    return render(request, "superadmin/settings/city.html", {
+        "cities": page_obj, "page_obj": page_obj, "query": query,
+        "page_query": params.urlencode(), "states": State.objects.all().order_by('name'),
+        "selected_state": selected_state,
+    })
+
+
+def taluk_settings(request):
+    from apps.superadmin.models import State, City, Taluk
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "add":
+            name = (request.POST.get("name") or "").strip()
+            city_id = request.POST.get("city_id") or request.POST.get("city") or request.POST.get("district")
+            status = request.POST.get("status", "1")
+            if not name:
+                messages.error(request, "Taluk name is required!")
+                return redirect(request.path)
+            if not city_id:
+                messages.error(request, "Please select a District / City!")
+                return redirect(request.path)
+            city = get_object_or_404(City, id=city_id)
+            if Taluk.objects.filter(name__iexact=name, city=city).exists():
+                messages.error(request, f"Taluk '{name}' already exists in {city.name}!")
+                return redirect(request.path)
+            Taluk.objects.create(name=name, city=city, status=status)
+            messages.success(request, f"Taluk '{name}' added successfully!")
+
+        elif action == "edit":
+            taluk_id = request.POST.get("id")
+            name = (request.POST.get("name") or "").strip()
+            city_id = request.POST.get("city_id") or request.POST.get("city") or request.POST.get("district")
+            status = request.POST.get("status", "1")
+            if not name:
+                messages.error(request, "Taluk name cannot be empty!")
+                return redirect(request.path)
+            tlk = get_object_or_404(Taluk, id=taluk_id)
+            if city_id:
+                ct = get_object_or_404(City, id=city_id)
+                if Taluk.objects.filter(name__iexact=name, city=ct).exclude(id=taluk_id).exists():
+                    messages.error(request, f"Taluk '{name}' already exists in {ct.name}!")
+                    return redirect(request.path)
+                tlk.city = ct
+            tlk.name = name
+            tlk.status = status
+            tlk.save()
+            messages.success(request, f"Taluk '{name}' updated successfully!")
+
+        elif action == "delete":
+            taluk_id = request.POST.get("id")
+            tlk = get_object_or_404(Taluk, id=taluk_id)
+            taluk_name = tlk.name
+            tlk.delete()
+            messages.success(request, f"Taluk '{taluk_name}' deleted successfully!")
+
+        return redirect("taluk_settings")
+
+    from django.core.paginator import Paginator
+    selected_state = request.GET.get('state', '')
+    selected_state = selected_state if selected_state.isdigit() else ''
+    selected_city = request.GET.get('city', '') or request.GET.get('district', '')
+    selected_city = selected_city if selected_city.isdigit() else ''
+    query = request.GET.get('q', '').strip()
+    taluks_query = Taluk.objects.select_related('city', 'city__state')
+    if selected_city:
+        taluks_query = taluks_query.filter(city_id=selected_city)
+    if selected_state:
+        taluks_query = taluks_query.filter(city__state_id=selected_state)
+    if query:
+        taluks_query = taluks_query.filter(name__icontains=query)
+    taluks_query = taluks_query.order_by('city__name', 'name', 'id')
+    page_obj = Paginator(taluks_query, 25).get_page(request.GET.get('page'))
+    states = State.objects.all().order_by('name')
+    if selected_state:
+        cities = City.objects.filter(state_id=selected_state).order_by('name')
+    elif selected_city:
+        cities = City.objects.filter(id=selected_city)
+    else:
+        cities = City.objects.none()
+    params = request.GET.copy()
+    params.pop('page', None)
+    return render(request, "superadmin/settings/taluk.html", {
+        "taluks": page_obj, "page_obj": page_obj, "query": query,
+        "page_query": params.urlencode(), "states": states, "cities": cities,
+        "selected_state": selected_state, "selected_city": selected_city,
+    })
 
 
 # -------------------------
@@ -3906,6 +4727,11 @@ def crop_category_settings(request):
 
         return redirect("crop_category_settings")
 
+    if not CropCategory.objects.exists():
+        default_categories = ['Organic', 'Live stock', 'Agri', 'Horti', 'Trees']
+        for cat_name in default_categories:
+            CropCategory.objects.create(name=cat_name, description=f"Standard {cat_name} category", is_active=True)
+
     items = CropCategory.objects.all().order_by("-created_at")
     return render(request, "superadmin/settings/crop_category.html", {"crop_categories": items})
 
@@ -3946,6 +4772,11 @@ def crop_pattern_settings(request):
             messages.success(request, "Crop Pattern deleted successfully!")
 
         return redirect("crop_pattern_settings")
+
+    if not CropPattern.objects.exists():
+        default_patterns = ['Pandhal', 'Green House', 'Open Field']
+        for pat_name in default_patterns:
+            CropPattern.objects.create(name=pat_name, description=f"Standard {pat_name} pattern", is_active=True)
 
     items = CropPattern.objects.all().order_by("-created_at")
     return render(request, "superadmin/settings/crop_pattern.html", {"crop_patterns": items})
@@ -4072,4 +4903,45 @@ def maintenance_schedule_settings(request):
 
     items = MaintenanceSchedule.objects.all().order_by("-created_at")
     return render(request, "superadmin/settings/maintenance_schedule.html", {"maintenance_schedules": items})
+
+
+def health_indicator(request):
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "add":
+            name = request.POST.get("name", "").strip()
+            if not name:
+                messages.error(request, "Health Indicator cannot be empty.")
+                return redirect(request.path)
+            if HealthIndicator.objects.filter(name__iexact=name).exists():
+                messages.error(request, "Health Indicator with this name already exists!")
+                return redirect(request.path)
+            description = request.POST.get("description", "").strip()
+            is_active = request.POST.get("is_active") == "on" or request.POST.get("is_active") is True
+            HealthIndicator.objects.create(name=name, description=description, is_active=is_active)
+            messages.success(request, "Health Indicator added successfully!")
+        elif action == "edit":
+            item_id = request.POST.get("id")
+            name = request.POST.get("name", "").strip()
+            if not name:
+                messages.error(request, "Health Indicator cannot be empty.")
+                return redirect(request.path)
+            if HealthIndicator.objects.filter(name__iexact=name).exclude(id=item_id).exists():
+                messages.error(request, "Health Indicator with this name already exists!")
+                return redirect(request.path)
+            item = HealthIndicator.objects.get(id=item_id)
+            item.name = name
+            item.description = request.POST.get("description", "").strip()
+            item.is_active = request.POST.get("is_active") == "on" or request.POST.get("is_active") is True
+            item.save()
+            messages.success(request, "Health Indicator updated successfully!")
+        elif action == "delete":
+            item_id = request.POST.get("id")
+            HealthIndicator.objects.filter(id=item_id).delete()
+            messages.success(request, "Health Indicator deleted successfully!")
+
+        return redirect("health_indicator")
+
+    items = HealthIndicator.objects.all().order_by("-created_at")
+    return render(request, "superadmin/settings/health_indicator.html", {"health_indicators": items})
 

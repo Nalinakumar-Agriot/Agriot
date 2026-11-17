@@ -108,6 +108,18 @@ $(document).ready(function() {
         var val = $(this).val();
         docTable.column(1).search(val ? '^' + val + '$' : '', true, false).draw();
     });
+
+    $(document).on('click', '.doc-cat-opt', function (e) {
+        e.preventDefault();
+        let val = $(this).data('val');
+        let label = $(this).find('.doc-cat-text').text().trim();
+        $('#categoryFilter').val(val).trigger('change');
+        $('#categoryFilterLabel').text(label);
+        $('.doc-cat-opt').removeClass('active');
+        $('.doc-cat-opt .check-mark').addClass('d-none');
+        $(this).addClass('active');
+        $(this).find('.check-mark').removeClass('d-none');
+    });
 });
 
 function validateFileSize(input) {
@@ -171,17 +183,45 @@ function copyShareLink(shareUrl) {
           </div>
         </div>
 
-        <select id="categoryFilter" class="form-select form-select-sm w-auto">
-            <option value="">All Categories</option>
+        <!-- Themed Category Filter Dropdown -->
+        <input type="hidden" id="categoryFilter" value="">
+        <div class="dropdown">
+          <button class="btn dropdown-toggle d-flex align-items-center gap-2 px-3 rounded-3 fw-semibold filter-dropdown-btn" 
+                  type="button" 
+                  id="categoryFilterBtn" 
+                  data-bs-toggle="dropdown" 
+                  aria-expanded="false">
+            <i class="ri-folder-shared-line" style="color: #F69C55;"></i>
+            <span id="categoryFilterLabel">All Categories</span>
+          </button>
+          <ul class="dropdown-menu shadow-lg border-0 py-1 rounded-3" aria-labelledby="categoryFilterBtn" style="min-width: 190px; max-height: 280px; overflow-y: auto;">
+            <li>
+              <a class="dropdown-item filter-dropdown-opt doc-cat-opt d-flex align-items-center justify-content-between active" href="javascript:void(0)" data-val="">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #94a3b8;"></span>
+                  <span class="doc-cat-text">All Categories</span>
+                </span>
+                <i class="ri-check-line check-mark"></i>
+              </a>
+            </li>
             {% regroup doc_categories by document_type as type_list %}
             {% for type in type_list %}
-            <optgroup label="{{ type.grouper }}">
-                {% for cat in type.list %}
-                <option value="{{ cat.name }}">{{ cat.name }}</option>
-                {% endfor %}
-            </optgroup>
+            <li><hr class="dropdown-divider my-1"></li>
+            <li class="dropdown-header text-uppercase text-muted fw-bold px-3 py-1" style="font-size: 11px;">{{ type.grouper }}</li>
+            {% for cat in type.list %}
+            <li>
+              <a class="dropdown-item filter-dropdown-opt doc-cat-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="{{ cat.name }}">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #F69C55;"></span>
+                  <span class="doc-cat-text">{{ cat.name }}</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
             {% endfor %}
-        </select>
+            {% endfor %}
+          </ul>
+        </div>
     </div>
 
     <div class="table-responsive text-nowrap p-3">

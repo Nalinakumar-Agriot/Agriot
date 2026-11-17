@@ -48,6 +48,91 @@
     box-shadow: 0 2px 6px rgba(246, 156, 85, 0.25);
   }
 
+  /* Daily attendance filters must remain a compact toolbar on desktop.
+     Theme-level form styles otherwise make each select consume a full row. */
+  .attendance-filter-row {
+    min-height: 38px;
+  }
+  .attendance-filter-options {
+    min-width: 0;
+  }
+  .attendance-filter-options .form-select {
+    flex: 0 0 180px;
+    width: 180px !important;
+    min-width: 180px !important;
+    max-width: 100%;
+    height: 38px !important;
+  }
+  .attendance-filter-options .attendance-filter-label {
+    height: 38px;
+    white-space: nowrap;
+  }
+  @media (min-width: 768px) {
+    .attendance-filter-row,
+    .attendance-filter-options {
+      flex-wrap: nowrap !important;
+    }
+  }
+  @media (max-width: 767.98px) {
+    .attendance-filter-options {
+      width: 100%;
+    }
+    .attendance-filter-options .form-select {
+      flex: 1 1 180px;
+    }
+    .attendance-filter-row .attendance-filter-reset {
+      margin-left: 0 !important;
+    }
+  }
+
+  /* Advance filters use fixed, readable desktop controls instead of allowing
+     theme form rules to stretch them into separate rows. */
+  .advance-filter-toolbar {
+    min-height: 62px;
+  }
+  .advance-filter-controls {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+  }
+  .advance-filter-controls .form-select {
+    flex: 0 0 190px;
+    width: 190px !important;
+    max-width: 100%;
+    height: 38px;
+  }
+  @media (min-width: 768px) {
+    .advance-filter-toolbar {
+      flex-wrap: nowrap !important;
+    }
+    .advance-filter-controls {
+      flex-wrap: nowrap !important;
+      margin-left: auto;
+    }
+    .advance-filter-toolbar .advance-add-action {
+      margin-left: 0 !important;
+      flex-wrap: nowrap !important;
+    }
+  }
+  @media (max-width: 767.98px) {
+    .advance-filter-toolbar {
+      align-items: flex-start !important;
+    }
+    .advance-filter-controls {
+      flex: 1 1 100%;
+      flex-wrap: wrap;
+      width: 100%;
+    }
+    .advance-filter-controls .form-select {
+      flex: 1 1 180px;
+    }
+    .advance-filter-toolbar .advance-add-action {
+      margin-left: 0 !important;
+      width: 100%;
+    }
+  }
+
   .list-group-item {
     background: transparent;
   }
@@ -255,21 +340,34 @@
     font-weight: 600;
     background: #fff;
     transition: all 0.2s;
+    user-select: none;
   }
 
   .radio-card:hover {
     background: #f8fafc;
   }
 
-  .radio-card input {
+  .radio-card input[type="radio"] {
     accent-color: #10b981;
+    cursor: pointer;
+    width: 17px;
+    height: 17px;
   }
 
-  /* ACTIVE STATE */
-  .radio-card.active {
-    background: #ecfdf5;
-    border-color: #34d399;
-    color: #065f46;
+  /* ACTIVE STATE: dynamically tied to input:checked and .active */
+  .radio-card.active,
+  .radio-card:has(input[type="radio"]:checked) {
+    background: #ecfdf5 !important;
+    border-color: #34d399 !important;
+    color: #065f46 !important;
+    box-shadow: 0 0 0 1px #34d399 !important;
+  }
+
+  .radio-card:not(.active):not(:has(input[type="radio"]:checked)) {
+    background: #ffffff !important;
+    border-color: #e5e7eb !important;
+    color: #334155 !important;
+    box-shadow: none !important;
   }
 
   /* INPUT ICON */
@@ -598,39 +696,60 @@
 }
 
 /* Status pill selector in Daily Sheet */
+.att-status-segmented-group {
+  display: inline-flex;
+  align-items: center;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  padding: 3px;
+  gap: 2px;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+}
 .att-status-pill-btn {
   font-size: 0.76rem;
   font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 20px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background: transparent;
   color: #64748b;
   cursor: pointer;
-  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  line-height: 1.2;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
 }
 .att-status-pill-btn:hover {
-  background: #f1f5f9;
+  background: rgba(255, 255, 255, 0.85);
+  color: #1e293b;
 }
 .att-status-pill-btn.active-p {
   background: #16a34a !important;
-  color: #fff !important;
-  border-color: #16a34a !important;
+  color: #ffffff !important;
+  border-color: #15803d !important;
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.35) !important;
 }
 .att-status-pill-btn.active-a {
   background: #dc2626 !important;
-  color: #fff !important;
-  border-color: #dc2626 !important;
+  color: #ffffff !important;
+  border-color: #b91c1c !important;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.35) !important;
 }
 .att-status-pill-btn.active-h {
   background: #0284c7 !important;
-  color: #fff !important;
-  border-color: #0284c7 !important;
+  color: #ffffff !important;
+  border-color: #0369a1 !important;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35) !important;
 }
 .att-status-pill-btn.active-dash {
   background: #64748b !important;
-  color: #fff !important;
-  border-color: #64748b !important;
+  color: #ffffff !important;
+  border-color: #475569 !important;
+  box-shadow: 0 2px 5px rgba(100, 116, 139, 0.25) !important;
 }
 
 #attendance_list_view th.sunday-col {
@@ -683,6 +802,87 @@
     max-width: 220px;
     width: 220px;
   }
+}
+
+/* Payment & Advance History Modern Drawer Styles */
+.ph-custom-tab-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748B;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  line-height: 1.3;
+}
+.ph-custom-tab-btn:hover {
+  color: #0F172A;
+  background: rgba(255, 255, 255, 0.6);
+}
+.ph-custom-tab-btn.active {
+  background: #FFFFFF !important;
+  color: #0F172A !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  font-weight: 700 !important;
+}
+.ph-custom-tab-btn i {
+  font-size: 16px;
+  transition: color 0.2s ease;
+}
+#ph_tab_payouts_btn.active i {
+  color: #2563EB;
+}
+#ph_tab_advances_btn.active i {
+  color: #D97706;
+}
+.ph-custom-tab-btn .badge {
+  background: #E2E8F0;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  transition: all 0.2s ease;
+}
+#ph_tab_payouts_btn.active .badge {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+}
+#ph_tab_advances_btn.active .badge {
+  background: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FDE68A;
+}
+
+/* Modern Transaction Receipt Card */
+.ph-trx-card {
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  background: #FFFFFF;
+  padding: 14px 16px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  position: relative;
+  overflow: hidden;
+}
+.ph-trx-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  border-color: #CBD5E1;
+}
+.ph-trx-card.card-payout {
+  border-left: 3.5px solid #10B981;
+}
+.ph-trx-card.card-advance {
+  border-left: 3.5px solid #F59E0B;
 }
 </style>
 {% endblock page_css %}
@@ -902,6 +1102,18 @@ function closeAttendanceSearchBox() {
     }, 250);
 }
 
+function resetAttendanceFilters() {
+    if (typeof closeAttendanceSearchBox === 'function') {
+        closeAttendanceSearchBox();
+    } else {
+        var input = document.getElementById('attendanceSearchInput');
+        if (input) input.value = '';
+    }
+    $('#filterAttendanceRole, #filterAttendanceDesignation, #filterAttendanceStatus')
+        .val('').trigger('change.select2');
+    applyAttendanceFilters();
+}
+
 document.addEventListener('click', function (e) {
     var wrapper = document.getElementById('att_search_collapse_wrapper');
     var group = document.getElementById('att_search_input_group');
@@ -1106,6 +1318,7 @@ function renderCalendarDateModalContent(dateKey) {
         var $btn = $tr.find('.attendance-btn[data-date="' + dateKey + '"]');
         var empId = $btn.data('emp-id');
         var currentStatus = $btn.text().trim() || '-';
+        var isBeforeJoining = $btn.attr('data-before-joining') === 'true' || $btn.data('beforeJoining') === true;
 
         if (empId) {
             staffRows.push({
@@ -1114,6 +1327,7 @@ function renderCalendarDateModalContent(dateKey) {
                 role: empRole,
                 designation: empDesig,
                 is_suspended: isSuspended,
+                is_before_joining: isBeforeJoining,
                 status: currentStatus
             });
         }
@@ -1123,83 +1337,142 @@ function renderCalendarDateModalContent(dateKey) {
     var countA = staffRows.filter(s => s.status === 'A').length;
     var countH = staffRows.filter(s => s.status === 'H').length;
 
+    function toTitleCase(str) {
+        if (!str) return '';
+        return str.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
+    }
+
     if (subLabel) {
-        subLabel.innerHTML = `<strong>${dObj.label || dateKey}</strong> ${dObj.is_today ? '<span class="badge bg-warning text-dark ms-1">Today</span>' : ''} ${dObj.is_sunday ? '<span class="badge bg-danger text-white ms-1">Sunday</span>' : ''} &nbsp;·&nbsp; Total: <strong>${staffRows.length} Staff</strong>`;
+        subLabel.innerHTML = `
+            <span class="badge bg-light text-dark border px-2.5 py-1 fw-semibold d-inline-flex align-items-center">
+                <i class="ri-calendar-2-line text-primary me-1"></i>${dObj.label || dateKey}
+            </span>
+            ${dObj.is_today ? '<span class="badge rounded-pill fw-semibold px-2.5 py-1" style="background:#FEF3C7; color:#92400E; border:1px solid #FCD34D;"><i class="ri-flashlight-fill text-warning me-1"></i>Today</span>' : ''}
+            ${dObj.is_sunday ? '<span class="badge rounded-pill fw-semibold px-2.5 py-1" style="background:#FEE2E2; color:#991B1B; border:1px solid #FCA5A5;"><i class="ri-sun-line text-danger me-1"></i>Sunday</span>' : ''}
+            <span class="text-secondary fw-bold">·</span>
+            <span class="text-secondary fw-semibold"><i class="ri-team-line text-muted me-1"></i>Total: <strong>${staffRows.length} Staff</strong></span>
+        `;
     }
 
     if (staffRows.length === 0) {
-        body.innerHTML = '<div class="text-center text-muted p-5">No staff members found for ' + dateKey + '.</div>';
+        body.innerHTML = `
+            <div class="text-center py-5 px-3">
+                <div class="rounded-circle d-inline-flex align-items-center justify-content-center bg-light text-muted mb-2" style="width: 54px; height: 54px;">
+                    <i class="ri-user-unfollow-line fs-2"></i>
+                </div>
+                <h6 class="fw-bold text-dark mb-1">No Staff Members Found</h6>
+                <p class="text-muted small mb-0">No active employees found in the roster for ${dateKey}.</p>
+            </div>
+        `;
         return;
     }
 
     var html = `
-    <div class="px-4 py-3 bg-light border-bottom d-flex flex-wrap align-items-center justify-content-between gap-3">
-        <div class="d-flex align-items-center gap-3">
-            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1"><i class="ri-check-line me-1"></i>${countP} Present</span>
-            <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1"><i class="ri-close-line me-1"></i>${countA} Absent</span>
-            <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1"><i class="ri-time-line me-1"></i>${countH} Half Day</span>
+    <div class="border-bottom d-flex flex-wrap align-items-center justify-content-between gap-3" style="background: #F8FAFC; padding: 14px 26px;">
+        <div class="d-flex align-items-center flex-wrap" style="gap: 10px;">
+            <div class="d-inline-flex align-items-center rounded-pill" style="background: #F0FDF4; border: 1px solid #BBF7D0; color: #15803D; padding: 6px 12px 6px 10px; gap: 8px; box-shadow: 0 1px 2px rgba(22, 163, 74, 0.08);">
+                <i class="ri-checkbox-circle-fill" style="font-size: 16px; color: #16A34A; line-height: 1;"></i>
+                <span style="font-size: 12.5px; font-weight: 600; letter-spacing: -0.1px;">Present</span>
+                <span style="background: #16A34A; color: #FFFFFF; font-size: 11px; font-weight: 700; border-radius: 9999px; min-width: 22px; height: 20px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; line-height: 1;">${countP}</span>
+            </div>
+            <div class="d-inline-flex align-items-center rounded-pill" style="background: #FEF2F2; border: 1px solid #FECACA; color: #B91C1C; padding: 6px 12px 6px 10px; gap: 8px; box-shadow: 0 1px 2px rgba(220, 38, 38, 0.08);">
+                <i class="ri-close-circle-fill" style="font-size: 16px; color: #DC2626; line-height: 1;"></i>
+                <span style="font-size: 12.5px; font-weight: 600; letter-spacing: -0.1px;">Absent</span>
+                <span style="background: #DC2626; color: #FFFFFF; font-size: 11px; font-weight: 700; border-radius: 9999px; min-width: 22px; height: 20px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; line-height: 1;">${countA}</span>
+            </div>
+            <div class="d-inline-flex align-items-center rounded-pill" style="background: #F0F9FF; border: 1px solid #BAE6FD; color: #0369A1; padding: 6px 12px 6px 10px; gap: 8px; box-shadow: 0 1px 2px rgba(2, 132, 199, 0.08);">
+                <i class="ri-time-fill" style="font-size: 16px; color: #0284C7; line-height: 1;"></i>
+                <span style="font-size: 12.5px; font-weight: 600; letter-spacing: -0.1px;">Half Day</span>
+                <span style="background: #0284C7; color: #FFFFFF; font-size: 11px; font-weight: 700; border-radius: 9999px; min-width: 22px; height: 20px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; line-height: 1;">${countH}</span>
+            </div>
         </div>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
             ${!isFuture ? `
-            <button type="button" class="btn btn-sm btn-outline-success fw-bold d-flex align-items-center gap-1" onclick="bulkUpdateDateAttendance('${dateKey}', 'P')">
-                <i class="ri-check-double-line"></i> Mark All Present
+            <button type="button" class="btn btn-sm d-inline-flex align-items-center rounded-3 fw-bold text-white shadow-xs" style="background: #16A34A; border: 1px solid #15803D; font-size: 12px; padding: 6px 14px; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='#15803D'" onmouseout="this.style.background='#16A34A'" onclick="bulkUpdateDateAttendance('${dateKey}', 'P')">
+                <i class="ri-check-double-line" style="font-size: 14px;"></i> Mark All Present
             </button>
-            <button type="button" class="btn btn-sm btn-outline-danger fw-semibold d-flex align-items-center gap-1" onclick="bulkUpdateDateAttendance('${dateKey}', 'A')">
-                <i class="ri-close-circle-line"></i> Mark All Absent
+            <button type="button" class="btn btn-sm d-inline-flex align-items-center rounded-3 fw-semibold shadow-xs" style="background: #FFF1F2; color: #DC2626; border: 1px solid #FECDD3; font-size: 12px; padding: 6px 14px; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='#FFE4E6'" onmouseout="this.style.background='#FFF1F2'" onclick="bulkUpdateDateAttendance('${dateKey}', 'A')">
+                <i class="ri-close-circle-line" style="font-size: 14px;"></i> Mark All Absent
             </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" onclick="bulkUpdateDateAttendance('${dateKey}', '-')">
-                <i class="ri-eraser-line"></i> Clear All
+            <button type="button" class="btn btn-sm d-inline-flex align-items-center rounded-3 text-secondary shadow-xs" style="background: #FFFFFF; border: 1px solid #E2E8F0; font-size: 12px; padding: 6px 12px; gap: 5px; transition: all 0.2s;" onmouseover="this.style.background='#F1F5F9'" onmouseout="this.style.background='#FFFFFF'" onclick="bulkUpdateDateAttendance('${dateKey}', '-')">
+                <i class="ri-eraser-line" style="font-size: 13px;"></i> Clear All
             </button>
-            ` : '<span class="badge bg-light text-muted border"><i class="ri-time-line me-1"></i> Future Date (Locked)</span>'}
+            ` : '<span class="badge bg-light text-muted border px-3 py-2 rounded-pill"><i class="ri-lock-line me-1"></i> Future Date (Locked)</span>'}
         </div>
     </div>
-    <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="bg-light sticky-top">
-                <tr>
-                    <th class="ps-4" style="width: 38%;">Employee / Crew Member</th>
-                    <th style="width: 24%;">Role / Designation</th>
-                    <th class="text-end pe-4" style="width: 38%;">Status</th>
+    <div class="table-responsive" style="max-height: 440px; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0" style="border-collapse: separate; border-spacing: 0;">
+            <thead class="sticky-top" style="background: #F8FAFC; z-index: 5;">
+                <tr style="border-bottom: 2px solid #E2E8F0;">
+                    <th class="py-3" style="padding-left: 26px; width: 40%; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; color: #64748B; text-transform: uppercase;">Employee / Crew Member</th>
+                    <th class="py-3" style="width: 28%; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; color: #64748B; text-transform: uppercase;">Role & Designation</th>
+                    <th class="text-end py-3" style="padding-right: 26px; width: 32%; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; color: #64748B; text-transform: uppercase;">Attendance Status</th>
                 </tr>
             </thead>
             <tbody>`;
 
-    staffRows.forEach(function(s) {
+    var avatarColors = [
+        { bg: '#EBF5EC', text: '#2E7D32', border: '#C8E6C9' },
+        { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
+        { bg: '#FDF4FF', text: '#A21CAF', border: '#F5D0FE' },
+        { bg: '#FFF7ED', text: '#C2410C', border: '#FFEDD5' },
+        { bg: '#F0FDFA', text: '#0F766E', border: '#CCFBF1' },
+        { bg: '#FEF2F2', text: '#B91C1C', border: '#FECACA' }
+    ];
+
+    staffRows.forEach(function(s, idx) {
         var initials = s.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        var color = avatarColors[(s.id || idx) % avatarColors.length];
+        var roleLabel = toTitleCase(s.role || 'Staff');
+        var desigLabel = toTitleCase(s.designation || '');
+
         html += `
-        <tr class="${s.is_suspended ? 'opacity-50 bg-light' : ''}">
-            <td class="ps-4">
-                <div class="d-flex align-items-center gap-2.5">
-                    <div class="worker-avatar bg-primary-subtle text-primary fw-bold" style="width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px;">
+        <tr class="${s.is_suspended || s.is_before_joining ? 'opacity-50 bg-light' : ''}" style="transition: background 0.15s ease;">
+            <td class="py-3" style="padding-left: 26px;">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-xs flex-shrink-0" 
+                         style="width: 40px; height: 40px; background: ${color.bg}; color: ${color.text}; border: 1.5px solid ${color.border}; font-size: 13.5px; letter-spacing: 0.5px;">
                         ${initials}
                     </div>
                     <div>
-                        <div class="fw-bold text-dark">${s.name}</div>
-                        ${s.is_suspended ? '<span class="badge bg-danger-subtle text-danger" style="font-size:9px;">Suspended</span>' : ''}
+                        <div class="fw-bold text-dark" style="font-size: 13.5px; line-height: 1.3;">${s.name}</div>
+                        <div class="d-flex align-items-center gap-1.5 mt-0.5">
+                            <span class="text-muted" style="font-size: 11px; font-family: monospace;">EMP-#${s.id}</span>
+                            ${s.is_suspended ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle px-1.5 py-0" style="font-size:9.5px;"><i class="ri-lock-2-line me-0.5"></i>Suspended</span>' : ''}
+                            ${s.is_before_joining ? '<span class="badge bg-secondary-subtle text-secondary border px-1.5 py-0" style="font-size:9.5px;">Before Joining</span>' : ''}
+                        </div>
                     </div>
                 </div>
             </td>
-            <td>
-                <span class="badge bg-light text-secondary border px-2 py-1">${s.role || 'Staff'}</span>
-                ${s.designation ? `<span class="badge bg-light text-primary border px-2 py-1 ms-1">${s.designation}</span>` : ''}
+            <td class="py-3">
+                <div class="d-flex flex-column gap-1 align-items-start">
+                    <span class="badge rounded-pill fw-semibold px-2.5 py-1 d-inline-flex align-items-center" style="background: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; font-size: 11px;">
+                        <i class="ri-user-star-line me-1 opacity-75"></i>${roleLabel}
+                    </span>
+                    ${desigLabel ? `
+                    <span class="badge rounded-pill fw-semibold px-2.5 py-1 d-inline-flex align-items-center" style="background: #FFF7ED; color: #C2410C; border: 1px solid #FFEDD5; font-size: 10.5px;">
+                        <i class="ri-briefcase-line me-1 text-warning opacity-75"></i>${desigLabel}
+                    </span>
+                    ` : ''}
+                </div>
             </td>
-            <td class="text-end pe-4">
-                ${s.is_suspended ? '<span class="text-muted small fst-italic">Account Locked</span>' : (isFuture ? '<span class="text-muted small fst-italic">Future Date</span>' : `
-                <div class="btn-group btn-group-sm rounded-pill p-0.5 bg-light border" role="group">
+            <td class="text-end py-3" style="padding-right: 26px;">
+                ${s.is_suspended ? '<span class="badge bg-danger-subtle text-danger px-3 py-1.5 rounded-pill border border-danger-subtle fw-medium"><i class="ri-lock-2-line me-1"></i>Account Locked</span>' : (s.is_before_joining ? '<span class="badge bg-secondary-subtle text-secondary px-3 py-1.5 rounded-pill border fw-medium"><i class="ri-forbid-line me-1"></i>Before Joining Date</span>' : (isFuture ? '<span class="badge bg-light text-muted px-3 py-1.5 rounded-pill border fw-medium"><i class="ri-time-line me-1"></i>Future Date</span>' : `
+                <div class="att-status-segmented-group">
                     <button type="button" class="att-status-pill-btn ${s.status === 'P' ? 'active-p' : ''}" onclick="setEmployeeAttendance(${s.id}, '${dateKey}', 'P')">
-                        <i class="ri-check-line me-0.5"></i> Present
+                        <i class="ri-check-line"></i><span>Present</span>
                     </button>
                     <button type="button" class="att-status-pill-btn ${s.status === 'A' ? 'active-a' : ''}" onclick="setEmployeeAttendance(${s.id}, '${dateKey}', 'A')">
-                        <i class="ri-close-line me-0.5"></i> Absent
+                        <i class="ri-close-line"></i><span>Absent</span>
                     </button>
                     <button type="button" class="att-status-pill-btn ${s.status === 'H' ? 'active-h' : ''}" onclick="setEmployeeAttendance(${s.id}, '${dateKey}', 'H')">
-                        <i class="ri-time-line me-0.5"></i> Halfday
+                        <i class="ri-time-line"></i><span>Halfday</span>
                     </button>
-                    <button type="button" class="att-status-pill-btn ${s.status === '-' ? 'active-dash' : ''}" onclick="setEmployeeAttendance(${s.id}, '${dateKey}', '-')">
-                        -
+                    <button type="button" class="att-status-pill-btn ${s.status === '-' ? 'active-dash' : ''}" onclick="setEmployeeAttendance(${s.id}, '${dateKey}', '-')" title="Reset / Clear status">
+                        <span>—</span>
                     </button>
                 </div>
-                `)}
+                `))}
             </td>
         </tr>`;
     });
@@ -1245,11 +1518,19 @@ function setEmployeeAttendance(empId, dateKey, status) {
                     window.showAppToast("Attendance updated", "success", 2000);
                 }
             } else {
-                alert('Error: ' + (res.error || 'Failed to update attendance'));
+                if (typeof window.showAppToast === 'function') {
+                    window.showAppToast(res.error || 'Failed to update attendance', 'error', 3000);
+                } else {
+                    alert('Error: ' + (res.error || 'Failed to update attendance'));
+                }
             }
         },
         error: function() {
-            alert('Network error while updating attendance.');
+            if (typeof window.showAppToast === 'function') {
+                window.showAppToast('Network error while updating attendance.', 'error');
+            } else {
+                alert('Network error while updating attendance.');
+            }
         }
     });
 }
@@ -1267,7 +1548,7 @@ function bulkUpdateDateAttendance(dateKey, status) {
                 // Update all matching buttons in List View table
                 $('#attendance_list_view .attendance-btn[data-date="' + dateKey + '"]').each(function() {
                     var $b = $(this);
-                    if (!$b.prop('disabled')) {
+                    if (!$b.prop('disabled') && $b.attr('data-before-joining') !== 'true') {
                         $b.text(status);
                         var newClass = "btn btn-sm attendance-btn btn-light text-muted";
                         if (status === "P") newClass = "btn btn-sm attendance-btn btn-primary";
@@ -1277,22 +1558,30 @@ function bulkUpdateDateAttendance(dateKey, status) {
                     }
                 });
 
-                // Update Top Stats & Calendar & Modal Content
                 updateTopStats(dateKey);
                 renderAttendanceCalendar();
                 renderCalendarDateModalContent(dateKey);
 
+                var toastMsg = res.message || ('✅ Bulk attendance updated for ' + dateKey);
                 if (window.Toastify) {
-                    Toastify({ text: '✅ Bulk updated ' + res.count + ' staff on ' + dateKey, backgroundColor: '#10B981', duration: 2500 }).showToast();
+                    Toastify({ text: toastMsg, backgroundColor: res.skipped_joining > 0 ? '#F59E0B' : '#10B981', duration: 2500 }).showToast();
                 } else if (typeof window.showAppToast === 'function') {
-                    window.showAppToast("Bulk attendance updated", "success", 2000);
+                    window.showAppToast(toastMsg, res.skipped_joining > 0 ? "warning" : "success", 2500);
                 }
             } else {
-                alert('Error: ' + (res.error || 'Failed to bulk update'));
+                if (typeof window.showAppToast === 'function') {
+                    window.showAppToast(res.error || 'Failed to update bulk attendance', 'error');
+                } else {
+                    alert('Error: ' + (res.error || 'Failed to update bulk attendance'));
+                }
             }
         },
         error: function() {
-            alert('Network error during bulk attendance update.');
+            if (typeof window.showAppToast === 'function') {
+                window.showAppToast('Network error while bulk updating attendance.', 'error');
+            } else {
+                alert('Network error while bulk updating attendance.');
+            }
         }
     });
 }
@@ -1473,7 +1762,16 @@ $(document).ready(function () {
 
     // Table click listener
     $(document).on('click', '#attendance_list_view .attendance-btn', function () {
-        if ($(this).prop('disabled')) return;
+        if ($(this).prop('disabled') || $(this).attr('data-before-joining') === 'true') {
+            if ($(this).attr('data-before-joining') === 'true') {
+                if (typeof window.showAppToast === 'function') {
+                    window.showAppToast("Cannot mark attendance before employee joining date", "error", 2500);
+                } else {
+                    alert("Cannot mark attendance before employee joining date");
+                }
+            }
+            return;
+        }
         var state = $(this).text().trim();
         var empId = $(this).data('empId') || $(this).attr('data-emp-id');
         var date = $(this).data('date') || $(this).attr('data-date');
@@ -1516,11 +1814,19 @@ $(document).ready(function () {
                         window.showAppToast("Attendance updated", "success", 2000);
                     }
                 } else {
-                    alert('Error: ' + (res.error || 'Failed to update attendance'));
+                    if (typeof window.showAppToast === 'function') {
+                        window.showAppToast(res.error || 'Failed to update attendance', 'error', 3000);
+                    } else {
+                        alert('Error: ' + (res.error || 'Failed to update attendance'));
+                    }
                 }
             },
             error: function() {
-                alert('Network error while updating attendance');
+                if (typeof window.showAppToast === 'function') {
+                    window.showAppToast('Network error while updating attendance', 'error', 2500);
+                } else {
+                    alert('Network error while updating attendance');
+                }
             }
         });
     });
@@ -1584,6 +1890,7 @@ function saveDuty(id) {
 </script>
 <script>
 $(document).ready(function () {
+    $.fn.dataTable.ext.errMode = 'none';
     var table;
     $('.datatable').each(function () {
         // 🔥 prevent double init
@@ -1603,12 +1910,12 @@ $(document).ready(function () {
         if (table) table.search(this.value).draw();
     });
 
-    // Status Filter (Column 4)
+    // Status Filter (Column 5 - Status column in Employee table)
     $('.status-filter').on('click', function (e) {
         e.preventDefault();
         var val = $(this).data('value');
         $('#statusDropdownBtn').text($(this).text());
-        if (table) table.column(4).search(val ? '^' + val + '$' : '', true, false).draw();
+        if (table) table.column(5).search(val ? '^' + val + '$' : '', true, false).draw();
     });
 
     // Role Filter (Column 2)
@@ -1628,9 +1935,36 @@ $(document).ready(function () {
             if (sortCol === 'name') {
                 table.order([0, 'asc']).draw();
             } else if (sortCol === 'status') {
-                table.order([4, 'asc']).draw();
+                table.order([5, 'asc']).draw();
             }
         }
+    });
+
+    // Reset User Filters
+    window.resetUserFilters = function () {
+        if (typeof closeSearchBox === 'function') {
+            closeSearchBox();
+        } else {
+            $('#customSearchBox').val('');
+        }
+        $('#sortDropdownBtn').html('<span><i class="ri-filter-3-line me-1"></i> Sort By</span>');
+        if ($('#statusDropdownBtn').length) $('#statusDropdownBtn').text('All Status');
+        if ($('#roleDropdownBtn').length) $('#roleDropdownBtn').text('All Roles');
+
+        if (table) {
+            table.search('').columns().search('').order([]).draw();
+        } else {
+            $('.datatable').each(function () {
+                if ($.fn.dataTable.isDataTable(this)) {
+                    $(this).DataTable().search('').columns().search('').order([]).draw();
+                }
+            });
+        }
+    };
+
+    $('#reset_user_filter_btn').on('click', function (e) {
+        e.preventDefault();
+        window.resetUserFilters();
     });
 });
 </script>
@@ -1643,8 +1977,155 @@ $(document).ready(function () {
       $('#quick_designation_name').val('');
       $('#quick_designation_desc').val('');
       var modalEl = document.getElementById('quick_add_designation_modal');
-      var modal = new bootstrap.Modal(modalEl);
-      modal.show();
+      if (modalEl) {
+          var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+          modal.show();
+          setTimeout(function() {
+              $('#quick_designation_name').focus();
+          }, 250);
+      }
+  };
+
+  window.closeQuickDesignationModal = function() {
+      var modalEl = document.getElementById('quick_add_designation_modal');
+      if (modalEl) {
+          var inst = bootstrap.Modal.getInstance(modalEl);
+          if (inst) {
+              inst.hide();
+          } else {
+              $(modalEl).modal('hide');
+          }
+      }
+      setTimeout(function() {
+          if ($('#add_staff_modal.show, #edit_staff_modal.show').length > 0) {
+              $('body').addClass('modal-open');
+          }
+          // Remove any orphaned secondary backdrops
+          $('.modal-backdrop').not(':first').remove();
+      }, 150);
+  };
+
+  // Restore parent modal interactivity when quick designation modal closes
+  $(document).on('hidden.bs.modal', '#quick_add_designation_modal', function () {
+      if ($('#add_staff_modal.show, #edit_staff_modal.show').length > 0) {
+          $('body').addClass('modal-open');
+      }
+      $('.modal-backdrop').not(':first').remove();
+  });
+
+  // Completely clean up backdrops when main staff modals close
+  $(document).on('hidden.bs.modal', '#add_staff_modal, #edit_staff_modal', function () {
+      setTimeout(function() {
+          if ($('.modal.show').length === 0) {
+              $('.modal-backdrop').remove();
+              $('body').removeClass('modal-open').css({'overflow': '', 'padding-right': ''});
+          }
+      }, 150);
+  });
+
+  $(document).on('show.bs.modal', '#add_staff_modal', function () {
+      $('#add_gender').val('').trigger('change');
+      $('#add_designation').val('').trigger('change');
+      $('#add_sal_freq').val('').trigger('change');
+      $('#add_doctype').val('').trigger('change');
+      $('#add_status').val('0').trigger('change');
+      if (typeof clearAddProfileImage === 'function') clearAddProfileImage();
+      if (typeof clearAddDocFile === 'function') clearAddDocFile();
+  });
+
+  var currentQuickDocTypeTarget = 'add';
+  window.openQuickDocTypeModal = function(target) {
+      currentQuickDocTypeTarget = target || 'add';
+      $('#quick_doc_type_name').val('');
+      $('#quick_doc_type_desc').val('');
+      var modalEl = document.getElementById('quick_add_doc_type_modal');
+      if (modalEl) {
+          var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+          modal.show();
+          setTimeout(function() {
+              $('#quick_doc_type_name').focus();
+          }, 250);
+      }
+  };
+
+  window.closeQuickDocTypeModal = function() {
+      var modalEl = document.getElementById('quick_add_doc_type_modal');
+      if (modalEl) {
+          var inst = bootstrap.Modal.getInstance(modalEl);
+          if (inst) {
+              inst.hide();
+          } else {
+              $(modalEl).modal('hide');
+          }
+      }
+      setTimeout(function() {
+          if ($('#add_staff_modal.show, #edit_staff_modal.show').length > 0) {
+              $('body').addClass('modal-open');
+          }
+          $('.modal-backdrop').not(':first').remove();
+      }, 150);
+  };
+
+  $(document).on('hidden.bs.modal', '#quick_add_doc_type_modal', function () {
+      if ($('#add_staff_modal.show, #edit_staff_modal.show').length > 0) {
+          $('body').addClass('modal-open');
+      }
+      $('.modal-backdrop').not(':first').remove();
+  });
+
+  window.submitQuickDocType = function() {
+      var name = $('#quick_doc_type_name').val().trim();
+      var desc = $('#quick_doc_type_desc').val().trim();
+      if (!name) {
+          showAppToast('Document Type Name is required.', 'error');
+          $('#quick_doc_type_name').focus();
+          return;
+      }
+
+      var formData = new FormData();
+      formData.append('name', name);
+      formData.append('description', desc);
+      formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+      $.ajax({
+          url: "{% url 'quick_add_staff_document_type' %}",
+          method: "POST",
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function(res) {
+              if (res.success) {
+                  ['#add_doctype', '#edit_doctype'].forEach(function(sel) {
+                      var $select = $(sel);
+                      if ($select.length) {
+                          var exists = false;
+                          $select.find('option').each(function() {
+                              if ($(this).val().toLowerCase() === res.name.toLowerCase()) {
+                                  exists = true;
+                              }
+                          });
+                          if (!exists) {
+                              $select.append($('<option>', {
+                                  value: res.name,
+                                  text: res.name
+                              }));
+                          }
+                      }
+                  });
+
+                  var targetSel = currentQuickDocTypeTarget === 'edit' ? '#edit_doctype' : '#add_doctype';
+                  $(targetSel).val(res.name).trigger('change');
+
+                  window.closeQuickDocTypeModal();
+                  showAppToast("Document Type '" + res.name + "' added successfully!", "success");
+              } else {
+                  showAppToast(res.error || "Failed to add document type", "error");
+              }
+          },
+          error: function() {
+              showAppToast('Error creating document type.', 'error');
+          }
+      });
   };
 
   window.submitQuickDesignation = function() {
@@ -1687,10 +2168,9 @@ $(document).ready(function () {
                   });
 
                   var targetSel = currentQuickDesigTarget === 'edit' ? '#edit_designation' : '#add_designation';
-                  $(targetSel).val(res.id);
+                  $(targetSel).val(res.id).trigger('change');
 
-                  let closeBtn = document.querySelector('#quick_add_designation_modal .btn-close');
-                  if (closeBtn) closeBtn.click();
+                  window.closeQuickDesignationModal();
 
                   showAppToast("Designation '" + res.name + "' added successfully!", "success");
               } else {
@@ -1739,6 +2219,7 @@ $(document).ready(function () {
       var formData = new FormData();
       formData.append('name', $('#add_name').val());
       formData.append('mobile', $('#add_mobile').val());
+      formData.append('doj', $('#add_doj').val());
       formData.append('dob', $('#add_dob').val());
       formData.append('gender', $('#add_gender').val());
       formData.append('doc_type', $('#add_doctype').val());
@@ -1758,6 +2239,11 @@ $(document).ready(function () {
       var isPermAll = $('#add_perm_all').is(':checked');
       formData.append('perm_all', isPermAll);
       
+      if ($('#add_mobile').hasClass('is-invalid')) {
+          showAppToast($('#add_mobile_feedback').text() || "This mobile number is already registered.", "error");
+          return;
+      }
+
       var selectedPerms = [];
       if (!isPermAll) {
           $('.add-perm-check:checked').each(function() {
@@ -1781,15 +2267,59 @@ $(document).ready(function () {
                   setTimeout(() => location.reload(), 1500);
               } else {
                   showAppToast(res.error || "Failed to add user", "error");
+                  if (res.error && res.error.toLowerCase().includes('mobile')) {
+                      $('#add_mobile').addClass('is-invalid');
+                      $('#add_mobile_feedback').html('<i class="ri-error-warning-line me-1"></i>' + res.error).removeClass('d-none');
+                  }
               }
           }
       });
+  });
+
+  $('#add_mobile').on('input blur', function() {
+      const val = $(this).val().trim();
+      const feedback = $('#add_mobile_feedback');
+      if (val.replace(/\D/g, '').length >= 10) {
+          $.getJSON("{% url 'farmer-employee-check-mobile' %}?mobile=" + encodeURIComponent(val), function(res) {
+              if (res.is_taken) {
+                  feedback.html('<i class="ri-error-warning-line me-1"></i>' + (res.error || 'Mobile number already registered.')).removeClass('d-none');
+                  $('#add_mobile').addClass('is-invalid');
+              } else {
+                  feedback.html('').addClass('d-none');
+                  $('#add_mobile').removeClass('is-invalid');
+              }
+          });
+      } else {
+          feedback.html('').addClass('d-none');
+          $('#add_mobile').removeClass('is-invalid');
+      }
+  });
+
+  $('#edit_mobile').on('input blur', function() {
+      const val = $(this).val().trim();
+      const staffId = $('#edit_staff_id').val();
+      const feedback = $('#edit_mobile_feedback');
+      if (val.replace(/\D/g, '').length >= 10) {
+          $.getJSON("{% url 'farmer-employee-check-mobile' %}?mobile=" + encodeURIComponent(val) + "&staff_id=" + staffId, function(res) {
+              if (res.is_taken) {
+                  feedback.html('<i class="ri-error-warning-line me-1"></i>' + (res.error || 'Mobile number already registered.')).removeClass('d-none');
+                  $('#edit_mobile').addClass('is-invalid');
+              } else {
+                  feedback.html('').addClass('d-none');
+                  $('#edit_mobile').removeClass('is-invalid');
+              }
+          });
+      } else {
+          feedback.html('').addClass('d-none');
+          $('#edit_mobile').removeClass('is-invalid');
+      }
   });
 
   $(document).on('click', '.edit-btn', function() {
       var id = $(this).attr('data-id');
       var name = $(this).attr('data-name');
       var mobile = $(this).attr('data-mobile');
+      var doj = $(this).attr('data-doj');
       var dob = $(this).attr('data-dob');
       var gender = $(this).attr('data-gender');
       var doctype = $(this).attr('data-doctype');
@@ -1806,30 +2336,62 @@ $(document).ready(function () {
       $('#edit_staff_id').val(id);
       $('#edit_name').val(name);
       $('#edit_mobile').val(mobile);
+      $('#edit_doj').val(doj || "");
       $('#edit_dob').val(dob);
       
-      if(gender && gender !== "None") $('#edit_gender').val(gender);
-      else $('#edit_gender').val("");
+      if(gender && gender !== "None") $('#edit_gender').val(gender).trigger('change');
+      else $('#edit_gender').val("").trigger('change');
       
-      if(doctype && doctype !== "None") $('#edit_doctype').val(doctype);
-      else $('#edit_doctype').val("");
+      if(doctype && doctype !== "None") $('#edit_doctype').val(doctype).trigger('change');
+      else $('#edit_doctype').val("").trigger('change');
       
+      removeEditProfileImageFlag = false;
       if(profileImg && profileImg !== '') {
           $('#edit_profile_image_preview').attr('src', profileImg).removeClass('d-none');
+          $('#edit_profile_image_placeholder').addClass('d-none');
+          $('#edit_remove_image_btn').removeClass('d-none');
       } else {
           $('#edit_profile_image_preview').attr('src', '').addClass('d-none');
+          $('#edit_profile_image_placeholder').removeClass('d-none');
+          $('#edit_remove_image_btn').addClass('d-none');
       }
       $('#edit_profile_image').val('');
 
-      $('#edit_status').val(status);
+      var docurl = $(this).attr('data-docurl');
+      removeEditDocFileFlag = false;
+      if (docurl && docurl !== '') {
+          $('#edit_remove_doc_btn').removeClass('d-none');
+          $('#edit_preview_doc_btn').attr('href', docurl).removeClass('d-none');
+          $('#edit_doc_view_link').attr('href', docurl);
+          $('#edit_doc_name_text').text('View Uploaded Document');
+          $('#edit_doc_name_badge').removeClass('d-none');
+          if (/\.(jpg|jpeg|png|webp)$/i.test(docurl)) {
+              $('#edit_doc_preview_img').attr('src', docurl).removeClass('d-none');
+              $('#edit_doc_placeholder').addClass('d-none');
+          } else if (/\.pdf$/i.test(docurl)) {
+              $('#edit_doc_preview_img').addClass('d-none');
+              $('#edit_doc_placeholder').removeClass('d-none');
+              $('#edit_doc_icon').attr('class', 'ri-file-pdf-line text-danger fs-5');
+          } else {
+              $('#edit_doc_preview_img').addClass('d-none');
+              $('#edit_doc_placeholder').removeClass('d-none');
+              $('#edit_doc_icon').attr('class', 'ri-file-text-line text-primary fs-5');
+          }
+      } else {
+          if (typeof clearEditDocFile === 'function') clearEditDocFile();
+          removeEditDocFileFlag = false;
+      }
+      $('#edit_docfile').val('');
+
+      $('#edit_status').val(status).trigger('change');
       
       var isManagerBool = (ismanager === 'true' || ismanager === 'True' || ismanager === '1');
       $('#editRoleManagerCheck').prop('checked', isManagerBool);
 
-      $('#edit_sal_freq').val(salaryfreq || "");
+      $('#edit_sal_freq').val(salaryfreq || "").trigger('change');
       $('#edit_salary').val(salary || "");
       $('#edit_address').val(address || "");
-      $('#edit_designation').val(designation || "");
+      $('#edit_designation').val(designation || "").trigger('change');
 
       // Parse permissions
       var perms = [];
@@ -1860,15 +2422,18 @@ $(document).ready(function () {
       formData.append('staff_id', $('#edit_staff_id').val());
       formData.append('name', $('#edit_name').val());
       formData.append('mobile', $('#edit_mobile').val());
+      formData.append('doj', $('#edit_doj').val());
       formData.append('dob', $('#edit_dob').val());
       formData.append('gender', $('#edit_gender').val());
       formData.append('doc_type', $('#edit_doctype').val());
       if($('#edit_docfile')[0].files[0]) {
           formData.append('doc_file', $('#edit_docfile')[0].files[0]);
       }
+      formData.append('remove_doc_file', removeEditDocFileFlag ? 'true' : 'false');
       if($('#edit_profile_image')[0] && $('#edit_profile_image')[0].files[0]) {
           formData.append('profile_image', $('#edit_profile_image')[0].files[0]);
       }
+      formData.append('remove_profile_image', removeEditProfileImageFlag ? 'true' : 'false');
       formData.append('status', $('#edit_status').val());
       formData.append('is_manager', $('#editRoleManagerCheck').is(':checked'));
       formData.append('designation', $('#edit_designation').val());
@@ -1879,6 +2444,11 @@ $(document).ready(function () {
       var isPermAll = $('#edit_perm_all').is(':checked');
       formData.append('perm_all', isPermAll);
       
+      if ($('#edit_mobile').hasClass('is-invalid')) {
+          showAppToast($('#edit_mobile_feedback').text() || "This mobile number is already registered.", "error");
+          return;
+      }
+
       var selectedPerms = [];
       if (!isPermAll) {
           $('.edit-perm-check:checked').each(function() {
@@ -1902,6 +2472,10 @@ $(document).ready(function () {
                   setTimeout(() => location.reload(), 1500);
               } else {
                   showAppToast(res.error || "Failed to update user", "error");
+                  if (res.error && res.error.toLowerCase().includes('mobile')) {
+                      $('#edit_mobile').addClass('is-invalid');
+                      $('#edit_mobile_feedback').html('<i class="ri-error-warning-line me-1"></i>' + res.error).removeClass('d-none');
+                  }
               }
           }
       });
@@ -1920,6 +2494,7 @@ $(document).ready(function () {
       var status = $(this).attr('data-status');
       var gender = $(this).attr('data-gender');
       var doctype = $(this).attr('data-doctype');
+      var doj = $(this).attr('data-doj');
       var dob = $(this).attr('data-dob');
       var docurl = $(this).attr('data-docurl');
       var profileImg = $(this).attr('data-profile-image');
@@ -1934,6 +2509,7 @@ $(document).ready(function () {
       $('#view_staff_mobile').text(mobile);
       $('#view_staff_gender').text(gender);
       $('#view_staff_doctype').text(doctype);
+      $('#view_staff_doj').text(doj || "Not Specified");
       $('#view_staff_dob').text(dob);
       $('#view_staff_sal_freq').text(salaryfreq || "Not Specified");
       $('#view_staff_salary').text(salary ? "₹ " + salary + "/-" : "Not Specified");
@@ -1970,26 +2546,145 @@ $(document).ready(function () {
       }
   });
 
+  let removeEditProfileImageFlag = false;
+
+  window.clearAddProfileImage = function() {
+      $('#add_profile_image').val('');
+      $('#add_profile_image_preview').attr('src', '').addClass('d-none');
+      $('#add_profile_image_placeholder').removeClass('d-none');
+      $('#add_remove_image_btn').addClass('d-none');
+  };
+
+  window.clearEditProfileImage = function() {
+      $('#edit_profile_image').val('');
+      $('#edit_profile_image_preview').attr('src', '').addClass('d-none');
+      $('#edit_profile_image_placeholder').removeClass('d-none');
+      $('#edit_remove_image_btn').addClass('d-none');
+      removeEditProfileImageFlag = true;
+  };
+
   // Dynamic Image Preview on File Selection
   $('#add_profile_image').on('change', function(e) {
       if (this.files && this.files[0]) {
           var reader = new FileReader();
           reader.onload = function(evt) {
               $('#add_profile_image_preview').attr('src', evt.target.result).removeClass('d-none');
+              $('#add_profile_image_placeholder').addClass('d-none');
+              $('#add_remove_image_btn').removeClass('d-none');
           };
           reader.readAsDataURL(this.files[0]);
       } else {
-          $('#add_profile_image_preview').attr('src', '').addClass('d-none');
+          clearAddProfileImage();
       }
   });
 
   $('#edit_profile_image').on('change', function(e) {
       if (this.files && this.files[0]) {
+          removeEditProfileImageFlag = false;
           var reader = new FileReader();
           reader.onload = function(evt) {
               $('#edit_profile_image_preview').attr('src', evt.target.result).removeClass('d-none');
+              $('#edit_profile_image_placeholder').addClass('d-none');
+              $('#edit_remove_image_btn').removeClass('d-none');
           };
           reader.readAsDataURL(this.files[0]);
+      } else {
+          clearEditProfileImage();
+      }
+  });
+
+  let removeEditDocFileFlag = false;
+
+  window.clearAddDocFile = function() {
+      $('#add_docfile').val('');
+      $('#add_doc_preview_img').attr('src', '').addClass('d-none');
+      $('#add_doc_placeholder').removeClass('d-none');
+      $('#add_doc_icon').attr('class', 'ri-file-text-line text-muted');
+      $('#add_doc_name_badge').addClass('d-none');
+      $('#add_doc_name_text').text('');
+      $('#add_remove_doc_btn').addClass('d-none');
+      $('#add_preview_doc_btn').addClass('d-none').attr('href', '#');
+      if ($('#add_doc_view_link').length) $('#add_doc_view_link').attr('href', '#');
+  };
+
+  window.clearEditDocFile = function() {
+      $('#edit_docfile').val('');
+      $('#edit_doc_preview_img').attr('src', '').addClass('d-none');
+      $('#edit_doc_placeholder').removeClass('d-none');
+      $('#edit_doc_icon').attr('class', 'ri-file-text-line text-muted');
+      $('#edit_doc_name_badge').addClass('d-none');
+      $('#edit_remove_doc_btn').addClass('d-none');
+      $('#edit_preview_doc_btn').addClass('d-none').attr('href', '#');
+      $('#edit_doc_view_link').attr('href', '#');
+      removeEditDocFileFlag = true;
+  };
+
+  function handleDocFileSelection(input, previewImg, placeholder, icon, badge, textEl, removeBtn) {
+      if (input.files && input.files[0]) {
+          var file = input.files[0];
+          $(textEl).text(file.name);
+          $(badge).removeClass('d-none');
+          $(removeBtn).removeClass('d-none');
+
+          if (file.type.startsWith('image/')) {
+              var reader = new FileReader();
+              reader.onload = function(evt) {
+                  $(previewImg).attr('src', evt.target.result).removeClass('d-none');
+                  $(placeholder).addClass('d-none');
+              };
+              reader.readAsDataURL(file);
+          } else {
+              $(previewImg).addClass('d-none');
+              $(placeholder).removeClass('d-none');
+              if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+                  $(icon).attr('class', 'ri-file-pdf-line text-danger fs-5');
+              } else if (/\.(doc|docx)$/i.test(file.name)) {
+                  $(icon).attr('class', 'ri-file-word-line text-primary fs-5');
+              } else if (/\.(xls|xlsx)$/i.test(file.name)) {
+                  $(icon).attr('class', 'ri-file-excel-line text-success fs-5');
+              } else {
+                  $(icon).attr('class', 'ri-file-text-line text-secondary fs-5');
+              }
+          }
+      }
+  }
+
+  $('#add_docfile').on('change', function() {
+      if (this.files && this.files[0]) {
+          var file = this.files[0];
+          var fileUrl = URL.createObjectURL(file);
+          $('#add_preview_doc_btn').attr('href', fileUrl).removeClass('d-none');
+          if ($('#add_doc_view_link').length) $('#add_doc_view_link').attr('href', fileUrl);
+          handleDocFileSelection(this, '#add_doc_preview_img', '#add_doc_placeholder', '#add_doc_icon', '#add_doc_name_badge', '#add_doc_name_text', '#add_remove_doc_btn');
+      } else {
+          clearAddDocFile();
+      }
+  });
+
+  $('#edit_docfile').on('change', function() {
+      if (this.files && this.files[0]) {
+          removeEditDocFileFlag = false;
+          var file = this.files[0];
+          var fileUrl = URL.createObjectURL(file);
+          $('#edit_preview_doc_btn').attr('href', fileUrl).removeClass('d-none');
+          $('#edit_doc_view_link').attr('href', fileUrl);
+          handleDocFileSelection(this, '#edit_doc_preview_img', '#edit_doc_placeholder', '#edit_doc_icon', '#edit_doc_name_badge', '#edit_doc_name_text', '#edit_remove_doc_btn');
+      } else {
+          clearEditDocFile();
+      }
+  });
+
+  $(document).on('click', '#edit_doc_preview_box', function() {
+      var href = $('#edit_preview_doc_btn').attr('href');
+      if (href && href !== '#' && href !== '') {
+          window.open(href, '_blank');
+      }
+  });
+
+  $(document).on('click', '#add_doc_preview_box', function() {
+      var href = $('#add_preview_doc_btn').attr('href');
+      if (href && href !== '#' && href !== '') {
+          window.open(href, '_blank');
       }
   });
 
@@ -2355,10 +3050,14 @@ function submitBulkDisburse() {
           </div>
         </div>
 
-        <!-- Sort dropdown -->
+        <!-- Sort dropdown & Filter Reset -->
         <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+          <button type="button" class="btn btn-outline-secondary d-flex align-items-center gap-1 shadow-xs" id="reset_user_filter_btn" onclick="resetUserFilters()" title="Reset Filters" style="height: 38px;">
+            <i class="ri-refresh-line"></i> Reset Filters
+          </button>
+
           <div class="dropdown" style="width: 200px;">
-            <button class="btn btn-outline-secondary dropdown-toggle w-100 d-flex align-items-center justify-content-between" type="button" data-bs-toggle="dropdown" id="sortDropdownBtn">
+            <button class="btn btn-outline-secondary dropdown-toggle w-100 d-flex align-items-center justify-content-between" type="button" data-bs-toggle="dropdown" id="sortDropdownBtn" style="height: 38px;">
               <span><i class="ri-filter-3-line me-1"></i> Sort By</span>
             </button>
             <ul class="dropdown-menu w-100">
@@ -2434,6 +3133,15 @@ function submitBulkDisburse() {
                               {% endif %}
                             </td>
                             <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-warning payment-history-btn me-1" 
+                                    data-id="{{ staff.id }}"
+                                    data-name="{{ staff.name|escape }}"
+                                    data-bs-toggle="offcanvas" 
+                                    data-bs-target="#payment_history_offcanvas" 
+                                    onclick="openStaffPaymentHistory('{{ staff.id }}', '{{ staff.name|escapejs }}')"
+                                    title="Payment & Advance History">
+                                    <i class="ri-history-line"></i>
+                                </button>
                                 <button class="btn btn-sm btn-outline-secondary view-btn" 
                                     data-name="{{ staff.name }}"
                                     data-mobile="{{ staff.mobile_number }}"
@@ -2441,6 +3149,7 @@ function submitBulkDisburse() {
                                     data-status="{% if staff.status == '0' %}Active{% else %}Suspended{% endif %}"
                                     data-gender="{{ staff.gender|default:'Not Specified' }}"
                                     data-doctype="{{ staff.document_type|default:'No Document' }}"
+                                    data-doj="{{ staff.date_of_joining|date:'d M, Y'|default:'Not Specified' }}"
                                     data-dob="{{ staff.date_of_birth|date:'d M, Y'|default:'Not Specified' }}"
                                     data-docurl="{% if staff.document_file %}{{ staff.document_file.url }}{% else %}{% endif %}"
                                     data-profile-image="{% if staff.profile_image %}{{ staff.profile_image.url }}{% else %}{% endif %}"
@@ -2453,6 +3162,7 @@ function submitBulkDisburse() {
                                     data-id="{{ staff.id }}"
                                     data-name="{{ staff.name }}"
                                     data-mobile="{{ staff.mobile_number }}"
+                                    data-doj="{{ staff.date_of_joining|date:'Y-m-d' }}"
                                     data-dob="{{ staff.date_of_birth|date:'Y-m-d' }}"
                                     data-gender="{{ staff.gender }}"
                                     data-doctype="{{ staff.document_type }}"
@@ -2460,6 +3170,7 @@ function submitBulkDisburse() {
                                     data-ismanager="{{ staff.is_role_manager|yesno:'true,false' }}"
                                     data-username="{% if staff.user %}{{ staff.user.username }}{% else %}{{ staff.mobile_number }}{% endif %}"
                                     data-permissions="{{ staff.permissions_json }}"
+                                    data-docurl="{% if staff.document_file %}{{ staff.document_file.url }}{% else %}{% endif %}"
                                     data-profile-image="{% if staff.profile_image %}{{ staff.profile_image.url }}{% else %}{% endif %}"
                                     data-salary-frequency="{{ staff.salary_frequency|default:'' }}"
                                     data-salary="{{ staff.salary|default:'' }}"
@@ -2561,110 +3272,130 @@ function submitBulkDisburse() {
 
     <!-- Task-Management Styled Action & Filter Toolbar -->
     <div class="card border-0 shadow-sm rounded-4 mb-3">
-      <div class="card-body p-3 d-flex flex-wrap align-items-center justify-content-between gap-2.5">
-        <!-- Left: Period Switcher, Search & Filter Dropdowns -->
-        <div class="d-flex flex-wrap align-items-center gap-2">
-          <!-- Collapsible Search Box -->
-          <div class="d-flex align-items-center search-collapse-wrapper" id="att_search_collapse_wrapper">
-            <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="att_search_toggle_btn" onclick="toggleAttendanceSearchBox()" style="width: 38px; height: 38px;">
-              <i class="ri-search-line"></i>
-            </button>
-            <div class="input-group search-input-group d-none" id="att_search_input_group">
-              <span class="input-group-text bg-white border-end-0">
-                <i class="ri-search-line text-muted"></i>
-              </span>
-              <input type="text"
-                     id="attendanceSearchInput"
-                     class="form-control border-start-0"
-                     placeholder="Search employee..."
-                     onkeyup="applyAttendanceFilters()">
-              <button class="btn btn-outline-secondary border-start-0" type="button" id="att_search_close_btn" onclick="closeAttendanceSearchBox()">
-                <i class="ri-close-line"></i>
+      <div class="card-body p-3 d-flex flex-column gap-3">
+        <!-- Top Row: Primary Navigation & View Controls -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <!-- Left: Search, Period & Date Selector -->
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <!-- Collapsible Search Box -->
+            <div class="d-flex align-items-center search-collapse-wrapper" id="att_search_collapse_wrapper">
+              <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="att_search_toggle_btn" onclick="toggleAttendanceSearchBox()" style="width: 38px; height: 38px;">
+                <i class="ri-search-line"></i>
+              </button>
+              <div class="input-group search-input-group d-none" id="att_search_input_group">
+                <span class="input-group-text bg-white border-end-0">
+                  <i class="ri-search-line text-muted"></i>
+                </span>
+                <input type="text"
+                       id="attendanceSearchInput"
+                       class="form-control border-start-0"
+                       placeholder="Search employee..."
+                       onkeyup="applyAttendanceFilters()">
+                <button class="btn btn-outline-secondary border-start-0" type="button" id="att_search_close_btn" onclick="closeAttendanceSearchBox()">
+                  <i class="ri-close-line"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Period Filter Selector (Day | Week | Month) -->
+            <div class="btn-group shadow-xs" role="group" aria-label="Attendance Period Filter">
+              <button type="button" class="btn btn-sm btn-primary active fw-semibold att-period-btn" id="att_period_day_btn" onclick="setAttendancePeriod('day')" style="height: 38px; display: inline-flex; align-items: center;">
+                <i class="ri-calendar-event-line me-1"></i>Day
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold att-period-btn" id="att_period_week_btn" onclick="setAttendancePeriod('week')" style="height: 38px; display: inline-flex; align-items: center;">
+                <i class="ri-calendar-check-line me-1"></i>Week
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold att-period-btn" id="att_period_month_btn" onclick="setAttendancePeriod('month')" style="height: 38px; display: inline-flex; align-items: center;">
+                <i class="ri-calendar-2-line me-1"></i>Month
+              </button>
+            </div>
+
+            <!-- Date Selector (Visible for Day & Week) -->
+            <div id="attendanceDateSelectorWrapper">
+              <select class="form-select form-select-sm w-auto" id="attendanceDateSelector" onchange="selectCalendarDay(this.value)" style="height: 38px;">
+                {% for d in days %}
+                <option value="{{ d.key }}" {% if is_latest_month and d.is_today %}selected{% elif not is_latest_month and forloop.first %}selected{% endif %}>
+                  {{ d.label }} {% if d.is_today %}(Today){% elif d.is_sunday %}(Sun){% endif %}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Period Scope Indicator Badge -->
+            <span class="badge bg-light text-dark border px-2.5 py-1.5 small d-none d-lg-inline-flex align-items-center" id="top_stat_period_badge" style="height: 38px;">
+              <i class="ri-calendar-event-line me-1 text-primary"></i>Day: Today
+            </span>
+          </div>
+
+          <!-- Right: Month Nav & View Switchers -->
+          <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
+            <!-- Month Navigator -->
+            <div class="d-flex align-items-center gap-1 bg-white border rounded-3 px-2 py-1 shadow-xs" style="height: 38px;">
+              <a href="?month={{ prev_month }}&year={{ prev_year }}&tab=daily_attendance" class="btn btn-sm btn-link text-muted p-0 text-decoration-none">
+                <i class="ri-arrow-left-s-line fs-5"></i>
+              </a>
+              <span class="fw-bold fs-7 mx-2 text-primary" style="min-width: 75px; text-align: center;">{{ current_month_name }} {{ selected_year }}</span>
+              {% if is_latest_month %}
+              <button class="btn btn-sm btn-link text-muted p-0 text-decoration-none opacity-25" disabled>
+                <i class="ri-arrow-right-s-line fs-5"></i>
+              </button>
+              {% else %}
+              <a href="?month={{ next_month }}&year={{ next_year }}&tab=daily_attendance" class="btn btn-sm btn-link text-muted p-0 text-decoration-none">
+                <i class="ri-arrow-right-s-line fs-5"></i>
+              </a>
+              {% endif %}
+            </div>
+
+            <!-- View Toggle Group -->
+            <div class="btn-group shadow-xs" role="group">
+              <button type="button" class="btn btn-sm btn-primary active fw-semibold" id="attendance_view_list_btn" onclick="switchAttendanceView('list')" style="height: 38px; display: inline-flex; align-items: center;">
+                <i class="ri-list-check-2 me-1"></i>List View
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" id="attendance_view_calendar_btn" onclick="switchAttendanceView('calendar')" style="height: 38px; display: inline-flex; align-items: center;">
+                <i class="ri-calendar-2-line me-1"></i>Calendar View
               </button>
             </div>
           </div>
+        </div>
 
-          <!-- Period Filter Selector (Day | Week | Month) -->
-          <div class="btn-group btn-group-sm shadow-xs" role="group" aria-label="Attendance Period Filter">
-            <button type="button" class="btn btn-sm btn-primary active fw-semibold att-period-btn" id="att_period_day_btn" onclick="setAttendancePeriod('day')">
-              <i class="ri-calendar-event-line me-1"></i>Day
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold att-period-btn" id="att_period_week_btn" onclick="setAttendancePeriod('week')">
-              <i class="ri-calendar-check-line me-1"></i>Week
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold att-period-btn" id="att_period_month_btn" onclick="setAttendancePeriod('month')">
-              <i class="ri-calendar-2-line me-1"></i>Month
-            </button>
-          </div>
+        <!-- Bottom Row: Filter Dropdowns & Reset Button -->
+        <div class="attendance-filter-row d-flex flex-wrap align-items-center gap-2">
+          <!-- Left: Filter Dropdowns -->
+          <div class="attendance-filter-options d-flex flex-wrap align-items-center gap-2">
+            <span class="attendance-filter-label text-muted small fw-semibold d-inline-flex align-items-center gap-1 me-1">
+              <i class="ri-filter-3-line text-primary"></i> Filter By:
+            </span>
 
-          <!-- Date Selector (Visible for Day & Week) -->
-          <div id="attendanceDateSelectorWrapper">
-            <select class="form-select form-select-sm w-auto" id="attendanceDateSelector" onchange="selectCalendarDay(this.value)">
-              {% for d in days %}
-              <option value="{{ d.key }}" {% if is_latest_month and d.is_today %}selected{% elif not is_latest_month and forloop.first %}selected{% endif %}>
-                {{ d.label }} {% if d.is_today %}(Today){% elif d.is_sunday %}(Sun){% endif %}
-              </option>
+            <!-- Role Filter -->
+            <select class="attendance-filter-select form-select form-select-sm" id="filterAttendanceRole" onchange="applyAttendanceFilters()" style="width: 180px !important; min-width: 180px !important; max-width: 180px !important; height: 38px !important;">
+              <option value="">All Roles</option>
+              {% for r in staff_roles %}
+              <option value="{{ r }}">{{ r }}</option>
               {% endfor %}
+            </select>
+
+            <!-- Designation Filter -->
+            <select class="attendance-filter-select form-select form-select-sm" id="filterAttendanceDesignation" onchange="applyAttendanceFilters()" style="width: 180px !important; min-width: 180px !important; max-width: 180px !important; height: 38px !important;">
+              <option value="">All Designations</option>
+              {% for d in designations %}
+              <option value="{{ d.name }}">{{ d.name }}</option>
+              {% endfor %}
+            </select>
+
+            <!-- Attendance Status Filter -->
+            <select class="attendance-filter-select form-select form-select-sm" id="filterAttendanceStatus" onchange="applyAttendanceFilters()" style="width: 180px !important; min-width: 180px !important; max-width: 180px !important; height: 38px !important;">
+              <option value="">All Statuses</option>
+              <option value="P">Present (P)</option>
+              <option value="A">Absent (A)</option>
+              <option value="H">Half Day (H)</option>
+              <option value="-">Unmarked (-)</option>
             </select>
           </div>
 
-          <!-- Role Filter -->
-          <select class="form-select form-select-sm w-auto" id="filterAttendanceRole" onchange="applyAttendanceFilters()">
-            <option value="">All Roles</option>
-            {% for r in staff_roles %}
-            <option value="{{ r }}">{{ r }}</option>
-            {% endfor %}
-          </select>
-
-          <!-- Designation Filter -->
-          <select class="form-select form-select-sm w-auto" id="filterAttendanceDesignation" onchange="applyAttendanceFilters()">
-            <option value="">All Designations</option>
-            {% for d in designations %}
-            <option value="{{ d.name }}">{{ d.name }}</option>
-            {% endfor %}
-          </select>
-
-          <!-- Attendance Status Filter -->
-          <select class="form-select form-select-sm w-auto" id="filterAttendanceStatus" onchange="applyAttendanceFilters()">
-            <option value="">All Statuses</option>
-            <option value="P">Present (P)</option>
-            <option value="A">Absent (A)</option>
-            <option value="H">Half Day (H)</option>
-            <option value="-">Unmarked (-)</option>
-          </select>
-
-          <!-- Period Scope Indicator Badge -->
-          <span class="badge bg-light text-dark border px-2.5 py-1.5 small d-none d-lg-inline-flex align-items-center" id="top_stat_period_badge">
-            <i class="ri-calendar-event-line me-1 text-primary"></i>Day: Today
-          </span>
-        </div>
-
-        <!-- Right: View Switchers & Month Nav -->
-        <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
-          <!-- Month Navigator -->
-          <div class="d-flex align-items-center gap-1 bg-white border rounded-3 px-2 py-1 shadow-xs">
-            <a href="?month={{ prev_month }}&year={{ prev_year }}&tab=daily_attendance" class="btn btn-sm btn-link text-muted p-0 text-decoration-none">
-              <i class="ri-arrow-left-s-line fs-5"></i>
-            </a>
-            <span class="fw-bold fs-7 mx-2 text-primary" style="min-width: 75px; text-align: center;">{{ current_month_name }} {{ selected_year }}</span>
-            {% if is_latest_month %}
-            <button class="btn btn-sm btn-link text-muted p-0 text-decoration-none opacity-25" disabled>
-              <i class="ri-arrow-right-s-line fs-5"></i>
-            </button>
-            {% else %}
-            <a href="?month={{ next_month }}&year={{ next_year }}&tab=daily_attendance" class="btn btn-sm btn-link text-muted p-0 text-decoration-none">
-              <i class="ri-arrow-right-s-line fs-5"></i>
-            </a>
-            {% endif %}
-          </div>
-
-          <!-- View Toggle Group -->
-          <div class="btn-group shadow-xs" role="group">
-            <button type="button" class="btn btn-sm btn-primary active fw-semibold" id="attendance_view_list_btn" onclick="switchAttendanceView('list')">
-              <i class="ri-list-check-2 me-1"></i>List View
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" id="attendance_view_calendar_btn" onclick="switchAttendanceView('calendar')">
-              <i class="ri-calendar-2-line me-1"></i>Calendar View
+          <!-- Right: Reset Filters Button -->
+          <div class="attendance-filter-reset d-flex align-items-center gap-2 ms-auto">
+            <button type="button" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1 shadow-xs" onclick="resetAttendanceFilters()" title="Reset Filters" style="height: 38px;">
+              <i class="ri-refresh-line"></i> Reset Filters
             </button>
           </div>
         </div>
@@ -2728,8 +3459,9 @@ function submitBulkDisburse() {
                       {% else %} btn-light text-muted
                       {% endif %}
                     " data-emp-id="{{ emp.id }}" data-date="{{ att.date }}"
-                    {% if att.is_future or emp.is_suspended %}disabled title="{% if emp.is_suspended %}Account is suspended/locked{% endif %}"{% endif %}
-                    {% if emp.is_suspended %}style="cursor: not-allowed; opacity: 0.4; pointer-events: none;"{% endif %}>
+                    data-before-joining="{% if att.is_before_joining %}true{% else %}false{% endif %}"
+                    {% if att.is_disabled %}disabled title="{% if att.is_before_joining %}Cannot mark attendance before joining date{% elif emp.is_suspended %}Account is suspended/locked{% elif att.is_future %}Future date (locked){% endif %}"{% endif %}
+                    {% if att.is_disabled %}style="cursor: not-allowed; opacity: 0.35; pointer-events: none;"{% endif %}>
                       {{ att.status }}
                     </button>
                   </td>
@@ -2776,16 +3508,18 @@ function submitBulkDisburse() {
 
     <!-- Calendar Date Attendance Modal Popup -->
     <div class="modal fade" id="calendarAttendanceModal" tabindex="-1" aria-labelledby="calendarAttendanceModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-dialog modal-dialog-centered" style="max-width: 860px; width: 95%;">
         <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
-          <div class="modal-header bg-white border-bottom py-3 px-4">
-            <div class="d-flex align-items-center gap-2.5">
-              <div class="rounded-circle d-flex align-items-center justify-content-center bg-primary-subtle text-primary" style="width: 40px; height: 40px;">
-                <i class="ri-calendar-check-line fs-4"></i>
+          <div class="modal-header bg-white border-bottom py-3" style="padding-left: 26px; padding-right: 26px;">
+            <div class="d-flex align-items-center gap-3">
+              <div class="rounded-3 d-flex align-items-center justify-content-center shadow-xs" style="width: 44px; height: 44px; background: #F4F7E8; color: #5B6D1B; border: 1px solid #DCE4B8;">
+                <i class="ri-calendar-check-fill fs-3"></i>
               </div>
               <div>
-                <h5 class="modal-title fw-bold mb-0 text-dark" id="calendarAttendanceModalLabel">Daily Attendance Sheet</h5>
-                <small class="text-muted" id="calendarAttendanceModalSubLabel">Loading...</small>
+                <h5 class="modal-title fw-bold mb-0 text-dark" id="calendarAttendanceModalLabel" style="font-size: 1.15rem; letter-spacing: -0.2px;">Daily Attendance Sheet</h5>
+                <div class="d-flex align-items-center flex-wrap gap-2 mt-1" id="calendarAttendanceModalSubLabel">
+                  <small class="text-muted">Loading attendance details...</small>
+                </div>
               </div>
             </div>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -2793,9 +3527,12 @@ function submitBulkDisburse() {
           <div class="modal-body p-0" id="calendarAttendanceModalBody">
             <!-- Dynamically populated -->
           </div>
-          <div class="modal-footer bg-light border-top py-2 px-4 d-flex justify-content-between align-items-center">
-            <small class="text-muted"><i class="ri-information-line me-1"></i>Changes are saved automatically.</small>
-            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+          <div class="modal-footer bg-light border-top py-2.5 d-flex justify-content-between align-items-center" style="padding-left: 26px; padding-right: 26px;">
+            <div class="d-flex align-items-center gap-2 text-muted" style="font-size: 12px;">
+              <span class="d-inline-block rounded-circle bg-success" style="width: 8px; height: 8px; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);"></span>
+              <span class="fw-medium">Changes are saved automatically in real-time</span>
+            </div>
+            <button type="button" class="btn btn-sm btn-dark px-4 py-1.5 rounded-3 fw-semibold shadow-sm" data-bs-dismiss="modal">Close</button>
           </div>
         </div>
       </div>
@@ -2845,8 +3582,8 @@ function submitBulkDisburse() {
                       data-name="{{ p.name }}"
                       data-role="{{ p.role }}"
                       data-present="{{ p.present_days }}"
-                      data-advance="{{ p.advance }}"
-                      data-rate="{{ p.base_rate }}"
+                      data-advance="{{ p.advance|floatformat:2 }}"
+                      data-rate="{{ p.base_rate|floatformat:2 }}"
                       data-frequency="{{ p.salary_frequency }}">
               </div>
               {% else %}
@@ -2866,7 +3603,7 @@ function submitBulkDisburse() {
                 </div>
                 <small class="text-muted d-flex align-items-center gap-1 mt-1">
                   Role: {{ p.role }} • Rate: ₹
-                  <input type="number" class="form-control form-control-sm p-1 row-rate-input" style="width:75px; height:24px; font-size:12px;" value="{{ p.base_rate }}" data-id="{{ p.id }}" data-present="{{ p.present_days }}" data-advance="{{ p.advance }}" {% if p.already_paid or p.is_suspended %}disabled{% endif %}>
+                  <input type="number" min="0" max="99999" maxlength="5" class="form-control form-control-sm p-1 row-rate-input" style="width:75px; height:24px; font-size:12px;" value="{{ p.base_rate|floatformat:2 }}" data-id="{{ p.id }}" data-present="{{ p.present_days }}" data-advance="{{ p.advance|floatformat:2 }}" {% if p.already_paid or p.is_suspended %}disabled{% endif %} oninput="if(this.value.length > 5) this.value = this.value.slice(0, 5); if(parseFloat(this.value) > 99999) this.value = 99999;">
                   /
                   <select name="sl_freq" class="form-select row-freq-select" style="width:95px; height:24px; font-size:11px; padding: 2px 8px;" data-id="{{ p.id }}" {% if p.already_paid or p.is_suspended %}disabled{% endif %}>
                     <option value="Daily" {% if p.salary_frequency == "Daily" %}selected{% endif %}>Daily</option>
@@ -2889,14 +3626,14 @@ function submitBulkDisburse() {
                 <div class="text-muted">Advance</div>
                 <!-- <div class="text-danger fw-bold">-₹{{ p.advance }}</div> -->
                 <div class="d-flex align-items-center justify-content-center text-danger fw-bold">
-                  -₹ <input type="number" class="form-control form-control-sm p-1 mx-1 row-adv-input" style="width:60px; height:24px; font-size:12px;" value="{{ p.advance|floatformat:'-2'|default:0 }}" {% if p.already_paid %}disabled{% endif %}>
+                  -₹ <input type="number" min="0" max="99999" maxlength="5" class="form-control form-control-sm p-1 mx-1 row-adv-input" style="width:70px; height:24px; font-size:12px;" value="{{ p.advance|floatformat:'-2'|default:0 }}" {% if p.already_paid %}disabled{% endif %} oninput="if(this.value.length > 5) this.value = this.value.slice(0, 5); if(parseFloat(this.value) > 99999) this.value = 99999;">
                 </div>
               </div>
 
               <div class="col-6 col-md-3">
                 <div class="text-muted">Incentives</div>
                 <div class="d-flex align-items-center justify-content-center text-primary fw-bold">
-                  +₹ <input type="number" class="form-control form-control-sm p-1 mx-1 row-inc-input" style="width:60px; height:24px; font-size:12px;" value="0" {% if p.already_paid %}disabled{% endif %}>
+                  +₹ <input type="number" min="0" max="99999" maxlength="5" class="form-control form-control-sm p-1 mx-1 row-inc-input" style="width:70px; height:24px; font-size:12px;" value="0" {% if p.already_paid %}disabled{% endif %} oninput="if(this.value.length > 5) this.value = this.value.slice(0, 5); if(parseFloat(this.value) > 99999) this.value = 99999;">
                 </div>
               </div>
             </div>
@@ -2907,7 +3644,7 @@ function submitBulkDisburse() {
                   {% if p.already_paid %}
                     <span class="text-success"><i class="ri-check-double-line"></i> Settled</span>
                   {% else %}
-                    ₹{{ p.net_pay }}
+                    ₹{{ p.net_pay|floatformat:2 }}
                   {% endif %}
                 </div>
               </div>
@@ -2917,8 +3654,8 @@ function submitBulkDisburse() {
               </button>
               {% else %}
               <button class="btn btn-primary btn-sm fw-bold execute-modal-btn" data-bs-toggle="modal" data-bs-target="#execute_paycheck_modal"
-                data-id="{{ p.id }}" data-name="{{ p.name }}" data-rate="{{ p.base_rate }}"
-                data-present="{{ p.present_days }}" data-gross="{{ p.gross }}" data-advance="{{ p.advance }}" data-net="{{ p.net_pay }}"
+                data-id="{{ p.id }}" data-name="{{ p.name }}" data-rate="{{ p.base_rate|floatformat:2 }}"
+                data-present="{{ p.present_days }}" data-gross="{{ p.gross|floatformat:2 }}" data-advance="{{ p.advance|floatformat:2 }}" data-net="{{ p.net_pay|floatformat:2 }}"
                 data-frequency="{{ p.salary_frequency }}">
                 <i class="ri-hand-coin-line me-1"></i> Disburse
               </button>
@@ -3008,7 +3745,7 @@ function submitBulkDisburse() {
 
     <!-- Filters & Table for Advances -->
     <div class="card border-0 shadow-sm rounded-4">
-      <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+      <div class="advance-filter-toolbar card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
 
         <!-- Search button / box -->
         <div class="d-flex align-items-center search-collapse-wrapper" id="adv_search_collapse_wrapper">
@@ -3029,29 +3766,31 @@ function submitBulkDisburse() {
           </div>
         </div>
 
-        <!-- Filter: Recovery Status -->
-        <select id="advance_status_filter" class="form-select form-select-sm w-auto">
-          <option value="all">All Recovery Statuses</option>
-          <option value="pending">Pending Deduction</option>
-          <option value="recovered">Recovered</option>
-        </select>
+        <div class="advance-filter-controls">
+          <!-- Filter: Recovery Status -->
+          <select id="advance_status_filter" class="form-select form-select-sm">
+            <option value="all">All Recovery Statuses</option>
+            <option value="pending">Pending Deduction</option>
+            <option value="recovered">Recovered</option>
+          </select>
 
-        <!-- Filter: Payment Method -->
-        <select id="advance_method_filter" class="form-select form-select-sm w-auto">
-          <option value="all">All Payment Methods</option>
-          <option value="Bank Transfer Wire">Bank Transfer Wire</option>
-          <option value="Hard Cash Handout">Hard Cash Handout</option>
-          <option value="Instant UPI">Instant UPI</option>
-          <option value="Certified Paper Cheque">Certified Paper Cheque</option>
-        </select>
+          <!-- Filter: Payment Method -->
+          <select id="advance_method_filter" class="form-select form-select-sm">
+            <option value="all">All Payment Methods</option>
+            <option value="Bank Transfer Wire">Bank Transfer Wire</option>
+            <option value="Hard Cash Handout">Hard Cash Handout</option>
+            <option value="Instant UPI">Instant UPI</option>
+            <option value="Certified Paper Cheque">Certified Paper Cheque</option>
+          </select>
 
-        <!-- Reset Button -->
-        <button type="button" class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center" onclick="resetAdvanceFilters()" title="Reset Filters" style="height: 38px; width: 38px;">
-          <i class="ri-refresh-line"></i>
-        </button>
+          <!-- Reset Button -->
+          <button type="button" class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center flex-shrink-0" onclick="resetAdvanceFilters()" title="Reset Filters" style="height: 38px; width: 38px;">
+            <i class="ri-refresh-line"></i>
+          </button>
+        </div>
 
         <!-- Right Side: Add Advance Button -->
-        <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
+        <div class="advance-add-action d-flex align-items-center gap-2 ms-auto flex-wrap">
           <button type="button" class="btn btn-primary btn-sm d-flex align-items-center gap-1 shadow-xs" data-bs-toggle="modal" data-bs-target="#add_advance_amount">
             <i class="ri-add-line fs-6"></i> Add Advance
           </button>
@@ -3227,9 +3966,15 @@ function submitBulkDisburse() {
     
               <div class="col-md-6">
                 <label class="form-label">Mobile Number</label>
-                <input type="text" class="form-control border rounded" id="add_mobile" placeholder="+91 9876543210" required>
+                <input maxlength="13" type="text" class="form-control border rounded" id="add_mobile" placeholder="+91 9876543210" required>
+                <div id="add_mobile_feedback" class="text-danger small mt-1 d-none"></div>
               </div>
     
+              <div class="col-md-6">
+                <label class="form-label">Date of Joining <span class="text-danger">*</span></label>
+                <input type="date" class="form-control border rounded" id="add_doj" value="{{ today_str }}" required>
+              </div>
+
               <div class="col-md-6">
                 <label class="form-label">Date of Birth</label>
                 <input type="date" class="form-control border rounded" id="add_dob">
@@ -3237,7 +3982,7 @@ function submitBulkDisburse() {
     
               <div class="col-md-6">
                 <label class="form-label">Gender</label>
-                <select class="form-select border rounded" id="add_gender">
+                <select class="form-select select2" id="add_gender" data-placeholder="Select Gender">
                   <option value="">Select Gender</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
@@ -3251,7 +3996,7 @@ function submitBulkDisburse() {
                     <i class="ri-add-line"></i> Quick Add
                   </button>
                 </div>
-                <select class="form-select border rounded" id="add_designation">
+                <select class="form-select select2" id="add_designation" data-placeholder="Select Designation">
                   <option value="">Select Designation</option>
                   {% for desig in designations %}
                     <option value="{{ desig.id }}">{{ desig.name }}</option>
@@ -3260,7 +4005,7 @@ function submitBulkDisburse() {
               </div>
               <div class="col-md-6">
                 <label class="form-label">Salary Frequency</label>
-                <select class="form-select border rounded" id="add_sal_freq">
+                <select class="form-select select2" id="add_sal_freq" data-placeholder="Select Salary Frequency">
                   <option value="">Select Salary Frequency</option>
                   <option value="Daily">Daily</option>
                   <option value="Monthly">Monthly</option>
@@ -3273,33 +4018,74 @@ function submitBulkDisburse() {
               </div>
     
               <div class="col-md-6">
-                <label class="form-label">Document Type</label>
-                <select class="form-select border rounded" id="add_doctype">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0">Document Type</label>
+                  <button type="button" class="btn btn-sm btn-link text-primary p-0 text-decoration-none fw-semibold" style="font-size:12px;" onclick="openQuickDocTypeModal('add')">
+                    <i class="ri-add-line"></i> Quick Add
+                  </button>
+                </div>
+                <select class="form-select select2" id="add_doctype" data-placeholder="Select Document">
                   <option value="">Select Document</option>
-                  <option value="Aadhaar Card">Aadhaar Card</option>
-                  <option value="PAN Card">PAN Card</option>
-                  <option value="Driving License">Driving License</option>
-                  <option value="Voter ID">Voter ID</option>
+                  {% for dt in document_types %}
+                    <option value="{{ dt.name }}">{{ dt.name }}</option>
+                  {% endfor %}
                 </select>
               </div>
     
               <div class="col-md-6">
-                <label class="form-label">Upload Document</label>
-                <input type="file" class="form-control border rounded" id="add_docfile">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0">Upload Document</label>
+                  <div class="d-flex align-items-center gap-2">
+                    <a href="#" target="_blank" class="btn btn-sm btn-link text-primary p-0 text-decoration-none fw-semibold d-none" id="add_preview_doc_btn" style="font-size:12px;">
+                      <i class="ri-eye-line me-1"></i> Preview
+                    </a>
+                    <button type="button" class="btn btn-sm btn-link text-danger p-0 text-decoration-none fw-semibold d-none" id="add_remove_doc_btn" style="font-size:12px;" onclick="clearAddDocFile()">
+                      <i class="ri-delete-bin-line me-1"></i> Remove
+                    </button>
+                  </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <div class="position-relative flex-shrink-0" style="width: 38px; height: 38px; cursor: pointer;" id="add_doc_preview_box" title="Click to preview document">
+                    <img id="add_doc_preview_img" src="" alt="Doc" class="rounded object-fit-cover shadow-sm d-none w-100 h-100" style="border: 2px solid #f1732a;">
+                    <div id="add_doc_placeholder" class="rounded bg-light border d-flex align-items-center justify-content-center text-muted w-100 h-100 shadow-sm" style="font-size: 16px;">
+                      <i class="ri-file-text-line" id="add_doc_icon"></i>
+                    </div>
+                  </div>
+                  <div class="flex-grow-1">
+                    <input type="file" class="form-control border rounded" id="add_docfile" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx">
+                  </div>
+                </div>
+                <div id="add_doc_name_badge" class="mt-1 small d-none">
+                  <a href="#" target="_blank" id="add_doc_view_link" class="badge bg-label-primary text-decoration-none d-inline-flex align-items-center gap-1 text-truncate" style="max-width: 260px;">
+                    <i class="ri-external-link-line"></i> <span id="add_doc_name_text"></span>
+                  </a>
+                </div>
               </div>
 
               <div class="col-md-6">
-                <label class="form-label">Profile Image</label>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0">Profile Image</label>
+                  <button type="button" class="btn btn-sm btn-link text-danger p-0 text-decoration-none fw-semibold d-none" id="add_remove_image_btn" style="font-size:12px;" onclick="clearAddProfileImage()">
+                    <i class="ri-delete-bin-line me-1"></i> Remove
+                  </button>
+                </div>
                 <div class="d-flex align-items-center gap-2">
-                  <img id="add_profile_image_preview" src="" alt="Preview" class="rounded-circle object-fit-cover shadow-sm d-none flex-shrink-0" style="width: 38px; height: 38px; border: 1.5px solid #e2e8f0;">
-                  <input type="file" class="form-control border rounded" id="add_profile_image" accept="image/*">
+                  <div class="position-relative flex-shrink-0" style="width: 38px; height: 38px;">
+                    <img id="add_profile_image_preview" src="" alt="Preview" class="rounded-circle object-fit-cover shadow-sm d-none w-100 h-100" style="border: 2px solid #f1732a;">
+                    <div id="add_profile_image_placeholder" class="rounded-circle bg-light border d-flex align-items-center justify-content-center text-muted w-100 h-100 shadow-sm" style="font-size: 16px;">
+                      <i class="ri-user-3-line"></i>
+                    </div>
+                  </div>
+                  <div class="flex-grow-1">
+                    <input type="file" class="form-control border rounded" id="add_profile_image" accept="image/*">
+                  </div>
                 </div>
               </div>
 
     
               <div class="col-md-12">
                 <label class="form-label">Status</label>
-                <select class="form-select border rounded" id="add_status">
+                <select class="form-select select2" id="add_status" data-placeholder="Select Status">
                   <option value="0">Active</option>
                   <option value="1">Suspended locked</option>
                 </select>
@@ -3343,7 +4129,7 @@ function submitBulkDisburse() {
                       <div class="d-flex align-items-center justify-content-between mb-3">
                         <span class="fw-bold text-dark small"><i class="ri-key-2-line me-1 text-orange-main"></i> Module Access Permissions</span>
                         <label class="custom-switch mb-0">
-                          <input type="checkbox" id="add_perm_all" checked>
+                          <input type="checkbox" id="add_perm_all">
                           <span class="switch-slider"></span>
                           <span class="fw-bold small text-success ms-1">All Modules</span>
                         </label>
@@ -3353,7 +4139,7 @@ function submitBulkDisburse() {
                         {% for perm in permissions %}
                         <div class="col-6 col-md-4">
                           <label class="custom-checkbox-orange" for="add_perm_{{ forloop.counter }}">
-                            <input type="checkbox" class="add-perm-check" value="{{ perm }}" id="add_perm_{{ forloop.counter }}" checked disabled>
+                            <input type="checkbox" class="add-perm-check" value="{{ perm }}" id="add_perm_{{ forloop.counter }}">
                             <span class="checkbox-indicator"></span>
                             <span class="ms-1">{{ perm }}</span>
                           </label>
@@ -3402,8 +4188,14 @@ function submitBulkDisburse() {
               <div class="col-md-6">
                 <label class="form-label">Mobile Number</label>
                 <input type="text" class="form-control border rounded" id="edit_mobile" required>
+                <div id="edit_mobile_feedback" class="text-danger small mt-1 d-none"></div>
               </div>
     
+              <div class="col-md-6">
+                <label class="form-label">Date of Joining</label>
+                <input type="date" class="form-control border rounded" id="edit_doj">
+              </div>
+
               <div class="col-md-6">
                 <label class="form-label">Date of Birth</label>
                 <input type="date" class="form-control border rounded" id="edit_dob">
@@ -3411,7 +4203,7 @@ function submitBulkDisburse() {
     
               <div class="col-md-6">
                 <label class="form-label">Gender</label>
-                <select class="form-select border rounded" id="edit_gender">
+                <select class="form-select select2" id="edit_gender" data-placeholder="Select Gender">
                   <option value="">Select Gender</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
@@ -3426,7 +4218,7 @@ function submitBulkDisburse() {
                     <i class="ri-add-line"></i> Quick Add
                   </button>
                 </div>
-                <select class="form-select border rounded" id="edit_designation">
+                <select class="form-select select2" id="edit_designation" data-placeholder="Select Designation">
                   <option value="">Select Designation</option>
                   {% for desig in designations %}
                     <option value="{{ desig.id }}">{{ desig.name }}</option>
@@ -3435,7 +4227,7 @@ function submitBulkDisburse() {
               </div>
               <div class="col-md-6">
                 <label class="form-label">Salary Frequency</label>
-                <select class="form-select border rounded" id="edit_sal_freq">
+                <select class="form-select select2" id="edit_sal_freq" data-placeholder="Select Salary Frequency">
                   <option value="">Select Salary Frequency</option>
                   <option value="Daily">Daily</option>
                   <option value="Monthly">Monthly</option>
@@ -3448,33 +4240,73 @@ function submitBulkDisburse() {
               </div>
 
               <div class="col-md-6">
-                <label class="form-label">Document Type</label>
-                <select class="form-select border rounded" id="edit_doctype">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0">Document Type</label>
+                  <button type="button" class="btn btn-sm btn-link text-primary p-0 text-decoration-none fw-semibold" style="font-size:12px;" onclick="openQuickDocTypeModal('edit')">
+                    <i class="ri-add-line"></i> Quick Add
+                  </button>
+                </div>
+                <select class="form-select select2" id="edit_doctype" data-placeholder="Select Document">
                   <option value="">Select Document</option>
-                  <option value="Aadhaar Card">Aadhaar Card</option>
-                  <option value="PAN Card">PAN Card</option>
-                  <option value="Driving License">Driving License</option>
-                  <option value="Voter ID">Voter ID</option>
+                  {% for dt in document_types %}
+                    <option value="{{ dt.name }}">{{ dt.name }}</option>
+                  {% endfor %}
                 </select>
               </div>
     
               <div class="col-md-6">
-                <label class="form-label">Upload Document</label>
-                <input type="file" class="form-control border rounded" id="edit_docfile">
-                <small class="text-muted" id="edit_doc_link"></small>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0">Upload Document</label>
+                  <div class="d-flex align-items-center gap-2">
+                    <a href="#" target="_blank" class="btn btn-sm btn-link text-primary p-0 text-decoration-none fw-semibold d-none" id="edit_preview_doc_btn" style="font-size:12px;">
+                      <i class="ri-eye-line me-1"></i> Preview
+                    </a>
+                    <button type="button" class="btn btn-sm btn-link text-danger p-0 text-decoration-none fw-semibold d-none" id="edit_remove_doc_btn" style="font-size:12px;" onclick="clearEditDocFile()">
+                      <i class="ri-delete-bin-line me-1"></i> Remove
+                    </button>
+                  </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <div class="position-relative flex-shrink-0" style="width: 38px; height: 38px; cursor: pointer;" id="edit_doc_preview_box" title="Click to preview document">
+                    <img id="edit_doc_preview_img" src="" alt="Doc" class="rounded object-fit-cover shadow-sm d-none w-100 h-100" style="border: 2px solid #f1732a;">
+                    <div id="edit_doc_placeholder" class="rounded bg-light border d-flex align-items-center justify-content-center text-muted w-100 h-100 shadow-sm" style="font-size: 16px;">
+                      <i class="ri-file-text-line" id="edit_doc_icon"></i>
+                    </div>
+                  </div>
+                  <div class="flex-grow-1">
+                    <input type="file" class="form-control border rounded" id="edit_docfile" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx">
+                  </div>
+                </div>
+                <div id="edit_doc_name_badge" class="mt-1 small d-none">
+                  <a href="#" target="_blank" id="edit_doc_view_link" class="badge bg-label-primary text-decoration-none d-inline-flex align-items-center gap-1 text-truncate" style="max-width: 260px;">
+                    <i class="ri-external-link-line"></i> <span id="edit_doc_name_text">View Document</span>
+                  </a>
+                </div>
               </div>
 
               <div class="col-md-6">
-                <label class="form-label">Profile Image</label>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0">Profile Image</label>
+                  <button type="button" class="btn btn-sm btn-link text-danger p-0 text-decoration-none fw-semibold d-none" id="edit_remove_image_btn" style="font-size:12px;" onclick="clearEditProfileImage()">
+                    <i class="ri-delete-bin-line me-1"></i> Remove
+                  </button>
+                </div>
                 <div class="d-flex align-items-center gap-2">
-                  <img id="edit_profile_image_preview" src="" alt="Profile" class="rounded-circle object-fit-cover shadow-sm d-none flex-shrink-0" style="width: 38px; height: 38px; border: 1.5px solid #e2e8f0;">
-                  <input type="file" class="form-control border rounded" id="edit_profile_image" accept="image/*">
+                  <div class="position-relative flex-shrink-0" style="width: 38px; height: 38px;">
+                    <img id="edit_profile_image_preview" src="" alt="Profile" class="rounded-circle object-fit-cover shadow-sm d-none w-100 h-100" style="border: 2px solid #f1732a;">
+                    <div id="edit_profile_image_placeholder" class="rounded-circle bg-light border d-flex align-items-center justify-content-center text-muted w-100 h-100 shadow-sm" style="font-size: 16px;">
+                      <i class="ri-user-3-line"></i>
+                    </div>
+                  </div>
+                  <div class="flex-grow-1">
+                    <input type="file" class="form-control border rounded" id="edit_profile_image" accept="image/*">
+                  </div>
                 </div>
               </div>
     
               <div class="col-md-12">
                 <label class="form-label">Status</label>
-                <select class="form-select border rounded" id="edit_status">
+                <select class="form-select select2" id="edit_status" data-placeholder="Select Status">
                   <option value="0">Active</option>
                   <option value="1">Suspended locked</option>
                 </select>
@@ -3551,13 +4383,41 @@ function submitBulkDisburse() {
   </div>
 </div>
 
-<!-- Quick Add Designation Modal -->
-<div class="modal fade" id="quick_add_designation_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;">
+<!-- Quick Add Document Type Modal -->
+<div class="modal fade" id="quick_add_doc_type_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;" data-bs-backdrop="false">
   <div class="modal-dialog modal-sm modal-dialog-centered">
-    <div class="modal-content border-0 shadow-lg rounded-3">
+    <div class="modal-content border-0 shadow-lg rounded-3" style="border: 1px solid rgba(0,0,0,0.12) !important;">
+      <div class="modal-header border-bottom py-2">
+        <h6 class="modal-title fw-bold text-dark"><i class="ri-add-circle-line me-1 text-primary"></i> Quick Add Document Type</h6>
+        <button type="button" class="btn-close" onclick="closeQuickDocTypeModal()" aria-label="Close"></button>
+      </div>
+      <div class="modal-body py-3">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Document Type Name <span class="text-danger">*</span></label>
+          <input type="text" id="quick_doc_type_name" class="form-control form-control-sm" placeholder="e.g. Passport, Ration Card">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Description</label>
+          <textarea id="quick_doc_type_desc" class="form-control form-control-sm" rows="2" placeholder="Optional description..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer border-top py-2 d-flex justify-content-end">
+        <button type="button" class="btn btn-sm btn-light" onclick="closeQuickDocTypeModal()">Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="submitQuickDocType()">
+          <i class="ri-check-line me-1"></i> Add Document Type
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Add Designation Modal -->
+<div class="modal fade" id="quick_add_designation_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;" data-bs-backdrop="false">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-3" style="border: 1px solid rgba(0,0,0,0.12) !important;">
       <div class="modal-header border-bottom py-2">
         <h6 class="modal-title fw-bold text-dark"><i class="ri-add-circle-line me-1 text-primary"></i> Quick Add Designation</h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <button type="button" class="btn-close" onclick="closeQuickDesignationModal()" aria-label="Close"></button>
       </div>
       <div class="modal-body py-3">
         <div class="mb-2">
@@ -3570,7 +4430,7 @@ function submitBulkDisburse() {
         </div>
       </div>
       <div class="modal-footer border-top py-2 d-flex justify-content-end">
-        <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm btn-light" onclick="closeQuickDesignationModal()">Cancel</button>
         <button type="button" class="btn btn-sm btn-primary" onclick="submitQuickDesignation()">
           <i class="ri-check-line me-1"></i> Add Designation
         </button>
@@ -3648,6 +4508,11 @@ function submitBulkDisburse() {
         <span id="view_staff_mobile">Mobile Number</span>
       </li>
       <li class="d-flex align-items-center mb-3">
+        <i class="ri-calendar-check-line ri-20px text-primary me-2"></i>
+        <span class="fw-medium text-heading me-2">Date of Joining:</span>
+        <span id="view_staff_doj">Not Specified</span>
+      </li>
+      <li class="d-flex align-items-center mb-3">
         <i class="ri-calendar-line ri-20px text-primary me-2"></i>
         <span class="fw-medium text-heading me-2">Date of Birth:</span>
         <span id="view_staff_dob">DOB</span>
@@ -3687,6 +4552,186 @@ function submitBulkDisburse() {
   </div>
 </div>
 
+<!-- Payment & Advance History Offcanvas Side Drawer -->
+<div class="offcanvas offcanvas-end shadow-lg" tabindex="-1" id="payment_history_offcanvas" style="width: 580px; max-width: 96vw; border-left: 1px solid #e2e8f0;">
+  <!-- HEADER -->
+  <div class="offcanvas-header border-bottom py-3 px-4 bg-white">
+    <div class="d-flex align-items-center gap-3">
+      <div class="rounded-3 d-flex align-items-center justify-content-center shadow-xs" style="width: 44px; height: 44px; background: #FFF7ED; color: #C2410C; border: 1px solid #FFEDD5;">
+        <i class="ri-history-line fs-3"></i>
+      </div>
+      <div>
+        <h5 class="mb-0 fw-bold text-dark" style="font-size: 1.15rem; letter-spacing: -0.2px;">Payment & Advance History</h5>
+        <div class="d-flex align-items-center gap-2 mt-1">
+          <small class="text-muted fw-medium" id="ph_staff_subtitle">Loading staff...</small>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+
+  <!-- BODY -->
+  <div class="offcanvas-body p-0 d-flex flex-column" style="background: #FAFBFD;">
+    <!-- Loading State -->
+    <div id="ph_loading_state" class="p-5 text-center my-auto">
+      <div class="spinner-border text-primary mb-3" role="status" style="width: 2.5rem; height: 2.5rem;">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <h6 class="fw-bold text-dark mb-1">Fetching Financial Records</h6>
+      <p class="text-muted small mb-0">Loading payout disbursements and advance logs...</p>
+    </div>
+
+    <!-- Error State -->
+    <div id="ph_error_state" class="p-5 text-center my-auto d-none">
+      <div class="rounded-circle bg-danger-subtle text-danger d-inline-flex align-items-center justify-content-center mb-3" style="width: 56px; height: 56px;">
+        <i class="ri-error-warning-line fs-2"></i>
+      </div>
+      <h6 class="fw-bold text-dark mb-1" id="ph_error_title">Failed to Load Records</h6>
+      <p class="text-muted small mb-3" id="ph_error_desc">An unexpected error occurred while fetching payment data.</p>
+      <button type="button" class="btn btn-sm btn-outline-primary px-3 rounded-pill" onclick="retryLoadPaymentHistory()">Try Again</button>
+    </div>
+
+    <!-- Content State -->
+    <div id="ph_content_state" class="d-none flex-column flex-grow-1">
+      <!-- Employee Profile Banner -->
+      <div class="p-4 bg-white border-bottom">
+        <div class="d-flex align-items-start gap-3">
+          <div class="position-relative flex-shrink-0" style="width: 52px; height: 52px;">
+            <img id="ph_avatar_img" src="" alt="Profile" class="rounded-circle object-fit-cover w-100 h-100 shadow-xs border d-none">
+            <div id="ph_avatar_initials" class="rounded-circle fw-bold d-flex align-items-center justify-content-center shadow-xs border w-100 h-100" style="background: #EBF5EC; color: #2E7D32; border-color: #C8E6C9 !important; font-size: 17px; font-weight: 800;">
+              HP
+            </div>
+          </div>
+          <div class="flex-grow-1 min-w-0">
+            <div class="d-flex align-items-center justify-content-between gap-2">
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <h5 class="fw-bold text-dark mb-0 text-truncate" style="font-size: 1.15rem; letter-spacing: -0.2px;" id="ph_staff_name">Employee Name</h5>
+                <span class="badge bg-light text-secondary border font-monospace" style="font-size: 10.5px; display:none;" id="ph_staff_empid">EMP-#</span>
+              </div>
+              <span class="badge rounded-pill fw-semibold px-2.5 py-1" id="ph_status_badge" style="font-size: 11px;">Active</span>
+            </div>
+            <div class="d-flex align-items-center flex-wrap gap-2 mt-2">
+              <span class="badge rounded-pill px-2.5 py-1 d-inline-flex align-items-center" style="background: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; font-size: 11px;">
+                <i class="ri-user-star-line me-1 opacity-75"></i><span id="ph_staff_role">Employee</span>
+              </span>
+              <span class="badge rounded-pill px-2.5 py-1 d-inline-flex align-items-center" style="background: #FFF7ED; color: #C2410C; border: 1px solid #FFEDD5; font-size: 11px;">
+                <i class="ri-briefcase-line me-1 text-warning opacity-75"></i><span id="ph_staff_desig">Field Vehicle Operator</span>
+              </span>
+              <span class="badge rounded-pill px-2.5 py-1 d-inline-flex align-items-center" style="background: #F8FAFC; color: #475569; border: 1px solid #E2E8F0; font-size: 11px;">
+                <i class="ri-phone-line me-1 text-primary"></i><span id="ph_staff_mobile">—</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3 Modern KPI Summary Cards -->
+        <div class="row g-2.5 mt-3">
+          <div class="col-4">
+            <div class="p-3 rounded-4 border h-100 d-flex flex-column justify-content-between position-relative overflow-hidden" 
+                 style="background: linear-gradient(145deg, #F0FDF4 0%, #DCFCE7 100%); border-color: #BBF7D0 !important; box-shadow: 0 2px 5px rgba(22, 163, 74, 0.06);">
+              <div class="d-flex align-items-center justify-content-between mb-1.5">
+                <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 28px; height: 28px; background: #FFFFFF; color: #16A34A; box-shadow: 0 1px 2px rgba(22, 163, 74, 0.15);">
+                  <i class="ri-hand-coin-line fs-6"></i>
+                </div>
+                <span class="badge rounded-pill fw-bold" style="background: rgba(22, 163, 74, 0.18); color: #15803D; font-size: 9px; padding: 2px 6px;" id="ph_kpi_payout_count">1 Paycheck</span>
+              </div>
+              <div>
+                <small class="text-uppercase fw-bold d-block" style="font-size: 9.5px; letter-spacing: 0.6px; color: #166534;">Total Payout</small>
+                <div class="fw-bold mt-0.5" style="font-size: 1.15rem; color: #15803D; font-family: system-ui, -apple-system, sans-serif; letter-spacing: -0.3px; line-height: 1.2;" id="ph_kpi_total_disbursed">₹0.00</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="p-3 rounded-4 border h-100 d-flex flex-column justify-content-between position-relative overflow-hidden" 
+                 style="background: linear-gradient(145deg, #FFFBEB 0%, #FEF3C7 100%); border-color: #FDE68A !important; box-shadow: 0 2px 5px rgba(217, 119, 6, 0.06);">
+              <div class="d-flex align-items-center justify-content-between mb-1.5">
+                <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 28px; height: 28px; background: #FFFFFF; color: #D97706; box-shadow: 0 1px 2px rgba(217, 119, 6, 0.15);">
+                  <i class="ri-wallet-3-line fs-6"></i>
+                </div>
+                <span class="badge rounded-pill fw-bold" style="background: rgba(217, 119, 6, 0.18); color: #B45309; font-size: 9px; padding: 2px 6px;" id="ph_kpi_advance_count">1 Advance</span>
+              </div>
+              <div>
+                <small class="text-uppercase fw-bold d-block" style="font-size: 9.5px; letter-spacing: 0.6px; color: #92400E;">Total Advances</small>
+                <div class="fw-bold mt-0.5" style="font-size: 1.15rem; color: #B45309; font-family: system-ui, -apple-system, sans-serif; letter-spacing: -0.3px; line-height: 1.2;" id="ph_kpi_total_advance">₹0.00</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="p-3 rounded-4 border h-100 d-flex flex-column justify-content-between position-relative overflow-hidden" 
+                 style="background: linear-gradient(145deg, #FEF2F2 0%, #FEE2E2 100%); border-color: #FECACA !important; box-shadow: 0 2px 5px rgba(220, 38, 38, 0.06);">
+              <div class="d-flex align-items-center justify-content-between mb-1.5">
+                <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 28px; height: 28px; background: #FFFFFF; color: #DC2626; box-shadow: 0 1px 2px rgba(220, 38, 38, 0.15);">
+                  <i class="ri-time-line fs-6"></i>
+                </div>
+                <span class="badge rounded-pill fw-bold" style="background: rgba(220, 38, 38, 0.18); color: #991B1B; font-size: 9px; padding: 2px 6px;">To Deduct</span>
+              </div>
+              <div>
+                <small class="text-uppercase fw-bold d-block" style="font-size: 9.5px; letter-spacing: 0.6px; color: #991B1B;">Pending Adv</small>
+                <div class="fw-bold mt-0.5" style="font-size: 1.15rem; color: #B91C1C; font-family: system-ui, -apple-system, sans-serif; letter-spacing: -0.3px; line-height: 1.2;" id="ph_kpi_pending_advance">₹0.00</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nav Tabs -->
+      <div class="px-4 py-2.5 bg-white border-bottom">
+        <div class="p-1 rounded-3 d-flex gap-1" style="background: #F1F5F9; border: 1px solid #E2E8F0;">
+          <button type="button" class="ph-custom-tab-btn active" id="ph_tab_payouts_btn" onclick="switchPHTab('payouts')">
+            <i class="ri-hand-coin-line fs-6"></i>
+            <span>Salary Payouts</span>
+            <span class="badge rounded-pill" id="ph_badge_payout_count">0</span>
+          </button>
+          <button type="button" class="ph-custom-tab-btn" id="ph_tab_advances_btn" onclick="switchPHTab('advances')">
+            <i class="ri-wallet-3-line fs-6"></i>
+            <span>Advance History</span>
+            <span class="badge rounded-pill" id="ph_badge_advance_count">0</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab Content Area -->
+      <div class="tab-content flex-grow-1 p-4" style="overflow-y: auto; max-height: calc(100vh - 350px);">
+        <!-- 1. SALARY PAYOUTS TAB -->
+        <div class="tab-pane fade show active" id="ph_tab_payouts" role="tabpanel">
+          <div id="ph_payouts_list" class="d-flex flex-column gap-3">
+            <!-- Dynamically populated -->
+          </div>
+          <div id="ph_payouts_empty" class="text-center py-5 d-none">
+            <div class="rounded-circle bg-light text-muted d-inline-flex align-items-center justify-content-center mb-2" style="width: 52px; height: 52px;">
+              <i class="ri-hand-coin-line fs-3"></i>
+            </div>
+            <h6 class="fw-bold text-dark mb-1">No Salary Disbursed Yet</h6>
+            <p class="text-muted small mb-0">No completed paycheck payrolls found for this employee.</p>
+          </div>
+        </div>
+
+        <!-- 2. ADVANCE RECORDS TAB -->
+        <div class="tab-pane fade" id="ph_tab_advances" role="tabpanel">
+          <div id="ph_advances_list" class="d-flex flex-column gap-3">
+            <!-- Dynamically populated -->
+          </div>
+          <div id="ph_advances_empty" class="text-center py-5 d-none">
+            <div class="rounded-circle bg-light text-muted d-inline-flex align-items-center justify-content-center mb-2" style="width: 52px; height: 52px;">
+              <i class="ri-wallet-3-line fs-3"></i>
+            </div>
+            <h6 class="fw-bold text-dark mb-1">No Advance Records</h6>
+            <p class="text-muted small mb-0">This employee has not taken any cash or bank advances.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="p-3 bg-white border-top d-flex align-items-center justify-content-between mt-auto">
+        <small class="text-muted d-flex align-items-center gap-1.5" style="font-size: 11.5px;">
+          <i class="ri-shield-check-line text-success"></i> Verified Financial Records
+        </small>
+        <button type="button" class="btn btn-sm btn-dark px-4 py-1.5 rounded-3 fw-semibold shadow-sm" data-bs-dismiss="offcanvas">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Add Execute Payout Modal -->
 <div class="modal fade" id="execute_paycheck_modal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-md">
@@ -3717,7 +4762,7 @@ function submitBulkDisburse() {
                   <strong class="fw-semibold text-danger" id="execute_advance_summary">-₹0.00</strong>
                 </div>
                 <div class="d-flex justify-content-between small-text text-primary border-bottom pb-2" id="execute_incentive_row">
-                  <span>Incentives & Bonuses:</span>
+                  <span>Incentives:</span>
                   <strong class="fw-semibold text-primary" id="execute_incentive_summary">+₹0.00</strong>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mt-2">
@@ -3754,7 +4799,7 @@ function submitBulkDisburse() {
                 </label>
                 <div class="input-icon">
                   <span>₹</span>
-                  <input type="number" id="execute_advance_input" class="form-control" value="0">
+                  <input type="number" min="0" max="99999" maxlength="5" id="execute_advance_input" class="form-control" value="0" oninput="if(this.value.length > 5) this.value = this.value.slice(0, 5); if(parseFloat(this.value) > 99999) this.value = 99999;">
                 </div>
                 <p class="hint" id="execute_advance_hint">
                   Previous setting was <strong>₹0</strong>
@@ -3762,11 +4807,11 @@ function submitBulkDisburse() {
               </div>
               <div class="mt-3">
                 <label class="label-title">
-                   Update Incentives & Bonuses (₹)
+                   Update Incentives (₹)
                 </label>
                 <div class="input-icon">
                   <span>₹</span>
-                  <input type="number" id="execute_incentive_input" class="form-control" value="0">
+                  <input type="number" min="0" max="99999" maxlength="5" id="execute_incentive_input" class="form-control" value="0" oninput="if(this.value.length > 5) this.value = this.value.slice(0, 5); if(parseFloat(this.value) > 99999) this.value = 99999;">
                 </div>
               </div>
             </div>
@@ -3798,7 +4843,7 @@ function submitBulkDisburse() {
             <div class="payout-wrapper">
               <div class="col-md-12">
                 <label class="form-label">Employee</label>
-                <select id="advance_employee_id" class="form-select">
+                <select id="advance_employee_id" class="form-select select2" data-placeholder="Select Employee">
                   {% for staff in staff_members %}
                   {% if staff.status != '1' %}
                   <option value="{{ staff.id }}">{{ staff.name }}</option>
@@ -3833,7 +4878,7 @@ function submitBulkDisburse() {
                 </label>
                 <div class="input-icon">
                   <span>₹</span>
-                  <input type="number" id="advance_amount" class="form-control" value="0">
+                  <input type="number" min="0" max="99999" maxlength="5" id="advance_amount" class="form-control" value="0" oninput="if(this.value.length > 5) this.value = this.value.slice(0, 5); if(parseFloat(this.value) > 99999) this.value = 99999;">
                 </div>
               </div>
               <div class="mt-3">
@@ -4195,11 +5240,11 @@ let currentExecPresent = 0;
   // Helper to calculate daily rate based on frequency
   function getDailyRate(rate, freq) {
       if (freq === 'Weekly') {
-          return rate / 6.0;
+          return Math.round((rate / 6.0) * 100) / 100;
       } else if (freq === 'Monthly') {
-          return rate / 30.0;
+          return Math.round((rate / 30.0) * 100) / 100;
       }
-      return rate; // 'Daily'
+      return Math.round(rate * 100) / 100; // 'Daily'
   }
 
   function updateRowNetPay(row) {
@@ -4208,26 +5253,44 @@ let currentExecPresent = 0;
       let incInput = row.querySelector('.row-inc-input');
       let freqSelect = row.querySelector('.row-freq-select');
       
-      let rate = rateInput ? (parseFloat(rateInput.value) || 0) : 0;
-      let inc = incInput ? (parseFloat(incInput.value) || 0) : 0;
+      if (rateInput && (parseFloat(rateInput.value) > 99999 || rateInput.value.length > 5)) {
+          rateInput.value = Math.min(99999, parseFloat(rateInput.value) || 0);
+      }
+      if (advInput && (parseFloat(advInput.value) > 99999 || advInput.value.length > 5)) {
+          advInput.value = Math.min(99999, parseFloat(advInput.value) || 0);
+      }
+      if (incInput && (parseFloat(incInput.value) > 99999 || incInput.value.length > 5)) {
+          incInput.value = Math.min(99999, parseFloat(incInput.value) || 0);
+      }
+
+      let rate = rateInput ? Math.min(99999, Math.max(0, parseFloat(rateInput.value) || 0)) : 0;
+      let inc = incInput ? Math.min(99999, Math.max(0, parseFloat(incInput.value) || 0)) : 0;
       let present = rateInput ? (parseFloat(rateInput.dataset.present) || 0) : 0;
-      let advance = advInput ? (parseFloat(advInput.value) || 0) : (rateInput ? (parseFloat(rateInput.dataset.advance) || 0) : 0);
+      let advance = advInput ? Math.min(99999, Math.max(0, parseFloat(advInput.value) || 0)) : (rateInput ? (parseFloat(rateInput.dataset.advance) || 0) : 0);
       let freq = freqSelect ? freqSelect.value : 'Daily';
       
       let dailyRate = getDailyRate(rate, freq);
-      let gross = dailyRate * present;
-      let net = Math.max(0, gross - advance + inc);
+      let gross = Math.round(dailyRate * present * 100) / 100;
+      let net = Math.max(0, Math.round((gross - advance + inc) * 100) / 100);
       
       row.querySelector('.row-net-pay').innerText = '₹' + net.toFixed(2);
   }
 
 document.addEventListener("DOMContentLoaded", function () {
-  // Add event listeners for inline editing on rows (instant update)
+  // Add event listeners for inline editing on rows (instant update with max 99999 enforcement)
   document.querySelectorAll('.row-rate-input, .row-adv-input, .row-inc-input, .row-freq-select').forEach(input => {
       input.addEventListener('input', function() {
+          if (this.type === 'number') {
+              if (this.value.length > 5) this.value = this.value.slice(0, 5);
+              if (parseFloat(this.value) > 99999) this.value = 99999;
+          }
           updateRowNetPay(this.closest('.payroll-row'));
       });
       input.addEventListener('change', function() {
+          if (this.type === 'number') {
+              if (this.value.length > 5) this.value = this.value.slice(0, 5);
+              if (parseFloat(this.value) > 99999) this.value = 99999;
+          }
           updateRowNetPay(this.closest('.payroll-row'));
       });
   });
@@ -4305,13 +5368,24 @@ document.addEventListener("DOMContentLoaded", function () {
       
       document.getElementById('execute_incentive_input').value = inc;
       
+      let defaultExecRadio = document.querySelector('#execute_payment_method input[value="Bank Transfer Wire"]');
+      if (defaultExecRadio) {
+          defaultExecRadio.checked = true;
+          if (window.syncRadioCards) window.syncRadioCards(defaultExecRadio);
+      }
+      
       updateNetPay();
     });
   });
   
   function updateNetPay() {
-      let adv = parseFloat(document.getElementById('execute_advance_input').value) || 0;
-      let inc = parseFloat(document.getElementById('execute_incentive_input').value) || 0;
+      let advEl = document.getElementById('execute_advance_input');
+      let incEl = document.getElementById('execute_incentive_input');
+      if (advEl && parseFloat(advEl.value) > 99999) advEl.value = 99999;
+      if (incEl && parseFloat(incEl.value) > 99999) incEl.value = 99999;
+
+      let adv = advEl ? Math.min(99999, Math.max(0, parseFloat(advEl.value) || 0)) : 0;
+      let inc = incEl ? Math.min(99999, Math.max(0, parseFloat(incEl.value) || 0)) : 0;
       let newNet = Math.max(0, currentExecGross - adv + inc);
       
       let advSummary = document.getElementById('execute_advance_summary');
@@ -4335,8 +5409,8 @@ document.addEventListener("DOMContentLoaded", function () {
   
   if (document.getElementById('execute_submit_btn')) {
       document.getElementById('execute_submit_btn').addEventListener('click', function() {
-          let adv = parseFloat(document.getElementById('execute_advance_input').value) || 0;
-          let inc = parseFloat(document.getElementById('execute_incentive_input').value) || 0;
+          let adv = Math.min(99999, Math.max(0, parseFloat(document.getElementById('execute_advance_input').value) || 0));
+          let inc = Math.min(99999, Math.max(0, parseFloat(document.getElementById('execute_incentive_input').value) || 0));
           let net = currentExecGross - adv + inc;
           let method = document.querySelector('input[name="exec_pay"]:checked').value;
           
@@ -4366,6 +5440,66 @@ document.addEventListener("DOMContentLoaded", function () {
           });
       });
   }
+
+  // Payment Method Radio Cards - Dynamic Green Active State Sync
+  window.syncRadioCards = function(radio) {
+      if (!radio) return;
+      let name = radio.name || radio.getAttribute('name');
+      if (!name) return;
+      document.querySelectorAll('input[type="radio"][name="' + name + '"]').forEach(r => {
+          let card = r.closest('.radio-card');
+          if (card) {
+              if (r.checked) {
+                  card.classList.add('active');
+              } else {
+                  card.classList.remove('active');
+              }
+          }
+      });
+  };
+
+  // Handle change on radio input
+  $(document).on('change', '.radio-card input[type="radio"]', function() {
+      window.syncRadioCards(this);
+  });
+
+  // Handle click on the radio card itself
+  $(document).on('click', '.radio-card', function(e) {
+      let radio = this.querySelector('input[type="radio"]');
+      if (radio && !radio.checked) {
+          radio.checked = true;
+          $(radio).trigger('change');
+          window.syncRadioCards(radio);
+      }
+  });
+
+  // Initialize all radio cards active state on load
+  document.querySelectorAll('.radio-card input[type="radio"]:checked').forEach(r => window.syncRadioCards(r));
+
+  // Reset to default on modal open
+  $('#execute_paycheck_modal').on('show.bs.modal', function () {
+      let defaultRadio = document.querySelector('#execute_payment_method input[value="Bank Transfer Wire"]') || document.querySelector('#execute_payment_method input[type="radio"]');
+      if (defaultRadio) {
+          defaultRadio.checked = true;
+          window.syncRadioCards(defaultRadio);
+      }
+  });
+
+  $('#add_advance_amount').on('show.bs.modal', function () {
+      let defaultRadio = document.querySelector('#advance_payment_method input[value="Bank Transfer Wire"]') || document.querySelector('#advance_payment_method input[type="radio"]');
+      if (defaultRadio) {
+          defaultRadio.checked = true;
+          window.syncRadioCards(defaultRadio);
+      }
+  });
+
+  $('#bulk_disburse_modal').on('show.bs.modal', function () {
+      let defaultRadio = document.querySelector('#bulk_payment_method input[value="Bank Transfer Wire"]') || document.querySelector('#bulk_payment_method input[type="radio"]');
+      if (defaultRadio) {
+          defaultRadio.checked = true;
+          window.syncRadioCards(defaultRadio);
+      }
+  });
 });
 
 function submitAdvance() {
@@ -4381,6 +5515,11 @@ function submitAdvance() {
 
     if (!amount || parseFloat(amount) <= 0) {
         showAppToast("Please enter an advance amount greater than 0", "error");
+        return;
+    }
+
+    if (parseFloat(amount) > 99999) {
+        showAppToast("Maximum advance amount allowed is ₹99,999", "error");
         return;
     }
 
@@ -4454,49 +5593,328 @@ function confirmDeleteAdvance() {
 }
 
 function filterAdvanceTable() {
-    var searchTerm = ($('#advance_search_input').val() || '').toLowerCase().trim();
-    var statusFilter = ($('#advance_status_filter').val() || 'all').toLowerCase();
-    var methodFilter = ($('#advance_method_filter').val() || 'all').toLowerCase();
+    var searchEl = document.getElementById('advance_search_input');
+    var statusEl = document.getElementById('advance_status_filter');
+    var methodEl = document.getElementById('advance_method_filter');
+
+    var searchTerm = (searchEl ? searchEl.value : '').toLowerCase().trim();
+    var statusFilter = (statusEl ? statusEl.value : 'all').toLowerCase();
+    var methodFilter = (methodEl ? methodEl.value : 'all').toLowerCase();
 
     var visibleCount = 0;
-    var $rows = $('#advance_table_body tr.advance-row');
+    var rows = document.querySelectorAll('#advance_table_body tr.advance-row');
 
-    $rows.each(function() {
-        var $row = $(this);
-        var staffName = ($row.data('staff') || '').toString().toLowerCase();
-        var role = ($row.data('role') || '').toString().toLowerCase();
-        var method = ($row.data('method') || '').toString().toLowerCase();
-        var status = ($row.data('status') || '').toString().toLowerCase();
+    rows.forEach(function(row) {
+        var staffName = (row.getAttribute('data-staff') || '').toLowerCase();
+        var role = (row.getAttribute('data-role') || '').toLowerCase();
+        var method = (row.getAttribute('data-method') || '').toLowerCase();
+        var status = (row.getAttribute('data-status') || '').toLowerCase();
 
-        var matchesSearch = !searchTerm || staffName.includes(searchTerm) || role.includes(searchTerm) || method.includes(searchTerm);
-        var matchesStatus = (statusFilter === 'all') || (status === statusFilter);
-        var matchesMethod = (methodFilter === 'all') || (method === methodFilter);
+        var matchesSearch = !searchTerm || 
+                            staffName.includes(searchTerm) || 
+                            role.includes(searchTerm) || 
+                            method.includes(searchTerm) ||
+                            row.textContent.toLowerCase().includes(searchTerm);
+
+        var matchesStatus = (statusFilter === 'all') || 
+                            (status === statusFilter) ||
+                            (statusFilter === 'pending' && (status.includes('pending') || status === 'unpaid')) ||
+                            (statusFilter === 'recovered' && (status.includes('recovered') || status.includes('settled') || status === 'paid'));
+
+        var matchesMethod = (methodFilter === 'all') || 
+                            (method === methodFilter) || 
+                            (method.includes(methodFilter) || methodFilter.includes(method)) ||
+                            (methodFilter.includes('upi') && method.includes('upi')) ||
+                            (methodFilter.includes('bank') && method.includes('bank')) ||
+                            (methodFilter.includes('cash') && method.includes('cash')) ||
+                            (methodFilter.includes('cheque') && method.includes('cheque'));
 
         if (matchesSearch && matchesStatus && matchesMethod) {
-            $row.show();
+            row.style.display = '';
             visibleCount++;
         } else {
-            $row.hide();
+            row.style.display = 'none';
         }
     });
 
-    if ($rows.length > 0) {
-        if (visibleCount === 0) {
-            $('#advance_no_results').show();
-        } else {
-            $('#advance_no_results').hide();
-        }
+    var noResults = document.getElementById('advance_no_results');
+    if (noResults && rows.length > 0) {
+        noResults.style.display = (visibleCount === 0) ? '' : 'none';
     }
 }
 
 function resetAdvanceFilters() {
-    $('#advance_search_input').val('');
-    $('#advance_status_filter').val('all');
-    $('#advance_method_filter').val('all');
+    var searchEl = document.getElementById('advance_search_input');
+    var statusEl = document.getElementById('advance_status_filter');
+    var methodEl = document.getElementById('advance_method_filter');
+    if (searchEl) searchEl.value = '';
+    if (statusEl) {
+        statusEl.value = 'all';
+        if (window.jQuery && $(statusEl).data('select2')) $(statusEl).trigger('change');
+    }
+    if (methodEl) {
+        methodEl.value = 'all';
+        if (window.jQuery && $(methodEl).data('select2')) $(methodEl).trigger('change');
+    }
     filterAdvanceTable();
 }
 
-$(document).on('keyup input', '#advance_search_input', filterAdvanceTable);
-$(document).on('change', '#advance_status_filter, #advance_method_filter', filterAdvanceTable);
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.jQuery) {
+        $(document).on('keyup input paste', '#advance_search_input', filterAdvanceTable);
+        $(document).on('change select2:select select2:clear', '#advance_status_filter, #advance_method_filter', filterAdvanceTable);
+    } else {
+        var searchInp = document.getElementById('advance_search_input');
+        if (searchInp) {
+            searchInp.addEventListener('input', filterAdvanceTable);
+            searchInp.addEventListener('keyup', filterAdvanceTable);
+        }
+        var statusFlt = document.getElementById('advance_status_filter');
+        if (statusFlt) statusFlt.addEventListener('change', filterAdvanceTable);
+        var methodFlt = document.getElementById('advance_method_filter');
+        if (methodFlt) methodFlt.addEventListener('change', filterAdvanceTable);
+    }
+});
+
+// ── Payment & Advance History Offcanvas Logic ──
+var currentPaymentHistoryStaffId = null;
+var currentPaymentHistoryStaffName = '';
+
+function switchPHTab(tab) {
+    var btnPayouts = document.getElementById('ph_tab_payouts_btn');
+    var btnAdvances = document.getElementById('ph_tab_advances_btn');
+    var panePayouts = document.getElementById('ph_tab_payouts');
+    var paneAdvances = document.getElementById('ph_tab_advances');
+    
+    if (tab === 'payouts') {
+        if (btnPayouts) btnPayouts.classList.add('active');
+        if (btnAdvances) btnAdvances.classList.remove('active');
+        if (panePayouts) {
+            panePayouts.classList.add('show', 'active');
+        }
+        if (paneAdvances) {
+            paneAdvances.classList.remove('show', 'active');
+        }
+    } else {
+        if (btnAdvances) btnAdvances.classList.add('active');
+        if (btnPayouts) btnPayouts.classList.remove('active');
+        if (paneAdvances) {
+            paneAdvances.classList.add('show', 'active');
+        }
+        if (panePayouts) {
+            panePayouts.classList.remove('show', 'active');
+        }
+    }
+}
+
+function openStaffPaymentHistory(staffId, staffName) {
+    currentPaymentHistoryStaffId = staffId;
+    currentPaymentHistoryStaffName = staffName || '';
+
+    var subtitle = document.getElementById('ph_staff_subtitle');
+    if (subtitle) subtitle.innerText = staffName ? ('Staff Member: ' + staffName) : 'Loading staff...';
+
+    var loadingEl = document.getElementById('ph_loading_state');
+    var errorEl = document.getElementById('ph_error_state');
+    var contentEl = document.getElementById('ph_content_state');
+
+    if (loadingEl) loadingEl.classList.remove('d-none');
+    if (errorEl) errorEl.classList.add('d-none');
+    if (contentEl) {
+        contentEl.classList.add('d-none');
+        contentEl.classList.remove('d-flex');
+    }
+
+    // Reset to Payouts tab
+    switchPHTab('payouts');
+
+    $.ajax({
+        url: '/farmer/employee/payment_history/',
+        method: 'GET',
+        data: { 'staff_id': staffId },
+        success: function(res) {
+            if (res.success) {
+                renderStaffPaymentHistory(res);
+            } else {
+                showPaymentHistoryError(res.error || 'Failed to load records.');
+            }
+        },
+        error: function(xhr, status, err) {
+            showPaymentHistoryError('Unable to connect to the server. Please check your connection.');
+        }
+    });
+}
+
+function retryLoadPaymentHistory() {
+    if (currentPaymentHistoryStaffId) {
+        openStaffPaymentHistory(currentPaymentHistoryStaffId, currentPaymentHistoryStaffName);
+    }
+}
+
+function showPaymentHistoryError(msg) {
+    var loadingEl = document.getElementById('ph_loading_state');
+    var errorEl = document.getElementById('ph_error_state');
+    var contentEl = document.getElementById('ph_content_state');
+    var errorDesc = document.getElementById('ph_error_desc');
+
+    if (loadingEl) loadingEl.classList.add('d-none');
+    if (contentEl) {
+        contentEl.classList.add('d-none');
+        contentEl.classList.remove('d-flex');
+    }
+    if (errorEl) {
+        errorEl.classList.remove('d-none');
+        if (errorDesc) errorDesc.innerText = msg;
+    }
+}
+
+function renderStaffPaymentHistory(data) {
+    var loadingEl = document.getElementById('ph_loading_state');
+    var errorEl = document.getElementById('ph_error_state');
+    var contentEl = document.getElementById('ph_content_state');
+
+    if (loadingEl) loadingEl.classList.add('d-none');
+    if (errorEl) errorEl.classList.add('d-none');
+    if (contentEl) {
+        contentEl.classList.remove('d-none');
+        contentEl.classList.add('d-flex');
+    }
+
+    var staff = data.staff || {};
+    var summary = data.summary || {};
+    var advances = data.advances || [];
+    var payrolls = data.payrolls || [];
+
+    // Staff Banner
+    document.getElementById('ph_staff_subtitle').innerText = staff.name + ' (EMP-#' + staff.id + ')';
+    document.getElementById('ph_staff_name').innerText = staff.name;
+    var empIdEl = document.getElementById('ph_staff_empid');
+    if (empIdEl) empIdEl.innerText = 'EMP-#' + staff.id;
+    document.getElementById('ph_staff_role').innerText = staff.role || 'Employee';
+    document.getElementById('ph_staff_desig').innerText = staff.designation || 'Not Assigned';
+    document.getElementById('ph_staff_mobile').innerText = staff.mobile || '—';
+
+    var statusBadge = document.getElementById('ph_status_badge');
+    if (statusBadge) {
+        if (staff.status === 'Active') {
+            statusBadge.className = 'badge rounded-pill fw-semibold px-2.5 py-1 bg-success-subtle text-success border border-success-subtle';
+            statusBadge.innerHTML = '<i class="ri-checkbox-circle-fill me-1"></i>Active';
+        } else {
+            statusBadge.className = 'badge rounded-pill fw-semibold px-2.5 py-1 bg-danger-subtle text-danger border border-danger-subtle';
+            statusBadge.innerHTML = '<i class="ri-close-circle-fill me-1"></i>Suspended';
+        }
+    }
+
+    // Avatar
+    var avatarImg = document.getElementById('ph_avatar_img');
+    var avatarInitials = document.getElementById('ph_avatar_initials');
+    if (staff.profile_image) {
+        avatarImg.src = staff.profile_image;
+        avatarImg.classList.remove('d-none');
+        avatarInitials.classList.add('d-none');
+    } else {
+        avatarImg.classList.add('d-none');
+        avatarInitials.classList.remove('d-none');
+        var inits = staff.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        avatarInitials.innerText = inits || 'EM';
+    }
+
+    // KPIs
+    document.getElementById('ph_kpi_total_disbursed').innerText = '₹' + Number(summary.total_disbursed || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('ph_kpi_payout_count').innerText = (summary.payroll_count || 0) + (summary.payroll_count === 1 ? ' Paycheck' : ' Paychecks');
+
+    document.getElementById('ph_kpi_total_advance').innerText = '₹' + Number(summary.total_advance || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('ph_kpi_advance_count').innerText = (summary.advance_count || 0) + (summary.advance_count === 1 ? ' Advance' : ' Advances');
+
+    document.getElementById('ph_kpi_pending_advance').innerText = '₹' + Number(summary.pending_advance || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    document.getElementById('ph_badge_payout_count').innerText = summary.payroll_count || 0;
+    document.getElementById('ph_badge_advance_count').innerText = summary.advance_count || 0;
+
+    // Render Paychecks Tab
+    var payoutsList = document.getElementById('ph_payouts_list');
+    var payoutsEmpty = document.getElementById('ph_payouts_empty');
+    if (payrolls.length === 0) {
+        payoutsList.innerHTML = '';
+        payoutsEmpty.classList.remove('d-none');
+    } else {
+        payoutsEmpty.classList.add('d-none');
+        var pHtml = '';
+        payrolls.forEach(function(p) {
+            pHtml += `
+            <div class="ph-trx-card card-payout mb-2">
+                <div class="d-flex align-items-start justify-content-between mb-2">
+                    <div class="d-flex align-items-center gap-2.5">
+                        <div class="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 38px; height: 38px; background: #ECFDF5; color: #059669; border: 1px solid #A7F3D0;">
+                            <i class="ri-calendar-check-line fs-5"></i>
+                        </div>
+                        <div style="margin-left: 10px;">
+                            <div class="fw-bold text-dark" style="font-size: 13.5px; letter-spacing: -0.1px;">Salary Paycheck &bull; ${p.month}</div>
+                            <small class="text-muted" style="font-size: 11px;">Disbursed: <strong class="text-dark">${p.paid_on}</strong></small>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold text-success" style="font-size: 1.08rem; font-family: system-ui, -apple-system, sans-serif;">₹${Number(p.net_pay || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                        <small class="text-muted fw-semibold" style="font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.3px;">Net Disbursed</small>
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2 pt-2 border-top" style="font-size: 11.5px;">
+                    <span class="badge rounded-pill bg-light text-dark border px-2 py-1"><i class="ri-user-follow-line text-primary me-1"></i>${p.present_days} Days Present</span>
+                    <span class="badge rounded-pill bg-light text-dark border px-2 py-1">₹${Number(p.base_rate || 0).toFixed(2)}/day</span>
+                    ${p.advance_deduction > 0 ? `<span class="badge rounded-pill px-2 py-1" style="background:#FEF2F2; color:#B91C1C; border:1px solid #FECACA;">-₹${Number(p.advance_deduction).toFixed(2)} Adv Deducted</span>` : ''}
+                    ${p.incentives > 0 ? `<span class="badge rounded-pill px-2 py-1" style="background:#F0FDF4; color:#15803D; border:1px solid #BBF7D0;">+₹${Number(p.incentives).toFixed(2)} Incentives</span>` : ''}
+                    <span class="badge rounded-pill bg-secondary-subtle text-secondary border px-2 py-1 ms-auto">
+                        <i class="ri-bank-card-line me-1"></i>${p.payment_method}
+                    </span>
+                </div>
+            </div>`;
+        });
+        payoutsList.innerHTML = pHtml;
+    }
+
+    // Render Advances Tab
+    var advList = document.getElementById('ph_advances_list');
+    var advEmpty = document.getElementById('ph_advances_empty');
+    if (advances.length === 0) {
+        advList.innerHTML = '';
+        advEmpty.classList.remove('d-none');
+    } else {
+        advEmpty.classList.add('d-none');
+        var aHtml = '';
+        advances.forEach(function(a) {
+            aHtml += `
+            <div class="ph-trx-card card-advance mb-2">
+                <div class="d-flex align-items-start justify-content-between mb-2">
+                    <div class="d-flex align-items-center gap-2.5">
+                        <div class="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 38px; height: 38px; background: #FFFBEB; color: #D97706; border: 1px solid #FDE68A;">
+                            <i class="ri-hand-coin-line fs-5"></i>
+                        </div>
+                        <div style="margin-left: 10px;">
+                            <div class="fw-bold text-dark" style="font-size: 13.5px; letter-spacing: -0.1px;">Advance Payment</div>
+                            <small class="text-muted" style="font-size: 11px;">Issued: <strong class="text-dark">${a.date}</strong></small>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold text-danger" style="font-size: 1.08rem; font-family: system-ui, -apple-system, sans-serif;">-₹${Number(a.amount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                        <small class="text-muted fw-semibold" style="font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.3px;">Amount Issued</small>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center justify-content-between pt-2 border-top" style="font-size: 11.5px;">
+                    <span class="badge rounded-pill bg-light text-dark border px-2.5 py-1">
+                        <i class="ri-bank-card-line me-1 text-secondary"></i>${a.payment_method}
+                    </span>
+                    ${a.is_paid ? `
+                    <span class="badge rounded-pill px-2.5 py-1" style="background:#F0FDF4; color:#15803D; border:1px solid #BBF7D0;">
+                        <i class="ri-checkbox-circle-line me-1"></i>Settled via Payroll
+                    </span>` : `
+                    <span class="badge rounded-pill px-2.5 py-1" style="background:#FEF2F2; color:#B91C1C; border:1px solid #FECACA;">
+                        <i class="ri-time-line me-1"></i>Pending Payroll Deduction
+                    </span>`}
+                </div>
+            </div>`;
+        });
+        advList.innerHTML = aHtml;
+    }
+}
 </script>
 {% endblock %}

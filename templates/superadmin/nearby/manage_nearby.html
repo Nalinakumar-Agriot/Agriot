@@ -382,8 +382,8 @@ function submitQuickServiceClassModal() {
     });
 }
 
-function deleteQuickServiceClass(name, id) {
-    if (!confirm('Are you sure you want to delete service class "' + name + '"?')) return;
+async function deleteQuickServiceClass(name, id) {
+    if (!(await window.confirmQuickDelete(name, 'service class'))) return;
 
     var formData = new FormData();
     if (id) formData.append('item_id', id);
@@ -510,6 +510,19 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    $(document).on('click', '.type-filter-opt', function (e) {
+        e.preventDefault();
+        let val = $(this).data('val');
+        let label = $(this).find('.type-opt-text').text().trim();
+        $('#typeFilter').val(val);
+        $('#typeFilterLabel').text(label);
+        $('.type-filter-opt').removeClass('active');
+        $('.type-filter-opt .check-mark').addClass('d-none');
+        $(this).addClass('active');
+        $(this).find('.check-mark').removeClass('d-none');
+        filterLocations();
+    });
 });
 
 function openEditLocationModal(btn) {
@@ -568,21 +581,113 @@ function openEditLocationModal(btn) {
           </div>
         </div>
 
-        <select class="form-select form-select-sm w-auto" id="typeFilter" onchange="filterLocations()">
-            <option value="All">All Location Types</option>
+        <!-- Themed Type Filter Dropdown -->
+        <input type="hidden" id="typeFilter" value="All">
+        <div class="dropdown">
+          <button class="btn dropdown-toggle d-flex align-items-center gap-2 px-3 rounded-3 fw-semibold filter-dropdown-btn" 
+                  type="button" 
+                  id="typeFilterBtn" 
+                  data-bs-toggle="dropdown" 
+                  aria-expanded="false">
+            <i class="ri-map-pin-line" style="color: #F69C55;"></i>
+            <span id="typeFilterLabel">All Location Types</span>
+          </button>
+          <ul class="dropdown-menu shadow-lg border-0 py-1 rounded-3" aria-labelledby="typeFilterBtn" style="min-width: 190px; max-height: 280px; overflow-y: auto;">
+            <li>
+              <a class="dropdown-item filter-dropdown-opt type-filter-opt d-flex align-items-center justify-content-between active" href="javascript:void(0)" data-val="All">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #94a3b8;"></span>
+                  <span class="type-opt-text">All Location Types</span>
+                </span>
+                <i class="ri-check-line check-mark"></i>
+              </a>
+            </li>
             {% for sc in service_classes %}
-              <option value="{{ sc.name }}">{{ sc.name }}</option>
+            <li>
+              <a class="dropdown-item filter-dropdown-opt type-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="{{ sc.name }}">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #F69C55;"></span>
+                  <span class="type-opt-text">{{ sc.name }}</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
             {% empty %}
-              <option value="Agri Office">Agri Office</option>
-              <option value="Fishery Office">Fishery Office</option>
-              <option value="Fertilizer Shop">Fertilizer Shop</option>
-              <option value="Organic Shop">Organic Shop</option>
-              <option value="Soil Testing Lab">Soil Testing Lab</option>
-              <option value="Cold Storage">Cold Storage</option>
-              <option value="Warehouse">Warehouse</option>
-              <option value="Seed Processing Center">Seed Processing Center</option>
+            <li>
+              <a class="dropdown-item filter-dropdown-opt type-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Agri Office">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #F69C55;"></span>
+                  <span class="type-opt-text">Agri Office</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item filter-dropdown-opt type-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Fishery Office">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #F69C55;"></span>
+                  <span class="type-opt-text">Fishery Office</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item filter-dropdown-opt type-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Fertilizer Shop">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #F69C55;"></span>
+                  <span class="type-opt-text">Fertilizer Shop</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item filter-dropdown-opt type-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Organic Shop">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #F69C55;"></span>
+                  <span class="type-opt-text">Organic Shop</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item filter-dropdown-opt type-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Soil Testing Lab">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #F69C55;"></span>
+                  <span class="type-opt-text">Soil Testing Lab</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item filter-dropdown-opt type-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Cold Storage">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #F69C55;"></span>
+                  <span class="type-opt-text">Cold Storage</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item filter-dropdown-opt type-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Warehouse">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #F69C55;"></span>
+                  <span class="type-opt-text">Warehouse</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item filter-dropdown-opt type-filter-opt d-flex align-items-center justify-content-between" href="javascript:void(0)" data-val="Seed Processing Center">
+                <span class="d-flex align-items-center gap-2">
+                  <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #F69C55;"></span>
+                  <span class="type-opt-text">Seed Processing Center</span>
+                </span>
+                <i class="ri-check-line check-mark d-none"></i>
+              </a>
+            </li>
             {% endfor %}
-        </select>
+          </ul>
+        </div>
     </div>
 </div>
 

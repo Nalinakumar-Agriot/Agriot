@@ -2019,18 +2019,56 @@ document.addEventListener('DOMContentLoaded', function () {
     var currentHorizon = '7day';
     var currentSelectedDay = 0;
 
-    var baseDate = new Date();
-    var forecastData = [
-      { label: 'Today', date: '25 Aug', temp_high: 33, temp_low: 26, feels_like: 34, condition: 'Partly Cloudy', icon: 'ri-sun-cloudy-line', rain: 40, humidity: 78, wind: 14, uv: 6, rain_mm: 4 },
-      { label: 'Wed', date: '26 Aug', temp_high: 31, temp_low: 25, feels_like: 32, condition: 'Cloudy & Overcast', icon: 'ri-cloudy-line', rain: 55, humidity: 82, wind: 16, uv: 5, rain_mm: 8 },
-      { label: 'Thu', date: '27 Aug', temp_high: 29, temp_low: 24, feels_like: 30, condition: 'Thunderstorms Anticipated', icon: 'ri-thunderstorms-line', rain: 72, humidity: 88, wind: 22, uv: 4, rain_mm: 22 },
-      { label: 'Fri', date: '28 Aug', temp_high: 28, temp_low: 23, feels_like: 29, condition: 'Heavy Rainfall', icon: 'ri-rainy-line', rain: 80, humidity: 92, wind: 28, uv: 3, rain_mm: 35 },
-      { label: 'Sat', date: '29 Aug', temp_high: 32, temp_low: 25, feels_like: 35, condition: 'Clear Sunny Sky', icon: 'ri-sun-line', rain: 20, humidity: 65, wind: 12, uv: 8, rain_mm: 0 },
-      { label: 'Sun', date: '30 Aug', temp_high: 33, temp_low: 26, feels_like: 36, condition: 'Scattered Clouds', icon: 'ri-sun-cloudy-line', rain: 35, humidity: 70, wind: 10, uv: 9, rain_mm: 2 },
-      { label: 'Mon', date: '31 Aug', temp_high: 30, temp_low: 24, feels_like: 31, condition: 'Passing Showers', icon: 'ri-cloudy-line', rain: 50, humidity: 75, wind: 15, uv: 7, rain_mm: 10 }
+    var serverForecast = {{ weather_forecast_json|safe }};
+    var serverHourly = {{ weather_hourly_json|safe }};
+    var serverHourlyByDay = {{ weather_hourly_by_day_json|default:"[]"|safe }};
+
+    var forecastData = (serverForecast && serverForecast.length > 0) ? serverForecast : [];
+    if (!forecastData.length) {
+      var today = new Date();
+      var monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      var dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      for (var i = 0; i < 7; i++) {
+        var d = new Date(today);
+        d.setDate(today.getDate() + i);
+        forecastData.push({
+          label: (i === 0) ? 'Today' : dayNames[d.getDay()],
+          date: d.getDate() + ' ' + monthNames[d.getMonth()],
+          temp_high: 32,
+          temp_low: 24,
+          feels_like: 34,
+          condition: 'Partly Cloudy',
+          icon: 'ri-sun-cloudy-line',
+          icon_class: 'ri-sun-cloudy-line',
+          rain: 25,
+          rain_chance: 25,
+          humidity: 75,
+          wind: 12,
+          wind_speed: 12,
+          uv: 6,
+          uv_index: 6,
+          rain_mm: 2
+        });
+      }
+    }
+
+    var hourlyLabels24 = [
+      '12:00 AM', '01:00 AM', '02:00 AM', '03:00 AM', '04:00 AM', '05:00 AM',
+      '06:00 AM', '07:00 AM', '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
+      '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM',
+      '06:00 PM', '07:00 PM', '08:00 PM', '09:00 PM', '10:00 PM', '11:00 PM'
     ];
 
-    var hourlyLabels = ['06:00 AM', '09:00 AM', '12:00 PM', '03:00 PM', '06:00 PM', '09:00 PM', '12:00 AM', '03:00 AM'];
+    var hourlyDataset = (serverHourly && serverHourly.labels && serverHourly.labels.length >= 24) ? serverHourly : {
+      labels: hourlyLabels24,
+      temp: [24, 23, 23, 24, 25, 27, 29, 31, 32, 33, 33, 32, 31, 30, 29, 28, 27, 26, 26, 25, 25, 24, 24, 24],
+      feels_like: [26, 25, 25, 26, 27, 29, 32, 34, 35, 36, 36, 35, 34, 33, 31, 30, 29, 28, 28, 27, 27, 26, 26, 26],
+      humidity: [90, 92, 92, 90, 85, 78, 72, 65, 62, 60, 62, 65, 70, 75, 78, 82, 85, 86, 88, 90, 90, 91, 91, 91],
+      wind: [6, 6, 5, 5, 7, 9, 12, 14, 16, 17, 16, 15, 14, 12, 11, 10, 9, 8, 8, 7, 7, 6, 6, 6],
+      rain_prob: [5, 5, 5, 5, 10, 15, 20, 25, 30, 35, 30, 25, 20, 15, 15, 10, 10, 5, 5, 5, 5, 5, 5, 5],
+      precip_mm: [0, 0, 0, 0, 0, 0, 0, 0.2, 0.5, 0.8, 0.4, 0.2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      uv: [0, 0, 0, 0, 0, 1, 3, 5, 7, 9, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    };
 
     function getDayLabels() {
       return forecastData.map(function(d) {
@@ -2055,8 +2093,8 @@ document.addEventListener('DOMContentLoaded', function () {
           rain: {
             categories: daysLabels,
             series: [
-              { name: 'Rain Probability (%)', data: forecastData.map(function(d){ return d.rain; }) },
-              { name: 'Estimated Rainfall (mm)', data: forecastData.map(function(d){ return d.rain_mm; }) }
+              { name: 'Rain Probability (%)', data: forecastData.map(function(d){ return (d.rain !== undefined) ? d.rain : d.rain_chance; }) },
+              { name: 'Estimated Rainfall (mm)', data: forecastData.map(function(d){ return d.rain_mm || 0; }) }
             ],
             colors: ['#0284c7', '#0f9d6c'],
             type: 'bar',
@@ -2065,8 +2103,8 @@ document.addEventListener('DOMContentLoaded', function () {
           humidity: {
             categories: daysLabels,
             series: [
-              { name: 'Humidity (%)', data: forecastData.map(function(d){ return d.humidity; }) },
-              { name: 'Wind Speed (km/h)', data: forecastData.map(function(d){ return d.wind; }) }
+              { name: 'Humidity (%)', data: forecastData.map(function(d){ return d.humidity || 70; }) },
+              { name: 'Wind Speed (km/h)', data: forecastData.map(function(d){ return (d.wind !== undefined) ? d.wind : d.wind_speed; }) }
             ],
             colors: ['#0e7fb8', '#10b981'],
             type: 'area',
@@ -2075,7 +2113,7 @@ document.addEventListener('DOMContentLoaded', function () {
           uv: {
             categories: daysLabels,
             series: [
-              { name: 'Solar UV Index', data: forecastData.map(function(d){ return d.uv; }) }
+              { name: 'Solar UV Index', data: forecastData.map(function(d){ return (d.uv !== undefined) ? d.uv : d.uv_index; }) }
             ],
             colors: ['#f97316'],
             type: 'bar',
@@ -2084,39 +2122,39 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         '24h': {
           temp: {
-            categories: hourlyLabels,
+            categories: hourlyDataset.labels,
             series: [
-              { name: 'Temperature (°C)', data: [25, 28, 32, 33, 30, 27, 26, 24] },
-              { name: 'Feels Like (°C)', data: [27, 30, 35, 36, 33, 29, 27, 25] }
+              { name: 'Temperature (°C)', data: hourlyDataset.temp },
+              { name: 'Feels Like (°C)', data: hourlyDataset.feels_like }
             ],
             colors: ['#f59e0b', '#ea580c'],
             type: 'area',
             unit: '°C'
           },
           rain: {
-            categories: hourlyLabels,
+            categories: hourlyDataset.labels,
             series: [
-              { name: 'Rain Probability (%)', data: [15, 20, 35, 45, 50, 30, 10, 5] },
-              { name: 'Precipitation (mm)', data: [0, 0, 1.2, 3.5, 4.0, 0.8, 0, 0] }
+              { name: 'Rain Probability (%)', data: hourlyDataset.rain_prob },
+              { name: 'Precipitation (mm)', data: hourlyDataset.precip_mm }
             ],
             colors: ['#0284c7', '#0f9d6c'],
             type: 'bar',
             unit: '%'
           },
           humidity: {
-            categories: hourlyLabels,
+            categories: hourlyDataset.labels,
             series: [
-              { name: 'Humidity (%)', data: [88, 76, 68, 65, 72, 82, 86, 90] },
-              { name: 'Wind Speed (km/h)', data: [8, 12, 16, 18, 15, 11, 9, 7] }
+              { name: 'Humidity (%)', data: hourlyDataset.humidity },
+              { name: 'Wind Speed (km/h)', data: hourlyDataset.wind }
             ],
             colors: ['#0e7fb8', '#10b981'],
             type: 'area',
             unit: ''
           },
           uv: {
-            categories: hourlyLabels,
+            categories: hourlyDataset.labels,
             series: [
-              { name: 'Solar UV Index', data: [1, 4, 8, 7, 3, 0, 0, 0] }
+              { name: 'Solar UV Index', data: hourlyDataset.uv }
             ],
             colors: ['#f97316'],
             type: 'bar',
@@ -2220,20 +2258,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
     window.changeWeatherBaseDate = function(dateStr) {
       if (!dateStr) return;
-      var picked = new Date(dateStr);
+      var parts = dateStr.split('-');
+      var picked = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
       if (isNaN(picked.getTime())) return;
 
       var monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       var dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-      for (var i = 0; i < 7; i++) {
+      var now = new Date();
+      var todayIso = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+
+      for (var i = 0; i < forecastData.length; i++) {
         var d = new Date(picked);
         d.setDate(picked.getDate() + i);
-        forecastData[i].label = (i === 0) ? 'Today' : dayNames[d.getDay()];
-        forecastData[i].date = d.getDate() + ' ' + monthNames[d.getMonth()];
+        var curIso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        forecastData[i].label = (curIso === todayIso) ? 'Today' : dayNames[d.getDay()];
+        forecastData[i].date = String(d.getDate()).padStart(2, '0') + ' ' + monthNames[d.getMonth()];
       }
 
-      // Re-render strip day cards
+      // Re-render strip day cards immediately
       forecastData.forEach(function(item, idx) {
         var card = document.getElementById('weatherDayCard_' + idx);
         if (card) {
@@ -2244,9 +2287,68 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       });
 
-      // Update current selected day
+      // Update current selected day and re-render chart immediately
       selectWeatherDay(0);
       renderWeatherChart();
+
+      // Fetch live API for selected date and coordinates
+      var apiUrl = '/farmer/api/weather/?date=' + encodeURIComponent(dateStr) + '&lat={{ weather_lat|default:9.9252 }}&lon={{ weather_lon|default:78.1198 }}';
+      fetch(apiUrl)
+        .then(function(res) { return res.json(); })
+        .then(function(resp) {
+          if (resp && resp.status === 'success' && resp.weather && resp.weather.forecast) {
+            forecastData = resp.weather.forecast;
+            if (resp.weather.hourly_by_day && resp.weather.hourly_by_day.length > 0) {
+              serverHourlyByDay = resp.weather.hourly_by_day;
+            }
+            if (resp.weather.hourly) {
+              hourlyDataset = resp.weather.hourly;
+            }
+            // Update day cards with live response values
+            forecastData.forEach(function(item, idx) {
+              var card = document.getElementById('weatherDayCard_' + idx);
+              if (card) {
+                var dayEl = card.querySelector('.wd-day');
+                var dateEl = card.querySelector('.wd-date');
+                var highEl = card.querySelector('.wd-high');
+                var lowEl = card.querySelector('.wd-low');
+                var rainEl = card.querySelector('.wd-rain');
+                var iconEl = card.querySelector('.wd-icon i');
+                if (dayEl) dayEl.textContent = item.label;
+                if (dateEl) dateEl.textContent = item.date;
+                if (highEl) highEl.innerHTML = item.temp_high + '&deg;';
+                if (lowEl) lowEl.innerHTML = item.temp_low + '&deg;';
+                var rVal = (item.rain !== undefined) ? item.rain : item.rain_chance;
+                if (rainEl) rainEl.innerHTML = '<i class="ri-drop-line"></i>' + rVal + '%';
+                var iCls = item.icon_class || item.icon;
+                if (iconEl && iCls) iconEl.className = iCls;
+              }
+            });
+            // Update main hero display from live API response
+            if (resp.weather.current) {
+              var curr = resp.weather.current;
+              var mainIcon = document.getElementById('weatherMainIcon');
+              var mainTemp = document.getElementById('weatherMainTemp');
+              var mainCond = document.getElementById('weatherMainCondition');
+              var metaHum = document.getElementById('weatherMetaHumidity');
+              var metaWind = document.getElementById('weatherMetaWind');
+              var metaRain = document.getElementById('weatherMetaRain');
+              var metaUV = document.getElementById('weatherMetaUV');
+              if (mainIcon && curr.icon_class) mainIcon.innerHTML = '<i class="' + curr.icon_class + '"></i>';
+              if (mainTemp && curr.temp) mainTemp.innerHTML = curr.temp + '&deg;C <span style="font-size:1rem; font-weight:normal; color:#8790b3;">/ ' + (forecastData[0] ? forecastData[0].temp_low : curr.temp - 6) + '&deg;C</span>';
+              if (mainCond) mainCond.innerHTML = curr.condition + ' &middot; Feels like ' + curr.feels_like + '&deg;C';
+              if (metaHum) metaHum.textContent = curr.humidity + '%';
+              if (metaWind) metaWind.textContent = curr.wind_speed + ' km/h';
+              if (metaRain) metaRain.textContent = curr.rain_chance + '%';
+              if (metaUV) metaUV.textContent = curr.uv_index;
+            }
+            selectWeatherDay(0);
+            renderWeatherChart();
+          }
+        })
+        .catch(function(err) {
+          console.warn('Live weather fetch error:', err);
+        });
 
       if (typeof Toastify !== 'undefined') {
         Toastify({
@@ -2262,6 +2364,20 @@ document.addEventListener('DOMContentLoaded', function () {
     window.selectWeatherDay = function(dayIdx) {
       currentSelectedDay = dayIdx;
       var item = forecastData[dayIdx] || forecastData[0];
+      if (!item) return;
+
+      if (serverHourlyByDay && serverHourlyByDay[dayIdx]) {
+        hourlyDataset = serverHourlyByDay[dayIdx];
+      }
+      if (currentHorizon === '24h') {
+        renderWeatherChart();
+      }
+
+      var itemIcon = item.icon_class || item.icon || 'ri-sun-cloudy-line';
+      var rainVal = (item.rain !== undefined) ? item.rain : (item.rain_chance !== undefined ? item.rain_chance : 30);
+      var windVal = (item.wind !== undefined) ? item.wind : (item.wind_speed !== undefined ? item.wind_speed : 12);
+      var uvVal = (item.uv !== undefined) ? item.uv : (item.uv_index !== undefined ? item.uv_index : 6);
+      var rainMmVal = item.rain_mm || 0;
 
       // Highlight active card
       document.querySelectorAll('.weather-day-card').forEach(function(card, idx) {
@@ -2281,13 +2397,13 @@ document.addEventListener('DOMContentLoaded', function () {
       var metaRain = document.getElementById('weatherMetaRain');
       var metaUV = document.getElementById('weatherMetaUV');
 
-      if (mainIcon) mainIcon.innerHTML = '<i class="' + item.icon + '"></i>';
+      if (mainIcon) mainIcon.innerHTML = '<i class="' + itemIcon + '"></i>';
       if (mainTemp) mainTemp.innerHTML = item.temp_high + '&deg;C <span style="font-size:1rem; font-weight:normal; color:#8790b3;">/ ' + item.temp_low + '&deg;C</span>';
       if (mainCond) mainCond.innerHTML = item.condition + ' &middot; Feels like ' + item.feels_like + '&deg;C (' + item.label + ')';
-      if (metaHum) metaHum.textContent = item.humidity + '%';
-      if (metaWind) metaWind.textContent = item.wind + ' km/h';
-      if (metaRain) metaRain.textContent = item.rain + '%';
-      if (metaUV) metaUV.textContent = item.uv;
+      if (metaHum) metaHum.textContent = (item.humidity || 75) + '%';
+      if (metaWind) metaWind.textContent = windVal + ' km/h';
+      if (metaRain) metaRain.textContent = rainVal + '%';
+      if (metaUV) metaUV.textContent = uvVal;
 
       // Update smart agronomy advisory based on selected day
       var advSprayBadge = document.getElementById('advSprayBadge');
@@ -2297,17 +2413,17 @@ document.addEventListener('DOMContentLoaded', function () {
       var advHarvestBadge = document.getElementById('advHarvestBadge');
       var advHarvestText = document.getElementById('advHarvestText');
 
-      if (item.rain >= 60) {
+      if (rainVal >= 60) {
         if (advSprayBadge) {
           advSprayBadge.className = 'badge bg-danger-subtle text-danger mb-1';
           advSprayBadge.textContent = 'Avoid Spraying';
         }
-        if (advSprayText) advSprayText.textContent = 'High rainfall expected on ' + item.label + ' (' + item.rain + '%). Risk of chemical wash-off.';
+        if (advSprayText) advSprayText.textContent = 'High rainfall expected on ' + item.label + ' (' + rainVal + '%). Risk of chemical wash-off.';
         if (advIrrigBadge) {
           advIrrigBadge.className = 'badge bg-info-subtle text-info mb-1';
           advIrrigBadge.textContent = 'Delay Irrigation';
         }
-        if (advIrrigText) advIrrigText.textContent = 'Heavy precipitation expected (~' + item.rain_mm + ' mm). Conserve water & power.';
+        if (advIrrigText) advIrrigText.textContent = 'Heavy precipitation expected (~' + rainMmVal + ' mm). Conserve water & power.';
         if (advHarvestBadge) {
           advHarvestBadge.className = 'badge bg-danger-subtle text-danger mb-1';
           advHarvestBadge.textContent = 'Hold Harvesting';
@@ -2318,7 +2434,7 @@ document.addEventListener('DOMContentLoaded', function () {
           advSprayBadge.className = 'badge bg-success-subtle text-success mb-1';
           advSprayBadge.textContent = 'Optimal Window';
         }
-        if (advSprayText) advSprayText.textContent = 'Favorable condition on ' + item.label + ' (Wind < ' + item.wind + ' km/h, Rain ' + item.rain + '%). Best hours: 06:30 AM – 10:00 AM.';
+        if (advSprayText) advSprayText.textContent = 'Favorable condition on ' + item.label + ' (Wind < ' + windVal + ' km/h, Rain ' + rainVal + '%). Best hours: 06:30 AM – 10:00 AM.';
         if (advIrrigBadge) {
           advIrrigBadge.className = 'badge bg-warning-subtle text-warning mb-1';
           advIrrigBadge.textContent = 'Normal Irrigation';
@@ -2777,7 +2893,7 @@ document.addEventListener('DOMContentLoaded', function () {
 <div class="elite-hero">
   <div class="row align-items-center p-6">
     <div class="col-lg-4">
-      <span class="hero-label">Total Business Value</span>
+      <span class="hero-label" title="Inventory value + sales + receivables. Deleting a sale can restore its inventory value.">Total Business Value</span>
       <div class="hero-value">{{ total_business_value_fmt }}</div>
     </div>
     <div class="col-lg-8">
@@ -2867,8 +2983,6 @@ document.addEventListener('DOMContentLoaded', function () {
 <!-- =====================================================================
      AGRONOMY
 ====================================================================== -->
-<div class="elite-section-divider">Agronomy</div>
-
 <!-- ---------- Weather Forecast (Localised Weather Advisory) ---------- -->
 <div class="row g-4 mb-4">
   <div class="col-lg-12">
@@ -4021,7 +4135,7 @@ document.addEventListener('DOMContentLoaded', function () {
     <div class="card elite-panel h-100">
       <div class="card-header d-flex justify-content-between align-items-center border-bottom-0">
         <span>Machinery &amp; Maintenance Status</span>
-        <a href="{% url 'farmer-consumption-vehicle' %}" class="btn btn-sm btn-outline-primary">View Fleet</a>
+        <a href="{% url 'farmer-inventory' %}#vehicle" class="btn btn-sm btn-outline-primary">View Fleet</a>
       </div>
       <div class="card-body">
 

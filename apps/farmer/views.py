@@ -3,44 +3,123 @@
 import datetime
 import os
 import random
+import re
 from datetime import date, timedelta
+from decimal import Decimal
 
 import requests
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from apps.superadmin.models import BlueprintStage, CropBlueprint, Package, Subscription, HardwareClass
+from apps.superadmin.master_utils import get_or_reactivate_master
 from auth.models import Profile
 
 
-def get_farmer_profile(user):
-    if not user or not user.is_authenticated:
-        return None
-    if hasattr(user, 'staff_profile') and user.staff_profile:
-        return user.staff_profile.farmer
-    if hasattr(user, 'profile'):
-        return user.profile
-    return None
+from apps.farmer.workspaces import farmer_is_inactive
+
+def get_user_workspaces(user, mobile=None):
+    """
+    Returns all workspaces available to this user:
+    - Personal Farm (if Profile with role='farmer')
+    - Managed Farms (if FarmerStaff with is_role_manager=True)
+    """
+    from auth.portals import is_admin_user
+    if not user or not user.is_authenticated or not user.is_active or is_admin_user(user):
+        return []
+    workspaces = []
+    from apps.farmer.models import Farm
+
+    # 1. Personal Farm Workspace (Farmer / Owner)
+    has_farmer_role = False
+    prof = None
+    if hasattr(user, 'profile') and user.profile and user.profile.role == 'farmer' and not farmer_is_inactive(user.profile):
+        has_farmer_role = True
+        prof = user.profile
+    if has_farmer_role and prof:
+        farm_name = prof.company_name or (f"{user.first_name}'s Farm" if getattr(user, 'first_name', '') else "My Personal Farm")
+        farms_count = Farm.objects.filter(farmer=prof).count()
+        workspaces.append({
+            'type': 'farmer',
+            'target_id': prof.id,
+            'farmer_id': prof.id,
+            'staff_id': None,
+            'title': farm_name,
+            'role_label': 'Farm Owner (Farmer)',
+            'role_badge': 'Owner',
+            'owner_name': user.get_full_name() or user.username,
+            'farms_count': farms_count,
+            'badge_color': 'success',
+            'is_owner': True,
+        })
+
+    # 2. Managed Farm Workspaces (Manager Role under Employer)
+    from apps.farmer.workspaces import manager_assignments
+    staff_qs = manager_assignments(user)
+
+    seen_farmers = set()
+    for staff in staff_qs:
+        if not staff.farmer or staff.farmer.id in seen_farmers:
+            continue
+        if has_farmer_role and prof and staff.farmer.id == prof.id:
+            continue
+        seen_farmers.add(staff.farmer.id)
+        employer_name = staff.farmer.company_name or (staff.farmer.user.get_full_name() if staff.farmer.user else "Employer Farm")
+        workspaces.append({
+            'type': 'manager',
+            'target_id': staff.id,
+            'staff_id': staff.id,
+            'farmer_id': staff.farmer.id,
+            'title': employer_name,
+            'role_label': f"Manager (at {employer_name})",
+            'role_badge': 'Manager',
+            'owner_name': employer_name,
+            'farms_count': Farm.objects.filter(farmer=staff.farmer).count(),
+            'badge_color': 'warning',
+            'is_owner': False,
+            'permissions': staff.permissions or [],
+        })
+
+    return workspaces
+
+
+def get_farmer_profile(target):
+    from apps.farmer.workspaces import resolve_workspace
+    return resolve_workspace(target)[0]
+
+
+def get_active_manager_staff(request):
+    from apps.farmer.workspaces import resolve_workspace
+    return resolve_workspace(request)[1]
+
+
+def get_active_manager_staff_id(request):
+    staff = get_active_manager_staff(request)
+    return staff.id if staff else None
 
 
 def get_actor_name(request):
-    if not request.user or not request.user.is_authenticated:
+    if not request or not hasattr(request, 'user') or not request.user.is_authenticated:
         return "System"
-    if hasattr(request.user, 'staff_profile') and request.user.staff_profile:
-        staff = request.user.staff_profile
-        role_label = "Manager" if staff.is_role_manager else "Staff"
-        return f"{staff.name} ({role_label})"
-    if hasattr(request.user, 'profile'):
-        prof = request.user.profile
-        name = request.user.first_name or prof.mobile_number or request.user.username
-        return f"{name} (Farmer)"
-    return request.user.username
+    active_mgr = get_active_manager_staff(request)
+    if active_mgr:
+        return active_mgr.name
+    first = (request.user.first_name or '').strip()
+    last = (request.user.last_name or '').strip()
+    full = f"{first} {last}".strip()
+    if full:
+        return full
+    if hasattr(request.user, 'profile') and request.user.profile:
+        return request.user.profile.mobile_number or request.user.username or "Farmer"
+    return request.user.username or "Farmer"
+
 
 
 def log_action(request, title, message, icon_class="ri-notification-3-line", bg_color="primary"):
@@ -64,32 +143,55 @@ def log_action(request, title, message, icon_class="ri-notification-3-line", bg_
 
 
 def login_view(request):
-    error = None
+    error = request.session.pop("inactive_farmer_message", None)
     if request.method == "POST":
         mobile = request.POST.get('mobile', '').strip()
-        if not mobile or len(mobile) != 10 or not mobile.isdigit():
-            error = "Please enter a valid 10-digit mobile number."
+        clean_phone = re.sub(r'[^0-9+]', '', mobile)
+        if clean_phone.count('+') > 1 or clean_phone.find('+') > 0:
+            clean_phone = '+' + clean_phone.replace('+', '')
+        digits_only = re.sub(r'[^0-9]', '', clean_phone)
+
+        if not digits_only or len(digits_only) < 7 or len(digits_only) > 15:
+            error = "Please enter a valid phone number (7 to 15 digits)."
         else:
             from auth.models import Profile
             from apps.farmer.models import FarmerStaff
+            from apps.superadmin.phone_utils import find_profile_by_phone, find_staff_by_phone
 
-            existing_profile = Profile.objects.filter(mobile_number=mobile).first()
-            existing_staff = FarmerStaff.objects.filter(mobile_number=mobile).first()
+            phone = clean_phone
+            existing_profile = find_profile_by_phone(phone, role='farmer')
+            existing_staff = find_staff_by_phone(phone)
 
-            if existing_staff and str(existing_staff.status) == "1":
+            # Restrict: Only Farmers and Managers can log in. Employees do not have login access.
+            if existing_staff and not existing_profile:
+                is_manager = existing_staff.is_role_manager or (existing_staff.role and str(existing_staff.role).strip().lower() == 'manager')
+                if not is_manager:
+                    error = "Access denied. Employees do not have login access. Only Managers and Farmers can log in."
+                    return render(request, "farmer/login.html", {"error": error})
+
+            if existing_staff and str(existing_staff.status) == "1" and not existing_profile:
                 error = "Your account has been suspended/locked. Access is disabled."
                 return render(request, "farmer/login.html", {"error": error})
 
-            if existing_profile and hasattr(existing_profile, 'status') and str(existing_profile.status) == "1":
-                error = "Your account has been suspended/locked. Access is disabled."
+            if existing_profile and farmer_is_inactive(existing_profile) and not get_user_workspaces(existing_profile.user):
+                error = "Your farmer account is inactive. Please contact your administrator."
                 return render(request, "farmer/login.html", {"error": error})
 
             is_valid_farmer = (existing_profile and existing_profile.role == 'farmer')
-            is_valid_staff = (existing_staff is not None)
+            is_valid_manager = (existing_staff is not None and (existing_staff.is_role_manager or (existing_staff.role and str(existing_staff.role).strip().lower() == 'manager')))
 
-            if not is_valid_farmer and not is_valid_staff:
-                error = "Unauthorized mobile number. Only registered farmers and staff can login."
-                return render(request, "farmer/login.html", {"error": error})
+            if not is_valid_farmer and not is_valid_manager:
+                if existing_staff:
+                    error = "Access denied. Employees do not have login access. Only Managers and Farmers can log in."
+                    return render(request, "farmer/login.html", {"error": error})
+                else:
+                    unreg_digits = digits_only[-10:] if len(digits_only) >= 10 else digits_only
+                    error = "This mobile number is not registered yet. Please register as a farmer to get started."
+                    return render(request, "farmer/login.html", {
+                        "error": error,
+                        "not_registered": True,
+                        "unregistered_mobile": unreg_digits
+                    })
 
             # Check for cooldown
             last_otp_time = request.session.get('login_otp_time', 0)
@@ -100,15 +202,17 @@ def login_view(request):
             # Generate OTP
             otp = str(random.randint(100000, 999999))
 
-            # Send SMS using existing Msg91 implementation
+            # Send SMS using Msg91 implementation
+            target_mobile = (existing_profile.mobile_number if existing_profile else None) or (existing_staff.mobile_number if existing_staff else None) or mobile
             from apps.superadmin.views import send_otp_sms
-            success, message = send_otp_sms(mobile, otp)
+            success, message = send_otp_sms(target_mobile, otp)
             if not success:
                 error = f"Failed to send SMS: {message}"
                 return render(request, "farmer/login.html", {"error": error})
 
             # Store in session
-            request.session['login_mobile'] = mobile
+            request.session['login_mobile'] = target_mobile
+            request.session['login_display_mobile'] = mobile
             request.session['login_otp'] = otp
             request.session['login_otp_time'] = timezone.now().timestamp()
 
@@ -118,8 +222,35 @@ def login_view(request):
 
 def otp_verify(request):
     mobile = request.session.get('login_mobile')
+    display_mobile = request.session.get('login_display_mobile', mobile)
     otp = request.session.get('login_otp')
+    # If user is already authenticated but hasn't selected active_role yet (e.g. refreshed account selector)
+    if request.user.is_authenticated and not request.session.get('active_role'):
+        workspaces = get_user_workspaces(request.user)
+        if workspaces and len(workspaces) > 1:
+            return render(request, "farmer/otp_verify.html", {
+                "show_workspace_modal": True,
+                "workspaces": workspaces,
+                "user_name": request.user.get_full_name() or request.user.username,
+                "mobile": display_mobile or request.user.username
+            })
+        elif workspaces and len(workspaces) == 1:
+            ws = workspaces[0]
+            request.session['active_role'] = ws['type']
+            request.session['active_farmer_id'] = ws['farmer_id']
+            request.session['active_staff_id'] = ws.get('staff_id')
+            return redirect('farmer-dashboard')
+        else:
+            from django.contrib.auth import logout
+            logout(request)
+            request.session.flush()
+            return redirect('farmer-login')
+
     if not mobile:
+        if request.user.is_authenticated:
+            from django.contrib.auth import logout
+            logout(request)
+            request.session.flush()
         return redirect('farmer-login')
 
     error = None
@@ -134,60 +265,553 @@ def otp_verify(request):
             error = "OTP expired. Please request again."
         elif otp_entered == session_otp:
             # Valid OTP, find or create user
+            from apps.superadmin.phone_utils import find_profile_by_phone, find_staff_by_phone
             from auth.models import Profile
             from apps.farmer.models import FarmerStaff
 
-            staff_obj = FarmerStaff.objects.filter(mobile_number=mobile).first()
-            if staff_obj:
-                if str(staff_obj.status) == "1":
-                    error = "Your account has been suspended/locked. Access is disabled."
-                    return render(request, "farmer/otp_verify.html", {"error": error, "mobile": mobile, "otp": otp})
+            # 1. Resolve or create User
+            existing_profile = find_profile_by_phone(mobile, role='farmer')
+            staff_obj = find_staff_by_phone(mobile)
 
-                if staff_obj.user:
-                    user = staff_obj.user
-                else:
-                    user = User.objects.filter(username=mobile).first()
-                    if not user:
-                        user = User.objects.create(username=mobile)
-                        user.set_unusable_password()
-                        user.save()
-                    staff_obj.user = user
-                    staff_obj.save()
-
-                if hasattr(user, 'profile'):
-                    user.profile.mobile_number = mobile
-                    user.profile.save()
+            user = None
+            if existing_profile and existing_profile.user:
+                user = existing_profile.user
+            elif staff_obj and staff_obj.user:
+                user = staff_obj.user
             else:
-                existing_profile = Profile.objects.filter(mobile_number=mobile, role='farmer').first()
-                if existing_profile:
-                    if hasattr(existing_profile, 'status') and str(existing_profile.status) == "1":
-                        error = "Your account has been suspended/locked. Access is disabled."
-                        return render(request, "farmer/otp_verify.html", {"error": error, "mobile": mobile, "otp": otp})
-                    user = existing_profile.user
-                else:
-                    error = "Unauthorized mobile number. Only registered farmers and staff can login."
-                    return render(request, "farmer/otp_verify.html", {"error": error, "mobile": mobile, "otp": otp})
+                user = User.objects.filter(username=mobile).first()
+                if not user:
+                    user = User.objects.create(username=mobile)
+                    user.set_unusable_password()
+                    user.save()
 
+            # Ensure staff_obj is linked to user if staff_obj exists
+            if staff_obj and not staff_obj.user:
+                staff_obj.user = user
+                staff_obj.save(update_fields=['user'])
+
+            # Ensure profile has mobile_number and appropriate role
+            if hasattr(user, 'profile') and user.profile:
+                updated_fields = []
+                if not user.profile.mobile_number:
+                    user.profile.mobile_number = mobile
+                    updated_fields.append('mobile_number')
+                if staff_obj and not existing_profile and user.profile.role != 'staff':
+                    user.profile.role = 'staff'
+                    updated_fields.append('role')
+                if updated_fields:
+                    user.profile.save(update_fields=updated_fields)
+
+            # 2. Check suspensions
+            if existing_profile and farmer_is_inactive(existing_profile) and not get_user_workspaces(existing_profile.user):
+                error = "Your farmer account is inactive. Please contact your administrator."
+                return render(request, "farmer/otp_verify.html", {"error": error, "mobile": display_mobile})
+
+            if staff_obj and str(staff_obj.status) == "1":
+                # Only block if user does not also have a valid active farmer profile
+                if not (existing_profile and not farmer_is_inactive(existing_profile)):
+                    error = "Your account has been suspended/locked. Access is disabled."
+                    return render(request, "farmer/otp_verify.html", {"error": error, "mobile": display_mobile})
+
+            # 3. Detect available workspaces
+            workspaces = get_user_workspaces(user, mobile=mobile)
+
+            if not workspaces:
+                error = "Unauthorized mobile number. Only registered farmers and managers can login."
+                return render(request, "farmer/otp_verify.html", {"error": error, "mobile": display_mobile})
+
+            # Log the user in
             login(request, user)
 
             # Clear session
-            if 'login_mobile' in request.session:
-                del request.session['login_mobile']
-            if 'login_otp' in request.session:
-                del request.session['login_otp']
-            if 'login_otp_time' in request.session:
-                del request.session['login_otp_time']
+            for k in ['login_mobile', 'login_display_mobile', 'login_otp', 'login_otp_time', 'active_role', 'active_farmer_id', 'active_staff_id']:
+                if k in request.session:
+                    del request.session[k]
 
-            return redirect('farmer-dashboard')
+            # 4. If single workspace -> auto-select and proceed
+            if len(workspaces) == 1:
+                ws = workspaces[0]
+                request.session['active_role'] = ws['type']
+                request.session['active_farmer_id'] = ws['farmer_id']
+                request.session['active_staff_id'] = ws.get('staff_id')
+                return redirect('farmer-dashboard')
+
+            # 5. Dual-Role (Multiple workspaces) -> render modal popup directly on the OTP page!
+            return render(request, "farmer/otp_verify.html", {
+                "show_workspace_modal": True,
+                "workspaces": workspaces,
+                "user_name": user.get_full_name() or user.username,
+                "mobile": display_mobile
+            })
         else:
             error = "Invalid OTP. Please try again."
 
-    return render(request, "farmer/otp_verify.html", {"error": error, "mobile": mobile, "otp": otp})
+    return render(request, "farmer/otp_verify.html", {"error": error, "mobile": display_mobile})
+
+
+def select_workspace_view(request):
+    """
+    Renders the Role / Workspace Selection page when a user has multiple workspaces
+    (e.g. Owner of personal farm AND Farm Manager for an employer).
+    """
+    if not request.user.is_authenticated:
+        return redirect('farmer-login')
+
+    workspaces = get_user_workspaces(request.user)
+    if not workspaces:
+        messages.error(request, "No active farm workspaces found for your account.")
+        return farmer_logout(request)
+
+    if len(workspaces) == 1 and not request.GET.get('force'):
+        ws = workspaces[0]
+        request.session['active_role'] = ws['type']
+        request.session['active_farmer_id'] = ws['farmer_id']
+        request.session['active_staff_id'] = ws.get('staff_id')
+        return redirect('farmer-dashboard')
+
+    # Handle selection
+    if request.method == "POST":
+        selected_type = request.POST.get('workspace_type')
+        target_id = request.POST.get('target_id')
+        try:
+            target_id = int(target_id)
+        except (ValueError, TypeError):
+            target_id = None
+
+        matched_ws = next((w for w in workspaces if w['type'] == selected_type and w['target_id'] == target_id), None)
+        if matched_ws:
+            request.session['active_role'] = matched_ws['type']
+            request.session['active_farmer_id'] = matched_ws['farmer_id']
+            request.session['active_staff_id'] = matched_ws.get('staff_id')
+            role_msg = "Personal Farm" if matched_ws['type'] == 'farmer' else f"Manager at {matched_ws['title']}"
+            messages.success(request, f"Switched to workspace: {matched_ws['title']} ({role_msg})")
+            return redirect('farmer-dashboard')
+        else:
+            messages.error(request, "Invalid workspace selection.")
+
+    active_role = request.session.get('active_role')
+    active_target_id = request.session.get('active_staff_id') if active_role == 'manager' else request.session.get('active_farmer_id')
+
+    for ws in workspaces:
+        ws['is_active'] = (ws['type'] == active_role and ws['target_id'] == active_target_id)
+
+    can_register_own_farm = not any(w['type'] == 'farmer' for w in workspaces)
+
+    context = {
+        'workspaces': workspaces,
+        'user_name': request.user.get_full_name() or request.user.username,
+        'can_register_own_farm': can_register_own_farm,
+    }
+    return render(request, "farmer/auth/select_workspace.html", context)
+
+
+def switch_workspace_view(request, role, target_id):
+    """
+    Fast workspace switcher endpoint called from the top navigation dropdown.
+    Validates ownership and switches active workspace without requiring re-login.
+    """
+    if not request.user.is_authenticated:
+        return redirect('farmer-login')
+
+    workspaces = get_user_workspaces(request.user)
+    try:
+        target_id = int(target_id)
+    except (ValueError, TypeError):
+        target_id = None
+
+    matched_ws = next((w for w in workspaces if w['type'] == role and w['target_id'] == target_id), None)
+    if matched_ws:
+        request.session['active_role'] = matched_ws['type']
+        request.session['active_farmer_id'] = matched_ws['farmer_id']
+        request.session['active_staff_id'] = matched_ws.get('staff_id')
+        role_label = "Personal Farm" if matched_ws['type'] == 'farmer' else f"Manager at {matched_ws['title']}"
+        messages.success(request, f"Active workspace changed to: {matched_ws['title']} ({role_label})")
+    else:
+        messages.error(request, "Selected workspace is not available on your account.")
+
+    next_url = request.META.get('HTTP_REFERER') or '/farmer/dashboard/'
+    if 'select-workspace' in next_url:
+        next_url = '/farmer/dashboard/'
+    return redirect(next_url)
+
+def resend_login_otp(request):
+    mobile = request.session.get('login_mobile')
+    display_mobile = request.session.get('login_display_mobile', mobile)
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or (request.content_type and 'application/json' in request.content_type)
+
+    if not mobile:
+        if is_ajax:
+            return JsonResponse({'status': 'error', 'message': 'Session expired. Please enter your mobile number again.'}, status=400)
+        messages.error(request, 'Session expired. Please enter your mobile number again.')
+        return redirect('farmer-login')
+
+    # Check cooldown (30 seconds)
+    last_otp_time = request.session.get('login_otp_time', 0)
+    current_time = timezone.now().timestamp()
+    if current_time - last_otp_time < 30:
+        remaining = max(1, int(30 - (current_time - last_otp_time)))
+        msg = f"Please wait {remaining} seconds before requesting a new OTP."
+        if is_ajax:
+            return JsonResponse({'status': 'error', 'message': msg}, status=429)
+        messages.warning(request, msg)
+        return redirect('otp-verify')
+
+    # Generate new 6-digit OTP
+    otp = str(random.randint(100000, 999999))
+
+    # Send SMS using Msg91 implementation
+    from apps.superadmin.views import send_otp_sms
+    success, message = send_otp_sms(mobile, otp)
+    if not success:
+        msg = f"Failed to send SMS: {message}"
+        if is_ajax:
+            return JsonResponse({'status': 'error', 'message': msg}, status=500)
+        messages.error(request, msg)
+        return redirect('otp-verify')
+
+    # Update session with new OTP and timestamp
+    request.session['login_otp'] = otp
+    request.session['login_otp_time'] = current_time
+
+    if is_ajax:
+        return JsonResponse({
+            'status': 'success',
+            'message': f'New OTP sent successfully to {display_mobile or mobile}.'
+        })
+
+    messages.success(request, f'New OTP sent successfully to {display_mobile or mobile}.')
+    return redirect('otp-verify')
 
 def farmer_logout(request):
     from django.contrib.auth import logout
     logout(request)
+    request.session.flush()
     return redirect('farmer-login')
+
+
+def get_wmo_weather_info(code):
+    mapping = {
+        0: ('Clear Sunny Sky', 'ri-sun-line'),
+        1: ('Mainly Clear', 'ri-sun-cloudy-line'),
+        2: ('Partly Cloudy', 'ri-sun-cloudy-line'),
+        3: ('Cloudy & Overcast', 'ri-cloudy-line'),
+        45: ('Foggy Atmosphere', 'ri-mist-line'),
+        48: ('Depositing Rime Fog', 'ri-mist-line'),
+        51: ('Light Drizzle', 'ri-drizzle-line'),
+        53: ('Moderate Drizzle', 'ri-drizzle-line'),
+        55: ('Dense Drizzle', 'ri-drizzle-line'),
+        61: ('Slight Rain Showers', 'ri-rainy-line'),
+        63: ('Moderate Rain', 'ri-rainy-line'),
+        65: ('Heavy Rainfall', 'ri-rainy-line'),
+        80: ('Passing Rain Showers', 'ri-showers-line'),
+        81: ('Moderate Rain Showers', 'ri-showers-line'),
+        82: ('Violent Rain Showers', 'ri-showers-line'),
+        95: ('Thunderstorms Anticipated', 'ri-thunderstorms-line'),
+        96: ('Thunderstorms with Hail', 'ri-thunderstorms-line'),
+        99: ('Heavy Thunderstorms with Hail', 'ri-thunderstorms-line'),
+    }
+    return mapping.get(code, ('Partly Cloudy', 'ri-sun-cloudy-line'))
+
+
+def fetch_live_weather(lat=9.9252, lon=78.1198, loc_name="Madurai, Tamil Nadu", base_date=None):
+    import json
+    import urllib.request
+    from datetime import datetime, date, timedelta
+
+    today = date.today()
+    if isinstance(base_date, str):
+        try:
+            base_date = datetime.strptime(base_date, "%Y-%m-%d").date()
+        except Exception:
+            base_date = today
+    elif not base_date:
+        base_date = today
+
+    start_str = base_date.strftime("%Y-%m-%d")
+    end_str = (base_date + timedelta(days=6)).strftime("%Y-%m-%d")
+
+    url = (
+        f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+        f"&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m"
+        f"&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,uv_index_max"
+        f"&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,wind_speed_10m,uv_index"
+        f"&start_date={start_str}&end_date={end_str}&timezone=auto"
+    )
+
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'AgriOT-Weather/1.0'})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+
+        curr_raw = data.get('current', {})
+        daily_raw = data.get('daily', {})
+        hourly_raw = data.get('hourly', {})
+
+        curr_code = curr_raw.get('weather_code', 2)
+        curr_cond, curr_icon = get_wmo_weather_info(curr_code)
+
+        daily_times = daily_raw.get('time', [])
+        max_temps = daily_raw.get('temperature_2m_max', [])
+        min_temps = daily_raw.get('temperature_2m_min', [])
+        app_max = daily_raw.get('apparent_temperature_max', [])
+        precip_sums = daily_raw.get('precipitation_sum', [])
+        precip_probs = daily_raw.get('precipitation_probability_max', [])
+        wind_maxs = daily_raw.get('wind_speed_10m_max', [])
+        uv_maxs = daily_raw.get('uv_index_max', [])
+        w_codes = daily_raw.get('weather_code', [])
+
+        forecast_days = []
+        for i in range(min(7, len(daily_times))):
+            d_str = daily_times[i]
+            d_obj = datetime.strptime(d_str, "%Y-%m-%d").date()
+            label = "Today" if d_obj == today else d_obj.strftime("%a")
+            code = w_codes[i] if i < len(w_codes) else 2
+            cond, icon = get_wmo_weather_info(code)
+
+            t_high = int(round(max_temps[i])) if i < len(max_temps) and max_temps[i] is not None else 32
+            t_low = int(round(min_temps[i])) if i < len(min_temps) and min_temps[i] is not None else 24
+            feels = int(round(app_max[i])) if i < len(app_max) and app_max[i] is not None else (t_high + 2)
+            rain_pct = int(precip_probs[i]) if i < len(precip_probs) and precip_probs[i] is not None else 20
+            rain_mm = round(float(precip_sums[i]), 1) if i < len(precip_sums) and precip_sums[i] is not None else 0.0
+            wind_spd = int(round(wind_maxs[i])) if i < len(wind_maxs) and wind_maxs[i] is not None else 12
+            uv_val = int(round(uv_maxs[i])) if i < len(uv_maxs) and uv_maxs[i] is not None else 6
+
+            forecast_days.append({
+                'label': label,
+                'date': d_obj.strftime("%d %b"),
+                'full_date': d_str,
+                'condition': cond,
+                'icon_class': icon,
+                'icon': icon,
+                'temp_high': t_high,
+                'temp_low': t_low,
+                'feels_like': feels,
+                'rain_chance': rain_pct,
+                'rain': rain_pct,
+                'rain_mm': rain_mm,
+                'humidity': int(curr_raw.get('relative_humidity_2m', 70)) if curr_raw else 70,
+                'wind_speed': wind_spd,
+                'wind': wind_spd,
+                'uv_index': uv_val,
+                'uv': uv_val,
+            })
+
+        # Process 24-hr hourly data (24 samples from 12:00 AM to 11:00 PM for each day)
+        h_temps = hourly_raw.get('temperature_2m', [])
+        h_feels = hourly_raw.get('apparent_temperature', [])
+        h_hum = hourly_raw.get('relative_humidity_2m', [])
+        h_wind = hourly_raw.get('wind_speed_10m', [])
+        h_prob = hourly_raw.get('precipitation_probability', [])
+        h_precip = hourly_raw.get('precipitation', [])
+        h_uv = hourly_raw.get('uv_index', [])
+
+        hourly_labels = [
+            '12:00 AM', '01:00 AM', '02:00 AM', '03:00 AM', '04:00 AM', '05:00 AM',
+            '06:00 AM', '07:00 AM', '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
+            '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM',
+            '06:00 PM', '07:00 PM', '08:00 PM', '09:00 PM', '10:00 PM', '11:00 PM'
+        ]
+
+        def extract_day_hourly(day_idx):
+            start_i = day_idx * 24
+            end_i = start_i + 24
+            s_temps = []
+            s_feels = []
+            s_hums = []
+            s_winds = []
+            s_probs = []
+            s_precips = []
+            s_uvs = []
+            for idx in range(start_i, end_i):
+                if idx < len(h_temps):
+                    s_temps.append(int(round(h_temps[idx])) if h_temps[idx] is not None else 30)
+                    s_feels.append(int(round(h_feels[idx])) if h_feels[idx] is not None else 32)
+                    s_hums.append(int(round(h_hum[idx])) if h_hum[idx] is not None else 70)
+                    s_winds.append(int(round(h_wind[idx])) if h_wind[idx] is not None else 10)
+                    s_probs.append(int(round(h_prob[idx])) if h_prob[idx] is not None else 15)
+                    s_precips.append(round(float(h_precip[idx]), 1) if h_precip[idx] is not None else 0.0)
+                    s_uvs.append(int(round(h_uv[idx])) if h_uv[idx] is not None else 0)
+                else:
+                    s_temps.append(30)
+                    s_feels.append(32)
+                    s_hums.append(70)
+                    s_winds.append(10)
+                    s_probs.append(15)
+                    s_precips.append(0.0)
+                    s_uvs.append(0)
+            return {
+                'labels': hourly_labels,
+                'temp': s_temps,
+                'feels_like': s_feels,
+                'humidity': s_hums,
+                'wind': s_winds,
+                'rain_prob': s_probs,
+                'precip_mm': s_precips,
+                'uv': s_uvs
+            }
+
+        hourly_dataset = extract_day_hourly(0)
+        hourly_by_day = [extract_day_hourly(d) for d in range(min(7, len(forecast_days)))]
+
+        if base_date == today and curr_raw:
+            curr_temp = int(round(curr_raw.get('temperature_2m', 31)))
+            curr_cond_str = curr_cond
+            curr_feels = int(round(curr_raw.get('apparent_temperature', 34)))
+            curr_hum = int(round(curr_raw.get('relative_humidity_2m', 75)))
+            curr_wind = int(round(curr_raw.get('wind_speed_10m', 14)))
+            curr_rain = forecast_days[0]['rain_chance'] if forecast_days else 20
+            curr_uv = forecast_days[0]['uv_index'] if forecast_days else 6
+            curr_icon_cls = curr_icon
+        else:
+            day0 = forecast_days[0] if forecast_days else {}
+            curr_temp = day0.get('temp_high', 32)
+            curr_cond_str = day0.get('condition', curr_cond)
+            curr_feels = day0.get('feels_like', curr_temp + 2)
+            curr_hum = day0.get('humidity', 70)
+            curr_wind = day0.get('wind_speed', 12)
+            curr_rain = day0.get('rain_chance', 20)
+            curr_uv = day0.get('uv_index', 6)
+            curr_icon_cls = day0.get('icon_class', curr_icon)
+
+        current_weather = {
+            'location': loc_name,
+            'temp': curr_temp,
+            'condition': curr_cond_str,
+            'feels_like': curr_feels,
+            'humidity': curr_hum,
+            'wind_speed': curr_wind,
+            'rain_chance': curr_rain,
+            'uv_index': curr_uv,
+            'icon_class': curr_icon_cls,
+        }
+
+        return {
+            'is_live': True,
+            'current': current_weather,
+            'forecast': forecast_days,
+            'hourly': hourly_dataset,
+            'hourly_by_day': hourly_by_day
+        }
+
+    except Exception:
+        # Fallback using base_date or today
+        fallback_days = []
+        weather_icons = [
+            'ri-sun-cloudy-line', 'ri-cloudy-line', 'ri-thunderstorms-line', 
+            'ri-rainy-line', 'ri-sun-line', 'ri-sun-cloudy-line', 'ri-cloudy-line'
+        ]
+        conditions = [
+            'Partly Cloudy', 'Cloudy & Overcast', 'Thunderstorms Anticipated',
+            'Heavy Rainfall', 'Clear Sunny Sky', 'Scattered Clouds', 'Passing Showers'
+        ]
+        highs = [33, 31, 29, 28, 32, 33, 30]
+        lows = [26, 25, 24, 23, 25, 26, 24]
+        feels_likes = [34, 32, 30, 29, 35, 36, 31]
+        rain_chances = [40, 55, 72, 80, 20, 35, 50]
+        humidities = [78, 82, 88, 92, 65, 70, 75]
+        winds = [14, 16, 22, 28, 12, 10, 15]
+        uv_indices = [6, 5, 4, 3, 8, 9, 7]
+
+        for i in range(7):
+            d_obj = base_date + timedelta(days=i)
+            day_label = "Today" if d_obj == today else d_obj.strftime("%a")
+            fallback_days.append({
+                'label': day_label,
+                'date': d_obj.strftime("%d %b"),
+                'full_date': d_obj.strftime("%Y-%m-%d"),
+                'condition': conditions[i % len(conditions)],
+                'icon_class': weather_icons[i % len(weather_icons)],
+                'icon': weather_icons[i % len(weather_icons)],
+                'temp_high': highs[i % len(highs)],
+                'temp_low': lows[i % len(lows)],
+                'feels_like': feels_likes[i % len(feels_likes)],
+                'rain_chance': rain_chances[i % len(rain_chances)],
+                'rain': rain_chances[i % len(rain_chances)],
+                'rain_mm': 5,
+                'humidity': humidities[i % len(humidities)],
+                'wind_speed': winds[i % len(winds)],
+                'wind': winds[i % len(winds)],
+                'uv_index': uv_indices[i % len(uv_indices)],
+                'uv': uv_indices[i % len(uv_indices)],
+            })
+
+        return {
+            'is_live': False,
+            'current': {
+                'location': loc_name,
+                'temp': 32,
+                'condition': 'Partly Cloudy',
+                'feels_like': 35,
+                'humidity': 75,
+                'wind_speed': 14,
+                'rain_chance': 35,
+                'uv_index': 6,
+                'icon_class': 'ri-sun-cloudy-line',
+            },
+            'forecast': fallback_days,
+            'hourly': {
+                'labels': [
+                    '12:00 AM', '01:00 AM', '02:00 AM', '03:00 AM', '04:00 AM', '05:00 AM',
+                    '06:00 AM', '07:00 AM', '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
+                    '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM',
+                    '06:00 PM', '07:00 PM', '08:00 PM', '09:00 PM', '10:00 PM', '11:00 PM'
+                ],
+                'temp': [24, 23, 23, 24, 25, 27, 29, 31, 32, 33, 33, 32, 31, 30, 29, 28, 27, 26, 26, 25, 25, 24, 24, 24],
+                'feels_like': [26, 25, 25, 26, 27, 29, 32, 34, 35, 36, 36, 35, 34, 33, 31, 30, 29, 28, 28, 27, 27, 26, 26, 26],
+                'humidity': [90, 92, 92, 90, 85, 78, 72, 65, 62, 60, 62, 65, 70, 75, 78, 82, 85, 86, 88, 90, 90, 91, 91, 91],
+                'wind': [6, 6, 5, 5, 7, 9, 12, 14, 16, 17, 16, 15, 14, 12, 11, 10, 9, 8, 8, 7, 7, 6, 6, 6],
+                'rain_prob': [5, 5, 5, 5, 10, 15, 20, 25, 30, 35, 30, 25, 20, 15, 15, 10, 10, 5, 5, 5, 5, 5, 5, 5],
+                'precip_mm': [0, 0, 0, 0, 0, 0, 0, 0.2, 0.5, 0.8, 0.4, 0.2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                'uv': [0, 0, 0, 0, 0, 1, 3, 5, 7, 9, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            },
+            'hourly_by_day': []
+        }
+
+
+def get_live_weather_api(request):
+    """
+    Returns live weather forecast data as JSON for the farmer dashboard.
+    Supports query parameters:
+      - lat: float (latitude)
+      - lon: float (longitude)
+      - loc_name: string (location display name)
+      - date: YYYY-MM-DD (selected date)
+    """
+    lat = request.GET.get('lat')
+    lon = request.GET.get('lon')
+    loc_name = request.GET.get('loc_name', '').strip()
+    date_str = request.GET.get('date', '').strip()
+
+    if not lat or not lon:
+        profile = get_farmer_profile(request.user) if request.user.is_authenticated else None
+        if profile:
+            from apps.farmer.models import Farm
+            first_farm = Farm.objects.filter(farmer=profile).first()
+            if first_farm and first_farm.latitude and first_farm.longitude:
+                lat = first_farm.latitude
+                lon = first_farm.longitude
+                if not loc_name:
+                    d_name = first_farm.district.name if first_farm.district else ''
+                    s_name = first_farm.state.name if first_farm.state else 'Tamil Nadu'
+                    loc_name = f"{d_name}, {s_name}" if d_name else s_name
+
+    try:
+        lat = float(lat) if lat else 9.9252
+        lon = float(lon) if lon else 78.1198
+    except (ValueError, TypeError):
+        lat = 9.9252
+        lon = 78.1198
+
+    if not loc_name:
+        loc_name = "Madurai, Tamil Nadu"
+
+    weather_data = fetch_live_weather(lat=lat, lon=lon, loc_name=loc_name, base_date=date_str)
+    return JsonResponse({
+        'status': 'success',
+        'is_live': weather_data.get('is_live', False),
+        'weather': weather_data
+    })
+
 
 def dashboard(request):
     import json
@@ -228,8 +852,15 @@ def dashboard(request):
         except Exception:
             return "₹0"
 
+    # ---- Active Manager Check ----
+    active_mgr = get_active_manager_staff(request)
+
     # ---- 1. Farms & Total Acreage ----
     farms = Farm.objects.filter(farmer=profile).select_related('district', 'state') if profile else Farm.objects.none()
+    if active_mgr:
+        farms = farms.filter(
+            Q(created_by_staff=active_mgr) | Q(splits__supervisors=active_mgr) | Q(splits__supervisor=active_mgr)
+        ).distinct()
     total_farms = farms.count()
     total_acres = 0.0
     for f in farms:
@@ -245,11 +876,22 @@ def dashboard(request):
 
     # ---- 2. Crops (Active & Harvested) ----
     crop_splits = CropSplit.objects.filter(farm__farmer=profile).select_related('crop', 'farm') if profile else CropSplit.objects.none()
-    active_crops = crop_splits.exclude(stage__iexact='Harvested').count()
-    harvested_crops = crop_splits.filter(stage__iexact='Harvested').count()
+    if active_mgr:
+        crop_splits = crop_splits.filter(
+            Q(supervisors=active_mgr) | Q(supervisor=active_mgr) | Q(farm__created_by_staff=active_mgr)
+        ).distinct()
+    active_crops = crop_splits.exclude(stage__in=['Harvested', 'Sold', 'Inactive']).count()
+    harvested_crops = crop_splits.filter(stage__in=['Harvested', 'Sold']).count()
 
     # ---- 3. Tasks ----
     tasks = FarmTask.objects.filter(Q(farmer=profile) | Q(farm__farmer=profile)).distinct() if profile else FarmTask.objects.none()
+    if active_mgr:
+        tasks = tasks.filter(
+            Q(assigned_workers=active_mgr) | 
+            Q(assigned_worker=active_mgr) | 
+            Q(associated_split__supervisors=active_mgr) |
+            Q(associated_split__supervisor=active_mgr)
+        ).distinct()
     total_tasks = tasks.count()
     pending_tasks = tasks.filter(status='Pending').count()
     in_progress_tasks = tasks.filter(status='In Progress').count()
@@ -280,7 +922,10 @@ def dashboard(request):
     absent_pct = round((absent_today / total_staff * 100)) if total_staff > 0 else 0
 
     # ---- 5. Financial Overview (Strictly aligned with Ledger and Outstandings) ----
-    transactions = LedgerTransaction.objects.filter(farmer=profile) if profile else LedgerTransaction.objects.none()
+    transactions = LedgerTransaction.objects.filter(farmer=profile).exclude(
+        category='Harvest Trade',
+        description__istartswith='Harvest Trade Settlement'
+    ) if profile else LedgerTransaction.objects.none()
 
     # Sales (Inflow transactions excluding internal customer duplicate entries)
     inflow = transactions.filter(
@@ -321,14 +966,11 @@ def dashboard(request):
     overdue_percentage = min(100, round((overdue_invoices_count / max(1, all_invoices_count)) * 100)) if all_invoices_count > 0 else 0
 
     # ---- 6. Subscription ----
-    sub = Subscription.objects.filter(
-        farmer=profile, 
-        subscription_status='active'
-    ).select_related('package').order_by('-id').first() if profile else None
-    if not sub and profile:
-        sub = Subscription.objects.filter(farmer=profile).select_related('package').order_by('-id').first()
+    from apps.superadmin.subscription_utils import get_farmer_subscription_details
+    sub_details = get_farmer_subscription_details(profile) if profile else None
+    sub = sub_details.get('subscription') if sub_details else None
 
-    if sub:
+    if sub and not sub_details.get('is_pending'):
         plan_name = sub.package.name if sub.package else "Standard Plan"
         plan_price = float(sub.monthly_amount or (sub.package.price if sub.package else 0))
         renews_on = sub.end_date.strftime("%b %d, %Y") if sub.end_date else "N/A"
@@ -343,68 +985,33 @@ def dashboard(request):
 
     # ---- 7. Agronomy: Weather Forecast & Farm Health ----
     # Location (City / District based)
-    loc_name = "Coimbatore, Tamil Nadu"
+    # ---- 7. Agronomy: Weather Forecast & Farm Health ----
+    # Location (City / District based)
+    loc_name = "Madurai, Tamil Nadu"
     if profile:
         city_val = getattr(profile, 'city', None) or getattr(profile, 'district', None)
         state_val = getattr(profile, 'state', None) or 'Tamil Nadu'
         if city_val:
             loc_name = f"{city_val}, {state_val}"
-    if loc_name == "Coimbatore, Tamil Nadu" and first_farm:
+    if loc_name == "Madurai, Tamil Nadu" and first_farm:
         if first_farm.district:
             loc_name = f"{first_farm.district.name}, {first_farm.state.name if first_farm.state else 'Tamil Nadu'}"
         elif first_farm.state:
             loc_name = f"{first_farm.state.name}, India"
 
-    # 7-day forecast construction
-    forecast_days = []
-    weather_icons = [
-        'ri-sun-cloudy-line', 'ri-cloudy-line', 'ri-thunderstorms-line', 
-        'ri-rainy-line', 'ri-sun-line', 'ri-sun-cloudy-line', 'ri-cloudy-line'
-    ]
-    conditions = [
-        'Partly Cloudy', 'Cloudy & Overcast', 'Thunderstorms Anticipated',
-        'Heavy Rainfall', 'Clear Sunny Sky', 'Scattered Clouds', 'Passing Showers'
-    ]
-    highs = [33, 31, 29, 28, 32, 33, 30]
-    lows = [26, 25, 24, 23, 25, 26, 24]
-    feels_likes = [34, 32, 30, 29, 35, 36, 31]
-    rain_chances = [40, 55, 72, 80, 20, 35, 50]
-    humidities = [78, 82, 88, 92, 65, 70, 75]
-    winds = [14, 16, 22, 28, 12, 10, 15]
-    uv_indices = [6, 5, 4, 3, 8, 9, 7]
+    farm_lat = 9.9252
+    farm_lon = 78.1198
+    if first_farm and getattr(first_farm, 'latitude', None) and getattr(first_farm, 'longitude', None):
+        try:
+            farm_lat = float(first_farm.latitude)
+            farm_lon = float(first_farm.longitude)
+        except (ValueError, TypeError):
+            pass
 
-    for i in range(7):
-        day_date = today_date + timedelta(days=i)
-        day_label = "Today" if i == 0 else day_date.strftime("%a")
-        forecast_days.append({
-            'label': day_label,
-            'date': day_date.strftime("%d %b"),
-            'full_date': day_date.strftime("%Y-%m-%d"),
-            'condition': conditions[i % len(conditions)],
-            'icon_class': weather_icons[i % len(weather_icons)],
-            'temp_high': highs[i % len(highs)],
-            'temp_low': lows[i % len(lows)],
-            'feels_like': feels_likes[i % len(feels_likes)],
-            'rain_chance': rain_chances[i % len(rain_chances)],
-            'humidity': humidities[i % len(humidities)],
-            'wind_speed': winds[i % len(winds)],
-            'uv_index': uv_indices[i % len(uv_indices)],
-        })
-
-    weather = {
-        'current': {
-            'location': loc_name,
-            'temp': 31,
-            'condition': 'Partly Cloudy',
-            'feels_like': 34,
-            'humidity': 78,
-            'wind_speed': 14,
-            'rain_chance': 40,
-            'uv_index': 6,
-            'icon_class': 'ri-sun-cloudy-line',
-        },
-        'forecast': forecast_days,
-    }
+    weather = fetch_live_weather(lat=farm_lat, lon=farm_lon, loc_name=loc_name, base_date=today_date)
+    weather_forecast_json = json.dumps(weather.get('forecast', []))
+    weather_hourly_json = json.dumps(weather.get('hourly', {}))
+    weather_hourly_by_day_json = json.dumps(weather.get('hourly_by_day', []))
 
     # Farm Health & Soil Indicators
     healthy_farms_count = farms.filter(health_indicator__in=['Good', 'Healthy', 'Optimal']).count()
@@ -460,8 +1067,8 @@ def dashboard(request):
     }
 
     for item in inventories.order_by('-id')[:6]:
-        qty = item.quantity or 0
-        safety = item.safety_stock or 5
+        qty = float(item.quantity or 0)
+        safety = float(item.safety_stock or 5)
         unit_p = float(item.unit_price or 0)
         tot_val = qty * unit_p
         is_low = qty <= safety
@@ -480,9 +1087,9 @@ def dashboard(request):
         inventory_items.append({
             'item_name': item.item_name,
             'category': item.category,
-            'quantity': qty,
+            'quantity': int(qty) if qty.is_integer() else round(qty, 3),
             'unit': item.unit or 'Units',
-            'safety_stock': safety,
+            'safety_stock': int(safety) if safety.is_integer() else safety,
             'location': item.location or 'Main Warehouse',
             'is_low': is_low,
             'unit_price': unit_p,
@@ -492,7 +1099,7 @@ def dashboard(request):
             'stock_pct': stock_pct,
         })
 
-    low_stock_list = [i for i in inventories if (i.quantity or 0) <= (i.safety_stock or 0)]
+    low_stock_list = [i for i in inventories if float(i.quantity or 0) <= float(i.safety_stock or 0)]
     low_stock_count = len(low_stock_list)
     low_stock_subtitle = f"{low_stock_list[0].item_name} below reorder point" if low_stock_list else "All stocks optimal"
 
@@ -511,7 +1118,7 @@ def dashboard(request):
     fleet_items = []
     for f_item in fleet_qs[:4]:
         is_op = str(f_item.status).lower() in ['in stock', 'operational', 'good']
-        is_low = (f_item.quantity or 0) <= (f_item.safety_stock or 0)
+        is_low = float(f_item.quantity or 0) <= float(f_item.safety_stock or 0)
         
         status_label = "Operational" if is_op else ("Low Stock" if is_low else "Maintenance")
         badge_class = "ok" if is_op else "low"
@@ -522,7 +1129,7 @@ def dashboard(request):
             'category': f_item.category,
             'plate': f_item.license_plate or 'N/A plate',
             'location': f_item.location or 'Main Garage',
-            'qty': f_item.quantity or 1,
+            'qty': float(f_item.quantity or 1),
             'status_label': status_label,
             'badge_class': badge_class,
             'icon_bg': icon_bg,
@@ -1234,6 +1841,11 @@ def dashboard(request):
         'days_left': days_left,
         'auto_renew': auto_renew,
         'weather': weather,
+        'weather_forecast_json': weather_forecast_json,
+        'weather_hourly_json': weather_hourly_json,
+        'weather_hourly_by_day_json': weather_hourly_by_day_json,
+        'weather_lat': farm_lat,
+        'weather_lon': farm_lon,
         'farm_health_score': farm_health_score,
         'healthy_farms_count': healthy_farms_count,
         'needs_attention_farms_count': needs_attention_farms_count,
@@ -1390,10 +2002,16 @@ def parse_farm_advance_fields(request, existing_farm=None):
     }
 
 def manage_farm(request):
+    if request.method == "POST":
+        from apps.farmer.validation import pincode_error
+        error = pincode_error(request)
+        if error is not None:
+            return error
+
     from django.contrib import messages
     from django.shortcuts import redirect
 
-    from apps.farmer.models import Farm
+    from apps.farmer.models import Farm, CropSplit
     from apps.superadmin.models import CropType, State
 
     farmer_prof = get_farmer_profile(request.user)
@@ -1401,18 +2019,29 @@ def manage_farm(request):
     if request.method == "POST":
         land_name = request.POST.get("land_name")
         total_area = request.POST.get("total_area")
-        crop_type_id = request.POST.get("crop_type")
+        raw_crop_ids = request.POST.getlist("crop_type") + request.POST.getlist("crops") + request.POST.getlist("crop")
+        crop_ids = [str(c).strip() for c in raw_crop_ids if c and str(c).strip()]
         crop_name = request.POST.get("crop_name", "").strip()
 
-        if not crop_type_id and crop_name:
-            from apps.superadmin.models import Crop, CropType
-            crop_type_obj = CropType.objects.filter(name__iexact=crop_name).first()
-            if not crop_type_obj:
-                crop_type_obj = CropType.objects.create(name=crop_name, description=f"Auto-created crop type for {crop_name}", is_active=True)
+        from apps.superadmin.models import Crop, CropType
+        crop_objs = []
+        if crop_ids:
+            # Preserve selected order where possible
+            crops_dict = {str(c.id): c for c in Crop.objects.filter(id__in=crop_ids)}
+            for cid in crop_ids:
+                if cid in crops_dict and crops_dict[cid] not in crop_objs:
+                    crop_objs.append(crops_dict[cid])
+        elif crop_name:
             crop_obj = Crop.objects.filter(name__iexact=crop_name).first()
             if not crop_obj:
+                crop_type_obj = CropType.objects.filter(name__iexact=crop_name).first()
+                if not crop_type_obj:
+                    crop_type_obj = CropType.objects.create(name=crop_name, description=f"Auto-created crop type for {crop_name}", is_active=True)
                 crop_obj = Crop.objects.create(name=crop_name, crop_type=crop_type_obj, description=f"Auto-created crop: {crop_name}", is_active=True)
-            crop_type_id = crop_type_obj.id
+            crop_objs = [crop_obj]
+
+        crop_obj = crop_objs[0] if crop_objs else None
+        crop_type_obj = crop_obj.crop_type if crop_obj and crop_obj.crop_type else None
 
         latitude = request.POST.get("latitude")
         longitude = request.POST.get("longitude")
@@ -1472,11 +2101,14 @@ def manage_farm(request):
                     return redirect('farmer-farms')
         # --------------------------------
         # Save new Farm Land
+        active_mgr = get_active_manager_staff(request)
         farm = Farm.objects.create(
             farmer=farmer_prof,
+            created_by_staff=active_mgr,
             land_name=land_name,
             total_area=new_area,
-            crop_type_id=crop_type_id if crop_type_id else None,
+            crop=crop_obj,
+            crop_type=crop_type_obj,
             latitude=latitude,
             longitude=longitude,
             state_id=state_id if state_id else None,
@@ -1502,6 +2134,8 @@ def manage_farm(request):
             electricity_details=adv_data["electricity_details"],
             farm_documents=adv_data["farm_documents"]
         )
+        if crop_objs:
+            farm.crops.set(crop_objs)
 
         # Log Notification for Farmer
         from auth.models import SystemNotification
@@ -1547,10 +2181,19 @@ def manage_farm(request):
     maintenance_schedules = MaintenanceSchedule.objects.filter(is_active=True).order_by('name')
 
     from django.db.models import Count, Q, Sum
-    farms_qs = Farm.objects.filter(farmer=farmer_prof).annotate(
-        split_count=Count('splits', filter=~Q(splits__stage__in=['Harvested', 'Sold']), distinct=True),
-        allocated_area=Sum('splits__acreage', filter=~Q(splits__stage__in=['Harvested', 'Sold']))
-    ).order_by('-created_at')
+    active_mgr = get_active_manager_staff(request)
+
+    if active_mgr:
+        mgr_farm_filter = Q(created_by_staff=active_mgr) | Q(splits__supervisors=active_mgr) | Q(splits__supervisor=active_mgr)
+        farms_qs = Farm.objects.filter(farmer=farmer_prof).filter(mgr_farm_filter).annotate(
+            split_count=Count('splits', filter=(~Q(splits__stage__in=['Inactive', 'Sold']) & (Q(splits__supervisors=active_mgr) | Q(splits__supervisor=active_mgr) | Q(created_by_staff=active_mgr))), distinct=True),
+            allocated_area=Sum('splits__acreage', filter=(~Q(splits__stage__in=['Harvested', 'Sold', 'Inactive']) & (Q(splits__supervisors=active_mgr) | Q(splits__supervisor=active_mgr) | Q(created_by_staff=active_mgr))))
+        ).distinct().order_by('-created_at')
+    else:
+        farms_qs = Farm.objects.filter(farmer=farmer_prof).annotate(
+            split_count=Count('splits', filter=~Q(splits__stage__in=['Inactive', 'Sold']), distinct=True),
+            allocated_area=Sum('splits__acreage', filter=~Q(splits__stage__in=['Harvested', 'Sold', 'Inactive']))
+        ).order_by('-created_at')
 
     farms = []
     for f in farms_qs:
@@ -1558,7 +2201,31 @@ def manage_farm(request):
         tot = float(f.total_area)
         f.unallocated_area = max(0.0, tot - alloc)
         f.alloc_val = alloc
+        if active_mgr:
+            f.visible_splits = f.splits.filter(
+                Q(supervisors=active_mgr) | Q(supervisor=active_mgr) | Q(farm__created_by_staff=active_mgr)
+            ).distinct().order_by('-id')
+        else:
+            f.visible_splits = f.splits.all().order_by('-id')
         farms.append(f)
+
+    # Extract unique regions and statuses from farmer's registered farms for filters
+    farm_regions = []
+    seen_regions = set()
+    farm_statuses = []
+    seen_statuses = set()
+    for f in farms:
+        loc_name = f.district.name if f.district else (f.state.name if f.state else None)
+        if loc_name and loc_name.strip() and loc_name.strip().lower() not in seen_regions:
+            seen_regions.add(loc_name.strip().lower())
+            farm_regions.append(loc_name.strip())
+
+        st_val = (f.health_indicator or '').strip()
+        if st_val and st_val.lower() not in seen_statuses:
+            seen_statuses.add(st_val.lower())
+            farm_statuses.append(st_val)
+    farm_regions.sort()
+    farm_statuses.sort()
 
     from apps.farmer.models import FarmerStaff
     from django.db.models import Q
@@ -1601,11 +2268,49 @@ def manage_farm(request):
         available_acres = "0"
         max_lands = "0"
 
+    max_crops = "unlimited"
+    current_active_crops_qs = CropSplit.objects.filter(farm__farmer=farmer_prof).exclude(stage='Inactive')
+    if active_mgr:
+        current_active_crops_qs = current_active_crops_qs.filter(
+            Q(supervisors=active_mgr) | Q(supervisor=active_mgr) | Q(farm__created_by_staff=active_mgr)
+        ).distinct()
+    current_active_crops = current_active_crops_qs.count() if farmer_prof else 0
+    crop_limit_reached = False
+    if active_sub and active_sub.package:
+        max_crops_str = str(active_sub.package.my_crop or '').lower().strip()
+        if max_crops_str and max_crops_str != "unlimited":
+            m_crop = re.search(r'\d+', max_crops_str)
+            if m_crop:
+                max_crops_val = int(m_crop.group())
+                max_crops = str(max_crops_val)
+                crop_limit_reached = (current_active_crops >= max_crops_val)
+
     from apps.farmer.models import FarmerCustomer, FarmerInventory, FarmerVendor
-    from apps.superadmin.models import ExpenseType, ExpenseUnit
+    from apps.superadmin.models import ExpenseType, ExpenseUnit, InventoryCategory
     expense_types = ExpenseType.objects.filter(is_active=True).order_by('name')
     expense_units = ExpenseUnit.objects.filter(is_active=True).order_by('name')
     inventories = FarmerInventory.objects.filter(farmer=farmer_prof, quantity__gt=0).order_by('item_name') if farmer_prof else []
+    from apps.farmer.inventory_consumption import inventory_layout, is_fuel
+    category_layouts = {
+        category.name.strip().lower(): category.layout_type
+        for category in InventoryCategory.objects.filter(is_active=True)
+    }
+    warehouse_inventories = []
+    machinery_inventories = []
+    tool_inventories = []
+    for item in inventories:
+        layout = inventory_layout(item, category_layouts)
+        if layout == 'machinery':
+            # A booked, maintenance, or otherwise unavailable vehicle must
+            # never be selectable for a new consumption entry.
+            if (item.status or '').strip().lower() == 'available':
+                machinery_inventories.append(item)
+        elif layout == 'tools':
+            if (item.status or '').strip().lower() == 'available':
+                tool_inventories.append(item)
+        else:
+            warehouse_inventories.append(item)
+    fuel_inventories = [item for item in inventories if is_fuel(item) and (item.unit or '').strip().lower() in ('l', 'ltr', 'ltrs', 'litre', 'litres', 'liter', 'liters')]
     vendors = FarmerVendor.objects.filter(farmer=farmer_prof).order_by('vendor_name') if farmer_prof else []
     customers = FarmerCustomer.objects.filter(farmer=farmer_prof).order_by('name') if farmer_prof else []
     from apps.superadmin.models import TaskCategory, TaskPriority
@@ -1623,8 +2328,10 @@ def manage_farm(request):
         TaskPriority.objects.create(name="High Priority", description="Critical, needs immediate attention")
         TaskPriority.objects.create(name="Medium Priority", description="Important, schedule when possible")
         TaskPriority.objects.create(name="Low Priority", description="Low priority, standard chores")
+    task_categories = TaskCategory.objects.filter(is_active=True).order_by('name')
+    task_priorities = TaskPriority.objects.filter(is_active=True).order_by('id')
 
-    from apps.superadmin.models import CropQuality, DocumentCategory
+    from apps.superadmin.models import CropQuality, DocumentCategory, HealthIndicator
     if not CropQuality.objects.exists():
         CropQuality.objects.create(name="Grade 1", description="Top export grade quality")
         CropQuality.objects.create(name="Grade 2", description="Standard market quality")
@@ -1632,19 +2339,74 @@ def manage_farm(request):
         CropQuality.objects.create(name="Grade 4", description="Feed or biomass grade")
     crop_qualities = CropQuality.objects.filter(is_active=True).order_by('id')
 
+    if not HealthIndicator.objects.exists():
+        HealthIndicator.objects.create(name="Excellent", description="Optimal soil and farm standing")
+        HealthIndicator.objects.create(name="Good", description="Normal healthy standing")
+        HealthIndicator.objects.create(name="Needs Attention", description="Requires inspection or treatment")
+    health_indicators = HealthIndicator.objects.filter(is_active=True).order_by('id')
+
     default_doc_types = ["Patta", "Chitta", "FMB", "Sale Deed", "Lease Agreement", "Adangal", "Soil Test Report", "Water Test Report", "Organic Certificate", "Electricity Bill", "Land Survey Map", "Other"]
     for dt in default_doc_types:
         DocumentCategory.objects.get_or_create(name=dt, defaults={'document_type': 'My Land', 'description': f"Default document type: {dt}", 'is_active': True})
     document_types = DocumentCategory.objects.filter(is_active=True).order_by('id')
 
-    task_categories = TaskCategory.objects.filter(is_active=True).order_by('name')
-    task_priorities = TaskPriority.objects.filter(is_active=True).order_by('id')
+    # 4 Top Metric Cards (Land, Crop, Yield, Sales)
+    total_area_used = 0.0
+    total_area_allocated = 0.0
+    for f in farms:
+        try:
+            total_area_used += float(f.total_area)
+            total_area_allocated += float(f.allocated_area or 0)
+        except (ValueError, TypeError):
+            pass
+    total_area_unallocated = max(0.0, total_area_used - total_area_allocated)
+
+    available_crop_slots = 0
+    if max_crops != "unlimited":
+        try:
+            available_crop_slots = max(0, int(max_crops) - current_active_crops)
+        except ValueError:
+            available_crop_slots = 0
+    else:
+        available_crop_slots = "unlimited"
+
+    from apps.farmer.models import CropSplit, LedgerTransaction
+    all_splits = CropSplit.objects.filter(farm__farmer=farmer_prof)
+    if active_mgr:
+        all_splits = all_splits.filter(
+            Q(supervisors=active_mgr) | Q(supervisor=active_mgr) | Q(farm__created_by_staff=active_mgr)
+        ).distinct()
+    total_yield_tons = 0.0
+    yield_unit_display = "Tons"
+    for sp in all_splits:
+        y_val = float(sp.yield_tons or sp.expected_yield or 0)
+        total_yield_tons += y_val
+        if sp.expected_yield_unit:
+            yield_unit_display = sp.expected_yield_unit
+
+    sales_qs = LedgerTransaction.objects.filter(
+        farmer=farmer_prof,
+        category__in=['Sales', 'Harvest Trade']
+    ).exclude(
+        category='Harvest Trade',
+        description__istartswith='Harvest Trade Settlement'
+    )
+    total_sales_amount = float(sales_qs.aggregate(Sum('amount'))['amount__sum'] or 0.0)
+    total_sales_count = sales_qs.count()
 
     data = {
-        "yield_tons": 13.2,
+        "yield_tons": total_yield_tons,
         "price_per_mt": 950,
-        "sale_value": 12540,
-        "settlement": "₹10,40,820",
+        "sale_value": total_sales_amount,
+        "settlement": f"₹{total_sales_amount:,.0f}",
+        "total_area_used": total_area_used,
+        "total_area_allocated": total_area_allocated,
+        "total_area_unallocated": total_area_unallocated,
+        "available_crop_slots": available_crop_slots,
+        "total_yield_tons": total_yield_tons,
+        "yield_unit_display": yield_unit_display,
+        "total_sales_amount": total_sales_amount,
+        "total_sales_count": total_sales_count,
         "states": states,
         "crop_types": crop_types,
         "crops": crops,
@@ -1660,6 +2422,9 @@ def manage_farm(request):
         "crop_qualities": crop_qualities,
         "maintenance_schedules": maintenance_schedules,
         "document_types": document_types,
+        "health_indicators": health_indicators,
+        "farm_regions": farm_regions,
+        "farm_statuses": farm_statuses,
         "farms": farms,
         "staffs": staffs,
         "managers": managers,
@@ -1668,35 +2433,159 @@ def manage_farm(request):
         "max_package_acres": max_package_acres,
         "available_acres": available_acres,
         "max_lands": max_lands,
+        "max_crops": max_crops,
+        "current_active_crops": current_active_crops,
+        "crop_limit_reached": crop_limit_reached,
         "inventories": inventories,
+        "warehouse_inventories": warehouse_inventories,
+        "machinery_inventories": machinery_inventories,
+        "tool_inventories": tool_inventories,
+        "fuel_inventories": fuel_inventories,
         "vendors": vendors,
         "customers": customers,
         "expense_types": expense_types,
         "expense_units": expense_units,
+        "is_acting_as_manager": bool(active_mgr),
+        "active_manager": active_mgr,
     }
     return render(request, "farmer/farms/manage_farm.html", data)
 
 def delete_farm(request):
+    import re
     from django.contrib import messages
     from django.shortcuts import redirect
-    from apps.farmer.models import Farm
+    from django.http import JsonResponse
+    from apps.farmer.models import Farm, CropSplit, FarmTask, InventoryStockLog, FarmActivity, LedgerTransaction
+    from django.db.models import Q
+
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.POST.get('is_ajax') == '1'
+
+    if get_active_manager_staff(request):
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': 'Managers do not have permission to delete farm land.'})
+        messages.error(request, "Managers do not have permission to delete farm land.")
+        return redirect('farmer-farms')
 
     farmer_prof = get_farmer_profile(request.user)
 
     if request.method == "POST":
         farm_id = request.POST.get('farm_id')
+        action = request.POST.get('action')
+
         if farm_id and farmer_prof:
             try:
                 farm = Farm.objects.get(id=farm_id, farmer=farmer_prof)
                 land_name = farm.land_name
+
+                # 1. Action: Mark as Inactive
+                if action == 'set_inactive':
+                    farm.health_indicator = 'Inactive'
+                    notes = str(farm.notes or '')
+                    if '[INACTIVE]' not in notes:
+                        notes = f"{notes} [INACTIVE]".strip()
+                    farm.notes = notes
+                    farm.save()
+
+                    # Inactivate any active crops on this farm as well
+                    for split in farm.splits.exclude(stage__in=['Inactive', 'Harvested', 'Sold']):
+                        split_notes = str(split.crop_notes or '')
+                        split_notes = re.sub(r'\[PREV_STAGE:[^\]]+\]', '', split_notes).strip()
+                        split_notes = f"{split_notes} [PREV_STAGE:{split.stage}]".strip()
+                        split.crop_notes = split_notes
+                        split.stage = 'Inactive'
+                        split.save()
+
+                    active_mgr = get_active_manager_staff(request)
+                    op_name = active_mgr.name if active_mgr else (request.user.first_name or get_actor_name(request))
+                    FarmActivity.objects.create(
+                        farm=farm,
+                        activity_type="Other Land Care",
+                        asset_name=f"Farm '{land_name}' Inactivated",
+                        quantity_metric=f"{farm.total_area} Ac",
+                        operator_name=op_name,
+                        notes=f"Farm land marked Inactive by {op_name}."
+                    )
+                    log_action(request, "Farm Inactivated", f"Farm '{land_name}' marked as Inactive.", icon_class="ri-pause-circle-line", bg_color="warning")
+                    if is_ajax:
+                        return JsonResponse({
+                            'success': True,
+                            'inactivated': True,
+                            'message': f"Farm '{land_name}' has been marked as Inactive."
+                        })
+                    messages.success(request, f"Farm '{land_name}' has been marked as Inactive.")
+                    return redirect('farmer-farms')
+
+                # 2. Check for child module dependencies before allowing hard delete
+                # A) Crop splits
+                crop_count = farm.splits.count()
+
+                # B) Tasks
+                task_count = FarmTask.objects.filter(farm=farm).count()
+
+                # C) Resource Consumptions
+                stock_logs_count = InventoryStockLog.objects.filter(farm=farm).count()
+                consumption_acts_count = FarmActivity.objects.filter(
+                    farm=farm,
+                    activity_type="Resource Consumption"
+                ).count()
+                consumption_count = stock_logs_count + consumption_acts_count
+
+                # D) Expenses / Ledger Transactions
+                farm_tag = f"Farm ID: {farm.id}"
+                expense_count = LedgerTransaction.objects.filter(farmer=farmer_prof).filter(
+                    Q(farm=farm) | Q(tags__icontains=farm_tag) | Q(description__icontains=farm_tag)
+                ).count()
+
+                dependencies = []
+                if crop_count > 0:
+                    dependencies.append(f"{crop_count} Crop{'s' if crop_count > 1 else ''}")
+                if task_count > 0:
+                    dependencies.append(f"{task_count} Task{'s' if task_count > 1 else ''}")
+                if consumption_count > 0:
+                    dependencies.append(f"{consumption_count} Consumption log{'s' if consumption_count > 1 else ''}")
+                if expense_count > 0:
+                    dependencies.append(f"{expense_count} Expense transaction{'s' if expense_count > 1 else ''}")
+
+                # If ANY module record has been created, BLOCK hard deletion
+                if dependencies:
+                    dep_str = ", ".join(dependencies)
+                    err_msg = f"Cannot delete '{land_name}' because it has linked records ({dep_str}). You can mark it as Inactive instead."
+                    if is_ajax:
+                        return JsonResponse({
+                            'success': False,
+                            'has_dependencies': True,
+                            'dependencies': dependencies,
+                            'farm_id': farm.id,
+                            'land_name': land_name,
+                            'error': err_msg
+                        })
+                    messages.warning(request, err_msg)
+                    return redirect('farmer-farms')
+
+                # 3. Clean up setup logs and delete farm if NO dependencies exist
+                FarmActivity.objects.filter(farm=farm).delete()
                 farm.delete()
                 log_action(request, "Farm Deleted", f"Farm '{land_name}' was deleted.", icon_class="ri-delete-bin-line", bg_color="danger")
+                if is_ajax:
+                    return JsonResponse({'success': True, 'message': f"Farm '{land_name}' deleted successfully!"})
                 messages.success(request, "Farm deleted successfully!")
             except Farm.DoesNotExist:
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': "Farm not found or you don't have permission."})
                 messages.error(request, "Farm not found or you don't have permission.")
+            except Exception as e:
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': str(e)})
+                messages.error(request, f"Error deleting farm: {str(e)}")
     return redirect('farmer-farms')
 
 def update_farm(request):
+    if request.method == "POST":
+        from apps.farmer.validation import pincode_error
+        error = pincode_error(request)
+        if error is not None:
+            return error
+
     from django.contrib import messages
     from django.shortcuts import redirect
     from apps.farmer.models import Farm
@@ -1741,20 +2630,32 @@ def update_farm(request):
 
                 farm.land_name = request.POST.get("land_name")
                 farm.total_area = total_area_str
-                crop_type_id = request.POST.get("crop_type")
+                raw_crop_ids = request.POST.getlist("crop_type") + request.POST.getlist("crops") + request.POST.getlist("crop")
+                crop_ids = [str(c).strip() for c in raw_crop_ids if c and str(c).strip()]
                 crop_name = request.POST.get("crop_name", "").strip()
 
-                if not crop_type_id and crop_name:
-                    from apps.superadmin.models import Crop, CropType
-                    crop_type_obj = CropType.objects.filter(name__iexact=crop_name).first()
-                    if not crop_type_obj:
-                        crop_type_obj = CropType.objects.create(name=crop_name, description=f"Auto-created crop type for {crop_name}", is_active=True)
+                from apps.superadmin.models import Crop, CropType
+                crop_objs = []
+                if crop_ids:
+                    crops_dict = {str(c.id): c for c in Crop.objects.filter(id__in=crop_ids)}
+                    for cid in crop_ids:
+                        if cid in crops_dict and crops_dict[cid] not in crop_objs:
+                            crop_objs.append(crops_dict[cid])
+                elif crop_name:
                     crop_obj = Crop.objects.filter(name__iexact=crop_name).first()
                     if not crop_obj:
+                        crop_type_obj = CropType.objects.filter(name__iexact=crop_name).first()
+                        if not crop_type_obj:
+                            crop_type_obj = CropType.objects.create(name=crop_name, description=f"Auto-created crop type for {crop_name}", is_active=True)
                         crop_obj = Crop.objects.create(name=crop_name, crop_type=crop_type_obj, description=f"Auto-created crop: {crop_name}", is_active=True)
-                    crop_type_id = crop_type_obj.id
+                    crop_objs = [crop_obj]
 
-                farm.crop_type_id = crop_type_id if crop_type_id else None
+                primary_crop = crop_objs[0] if crop_objs else None
+                primary_crop_type = primary_crop.crop_type if primary_crop and primary_crop.crop_type else None
+
+                farm.crop = primary_crop
+                farm.crop_type = primary_crop_type
+                farm.crops.set(crop_objs)
                 farm.latitude = request.POST.get("latitude")
                 farm.longitude = request.POST.get("longitude")
                 state_id = request.POST.get("state")
@@ -1797,25 +2698,51 @@ def update_farm(request):
 
 def farm_profile_api(request, farm_id):
     from django.http import JsonResponse
+    from django.db.models import Q, Sum
     from apps.farmer.models import Farm
 
-    farmer_prof = get_farmer_profile(request.user)
+    farmer_prof = get_farmer_profile(request)
+    active_mgr = get_active_manager_staff(request)
 
     try:
-        farm = Farm.objects.get(id=farm_id, farmer=farmer_prof)
-        splits = list(farm.splits.all().order_by('-id').values(
+        if active_mgr:
+            mgr_farm_filter = Q(created_by_staff=active_mgr) | Q(splits__supervisors=active_mgr) | Q(splits__supervisor=active_mgr)
+            farm = Farm.objects.filter(id=farm_id, farmer=farmer_prof).filter(mgr_farm_filter).distinct().first()
+            if not farm:
+                return JsonResponse({'success': False, 'error': 'Farm not found or access denied.'}, status=404)
+            splits_qs = farm.splits.filter(
+                Q(supervisors=active_mgr) | Q(supervisor=active_mgr) | Q(farm__created_by_staff=active_mgr)
+            ).distinct()
+        else:
+            farm = Farm.objects.get(id=farm_id, farmer=farmer_prof)
+            splits_qs = farm.splits.all()
+
+        splits_models = {cs.id: cs for cs in splits_qs.prefetch_related('supervisors', 'supervisor')}
+        splits = list(splits_qs.order_by('-id').values(
             'id', 'crop_id', 'crop__name', 'crop_category', 'crop_pattern', 'crop_variety',
-            'harvest_type', 'total_flushes', 'acreage', 'crop_latitude', 'crop_longitude', 'row_count', 'plant_count',
+            'harvest_type', 'total_flushes', 'current_flush', 'acreage', 'crop_latitude', 'crop_longitude', 'row_count', 'plant_count',
             'growth_duration', 'duration_min', 'duration_max', 'start_date', 'stage',
             'supervisor_id', 'supervisor__name', 'cultivation_method',
             'expected_yield', 'expected_yield_unit', 'crop_notes', 'harvest_batches', 'seed_details', 'plant_spacing',
             'yield_tons', 'price_per_mt', 'total_sale_value', 'has_advanced_details'
         ))
-        from django.db.models import Q
         from apps.farmer.models import CropSplit
         from apps.superadmin.models import DepotCropPricing, DepotTerminal, MarketPriceIndex
 
         for split in splits:
+            cs_obj = splits_models.get(split['id'])
+            if cs_obj:
+                sup_list = list(cs_obj.supervisors.all())
+                if not sup_list and cs_obj.supervisor:
+                    sup_list = [cs_obj.supervisor]
+                split['supervisor_ids'] = [s.id for s in sup_list]
+                split['supervisor_names'] = [s.name for s in sup_list]
+                if sup_list:
+                    split['supervisor__name'] = ', '.join([s.name for s in sup_list])
+            else:
+                split['supervisor_ids'] = [split['supervisor_id']] if split.get('supervisor_id') else []
+                split['supervisor_names'] = [split['supervisor__name']] if split.get('supervisor__name') else []
+
             split['start_date_formatted'] = split['start_date'].strftime('%Y-%m-%d') if split['start_date'] else ''
             if split['yield_tons'] is not None:
                 y_val = float(split['yield_tons'])
@@ -1823,12 +2750,14 @@ def farm_profile_api(request, farm_id):
             if split['expected_yield'] is not None:
                 ey_val = float(split['expected_yield'])
                 split['expected_yield'] = int(ey_val) if ey_val.is_integer() else ey_val
+            split['is_completed'] = bool(split.get('crop_notes') and '[ALL_FLUSHES_COMPLETED]' in split['crop_notes'])
             if split['price_per_mt'] is not None:
                 p_val = float(split['price_per_mt'])
                 split['price_per_mt'] = int(p_val) if p_val.is_integer() else p_val
 
             c_name = split.get('crop__name')
             market_price = 0.0
+            market_price_unit = ''
             if c_name:
                 clean_name = c_name.split('(')[0].strip()
 
@@ -1844,6 +2773,8 @@ def farm_profile_api(request, farm_id):
                     
                     if local_dcp and local_dcp.terminal_rate and float(local_dcp.terminal_rate) > 0:
                         market_price = float(local_dcp.terminal_rate)
+                        if local_dcp.crop_index and local_dcp.crop_index.unit:
+                            market_price_unit = local_dcp.crop_index.unit
                     
                     if market_price == 0.0:
                         # 2. Local DepotTerminal available_crops
@@ -1861,6 +2792,7 @@ def farm_profile_api(request, farm_id):
                                             price_val = 0.0
                                         if clean_name.lower() in item_name.lower() and price_val > 0:
                                             market_price = price_val
+                                            market_price_unit = crop_item.get('unit', '')
                                             break
                                     if market_price > 0:
                                         break
@@ -1873,8 +2805,10 @@ def farm_profile_api(request, farm_id):
 
                     if mpi and mpi.base_price and float(mpi.base_price) > 0:
                         market_price = float(mpi.base_price)
+                        market_price_unit = mpi.unit or ''
 
             split['market_price'] = int(market_price) if market_price.is_integer() else market_price
+            split['market_price_unit'] = market_price_unit
 
             # Clean crop_notes if it was legacy JSON
             if split.get('crop_notes') and str(split['crop_notes']).strip().startswith('['):
@@ -1892,6 +2826,8 @@ def farm_profile_api(request, farm_id):
                 split['harvest_batches'] = h_batches
             else:
                 split['harvest_batches'] = []
+            from apps.farmer.harvest_batches import normalize_batch_numbers
+            split['harvest_batches'] = normalize_batch_numbers(split['harvest_batches'])
         activities = list(farm.activities.all().order_by('-created_at', '-id').values(
             'id', 'activity_type', 'asset_name', 'quantity_metric',
             'operator_name', 'notes', 'amount', 'created_at'
@@ -1900,6 +2836,7 @@ def farm_profile_api(request, farm_id):
         # format dates and amounts
         for a in activities:
             a['created_at_formatted'] = a['created_at'].strftime('%Y-%m-%d')
+            a['created_at_iso'] = a['created_at'].isoformat() if a.get('created_at') else ''
             a['amount'] = float(a['amount']) if a['amount'] else 0.0
 
         from django.db.models import Sum as _Sum
@@ -1924,24 +2861,32 @@ def farm_profile_api(request, farm_id):
                 'work_timeline': t.work_timeline or 'Full Day',
                 'associated_split_id': t.associated_split.id if t.associated_split else None,
                 'crop_name': t.associated_split.crop.name if t.associated_split and t.associated_split.crop else '',
-                'assigned_worker__name': worker_list[0]['name'] if worker_list else '',
+                'assigned_worker__name': ', '.join([w['name'] for w in worker_list]) if worker_list else '',
                 'assigned_workers': worker_list,
                 'status': t.status or 'Pending',
                 'start_date': t.start_date.strftime('%Y-%m-%d') if t.start_date else (t.task_date.strftime('%Y-%m-%d') if t.task_date else ''),
                 'end_date': t.end_date.strftime('%Y-%m-%d') if t.end_date else '',
                 'start_time': t.start_time.strftime('%H:%M') if t.start_time else '',
                 'end_time': t.end_time.strftime('%H:%M') if t.end_time else '',
-                'total_hours': t.total_hours if t.total_hours is not None else '',
-                'actual_hours': t.actual_hours if t.actual_hours is not None else '',
+                'start_time_formatted': t.start_time.strftime('%I:%M %p') if t.start_time else '',
+                'end_time_formatted': t.end_time.strftime('%I:%M %p') if t.end_time else '',
+                'total_hours': float(t.total_hours) if t.total_hours is not None else '',
+                'actual_hours': float(t.actual_hours) if t.actual_hours is not None else '',
                 'created_at_formatted': t.created_at.strftime('%Y-%m-%d') if t.created_at else '',
+                'created_at_iso': t.created_at.isoformat() if t.created_at else '',
                 'farm_id': t.farm.id if t.farm else farm.id,
                 'farm_name': t.farm.land_name if t.farm else farm.land_name,
             })
 
-        from django.db.models import Sum, Q
         from apps.farmer.models import FarmerStaff, LedgerTransaction
         workers = list(FarmerStaff.objects.filter(farmer=farmer_prof).values('id', 'name', 'role'))
         managers = list(FarmerStaff.objects.filter(farmer=farmer_prof).filter(Q(is_role_manager=True) | Q(role__iexact='Manager')).values('id', 'name', 'role'))
+
+        try:
+            from apps.farmer.recurring_utils import process_recurring_expenses
+            process_recurring_expenses(farmer_prof, request=request)
+        except Exception:
+            pass
 
         # Fetch expenses specific to this farm
         expenses_qs = LedgerTransaction.objects.filter(
@@ -1965,15 +2910,25 @@ def farm_profile_api(request, farm_id):
         )
 
         expenses = list(expenses_qs.order_by('-close_date', '-id').values(
-            'id', 'description', 'category', 'amount', 'close_date', 'tags', 'status', 'payment_method'
+            'id', 'description', 'category', 'amount', 'balance_due', 'close_date', 'tags', 'status', 'payment_method', 'created_at'
         ))
         for exp in expenses:
             exp['date_formatted'] = exp['close_date'].strftime('%Y-%m-%d') if exp['close_date'] else ''
-            exp['amount'] = abs(float(exp['amount']))
+            exp['created_at_iso'] = exp['created_at'].isoformat() if exp.get('created_at') else ''
+            actual = abs(float(exp['amount'] or 0))
+            bal = float(exp.get('balance_due') or 0)
+            paid = max(0.0, actual - bal)
+            exp['amount'] = actual
+            exp['actual_price'] = actual
+            exp['balance_due'] = bal
+            exp['paid_amount'] = paid
 
         # Fetch sales for this farm
         sales_qs = LedgerTransaction.objects.filter(
             farmer=farmer_prof
+        ).exclude(
+            category='Harvest Trade',
+            description__istartswith='Harvest Trade Settlement'
         ).filter(
             Q(farm=farm) | Q(tags__icontains=f"Farm ID: {farm.id}") | Q(tags__icontains="CropSplit #")
         ).filter(
@@ -1981,15 +2936,63 @@ def farm_profile_api(request, farm_id):
         ).order_by('-close_date', '-id')
 
         sales = list(sales_qs.values(
-            'id', 'description', 'category', 'amount', 'quantity', 'unit', 'close_date', 'status', 'tags', 'payment_method'
+            'id', 'description', 'category', 'amount', 'quantity', 'unit', 'close_date', 'status', 'tags', 'payment_method', 'created_at'
         ))
+        import re
         for s in sales:
             s['date_formatted'] = s['close_date'].strftime('%d %b %Y') if s['close_date'] else ''
+            s['created_at_iso'] = s['created_at'].isoformat() if s.get('created_at') else ''
             s['amount'] = float(s['amount'])
             s['quantity'] = float(s['quantity']) if s['quantity'] else None
 
+            # Parse paid and pending amounts from description or status
+            desc = s.get('description') or ''
+            m = re.search(r'\[Paid:\s*₹?([\d.,]+),\s*Pending:\s*₹?([\d.,]+)\]', desc)
+            if m:
+                try:
+                    s['paid'] = float(m.group(1).replace(',', ''))
+                    s['pending'] = float(m.group(2).replace(',', ''))
+                except (ValueError, TypeError):
+                    s['paid'] = s['amount']
+                    s['pending'] = 0.0
+            elif s.get('status') in ['Received', 'Paid', 'Income', 'Settled']:
+                s['paid'] = s['amount']
+                s['pending'] = 0.0
+            elif s.get('status') == 'Pending':
+                s['paid'] = 0.0
+                s['pending'] = s['amount']
+            else:
+                s['paid'] = s['amount']
+                s['pending'] = 0.0
+
+            # Extract customer name if 'to <Customer>'
+            cust_m = re.search(r'to\s+([^\[\(]+)', desc)
+            if cust_m:
+                s['customer'] = cust_m.group(1).strip()
+            else:
+                s['customer'] = ''
+
+        active_sub = farmer_prof.subscriptions.filter(subscription_status='active').order_by('-id').first() if farmer_prof else None
+        max_crops = "unlimited"
+        current_active_crops_qs = CropSplit.objects.filter(farm__farmer=farmer_prof).exclude(stage='Inactive')
+        if active_mgr:
+            current_active_crops_qs = current_active_crops_qs.filter(
+                Q(supervisors=active_mgr) | Q(supervisor=active_mgr) | Q(farm__created_by_staff=active_mgr)
+            ).distinct()
+        current_active_crops = current_active_crops_qs.count() if farmer_prof else 0
+        crop_limit_reached = False
+        if active_sub and active_sub.package:
+            max_crops_str = str(active_sub.package.my_crop or '').lower().strip()
+            if max_crops_str and max_crops_str != "unlimited":
+                m_crop = re.search(r'\d+', max_crops_str)
+                if m_crop:
+                    max_crops_val = int(m_crop.group())
+                    max_crops = str(max_crops_val)
+                    crop_limit_reached = (current_active_crops >= max_crops_val)
+
         return JsonResponse({
             'success': True,
+            'is_acting_as_manager': bool(active_mgr),
             'farm': {
                 'id': farm.id,
                 'name': farm.land_name,
@@ -2008,10 +3011,231 @@ def farm_profile_api(request, farm_id):
             'total_consumption_value': total_consumption_value,
             'total_budget': total_budget,
             'seeds_cost': seeds_cost,
-            'fertilizers_cost': fertilizers_cost
+            'fertilizers_cost': fertilizers_cost,
+            'max_crops': max_crops,
+            'current_active_crops': current_active_crops,
+            'crop_limit_reached': crop_limit_reached,
         })
     except Farm.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Farm not found'}, status=404)
+
+
+def get_manager_crops_api(request):
+    """
+    Returns list of managers and all farms & crop splits for assignment configuration.
+    """
+    farmer_prof = get_farmer_profile(request.user)
+    if not farmer_prof:
+        return JsonResponse({'success': False, 'error': 'Farmer profile not found.'}, status=403)
+
+    from apps.farmer.models import Farm, CropSplit, FarmerStaff
+    from django.db.models import Q
+
+    managers_qs = FarmerStaff.objects.filter(farmer=farmer_prof).filter(
+        Q(is_role_manager=True) | Q(role__iexact='Manager')
+    ).order_by('name')
+
+    manager_id = request.GET.get('manager_id')
+    selected_mgr = None
+    if manager_id:
+        try:
+            selected_mgr = managers_qs.filter(id=int(manager_id)).first()
+        except (ValueError, TypeError):
+            selected_mgr = None
+    elif managers_qs.exists():
+        selected_mgr = managers_qs.first()
+
+    managers_data = []
+    for m in managers_qs:
+        assigned_crops_cnt = CropSplit.objects.filter(farm__farmer=farmer_prof).filter(
+            Q(supervisors=m) | Q(supervisor=m)
+        ).distinct().count()
+        assigned_farms_cnt = Farm.objects.filter(farmer=farmer_prof).filter(
+            Q(created_by_staff=m) | Q(splits__supervisors=m) | Q(splits__supervisor=m)
+        ).distinct().count()
+        managers_data.append({
+            'id': m.id,
+            'name': m.name,
+            'mobile': m.mobile_number or '',
+            'role': m.role or 'Manager',
+            'assigned_crops_count': assigned_crops_cnt,
+            'assigned_farms_count': assigned_farms_cnt,
+            'is_selected': bool(selected_mgr and selected_mgr.id == m.id)
+        })
+
+    farms_qs = Farm.objects.filter(farmer=farmer_prof).prefetch_related('splits__crop', 'splits__supervisor', 'splits__supervisors').order_by('land_name')
+    farms_data = []
+    total_assigned_to_selected = 0
+    total_crops_overall = 0
+
+    for f in farms_qs:
+        f_splits = f.splits.all().order_by('-id')
+        crops_list = []
+        farm_has_assigned = False
+
+        for sp in f_splits:
+            total_crops_overall += 1
+            sup_objs = list(sp.supervisors.all())
+            if not sup_objs and sp.supervisor:
+                sup_objs = [sp.supervisor]
+            sup_ids = [s.id for s in sup_objs]
+            sup_names = [s.name for s in sup_objs]
+
+            is_assigned = (selected_mgr is not None and selected_mgr.id in sup_ids)
+            if is_assigned:
+                total_assigned_to_selected += 1
+                farm_has_assigned = True
+
+            other_supervisors = [s.name for s in sup_objs if not selected_mgr or s.id != selected_mgr.id]
+
+            crops_list.append({
+                'id': sp.id,
+                'crop_name': sp.crop.name if sp.crop else 'Crop Field',
+                'crop_variety': sp.crop_variety or '',
+                'acreage': float(sp.acreage or 0),
+                'stage': sp.stage or 'Sown',
+                'supervisor_id': sp.supervisor_id,
+                'supervisor_name': ', '.join(sup_names) if sup_names else 'Unassigned',
+                'supervisors': [{'id': s.id, 'name': s.name} for s in sup_objs],
+                'is_assigned': is_assigned,
+                'is_assigned_to_other': len(other_supervisors) > 0,
+                'other_supervisors': other_supervisors
+            })
+
+        farms_data.append({
+            'id': f.id,
+            'land_name': f.land_name,
+            'total_area': float(f.total_area or 0),
+            'crops_count': len(crops_list),
+            'has_assigned_crops': farm_has_assigned,
+            'crops': crops_list
+        })
+
+    return JsonResponse({
+        'success': True,
+        'managers': managers_data,
+        'selected_manager': {
+            'id': selected_mgr.id,
+            'name': selected_mgr.name,
+            'mobile': selected_mgr.mobile_number or '',
+        } if selected_mgr else None,
+        'farms': farms_data,
+        'total_crops': total_crops_overall,
+        'total_assigned': total_assigned_to_selected
+    })
+
+
+@csrf_exempt
+def save_manager_crops_api(request):
+    """
+    Saves multiple crop assignments for a specific manager without overwriting other managers.
+    Request body (JSON or POST):
+    - manager_id: int
+    - crop_split_ids: list of int
+    """
+    if request.method != "POST":
+        return JsonResponse({'success': False, 'error': 'POST method required.'}, status=405)
+
+    farmer_prof = get_farmer_profile(request.user)
+    if not farmer_prof:
+        return JsonResponse({'success': False, 'error': 'Farmer profile not found.'}, status=403)
+
+    import json
+    from apps.farmer.models import Farm, CropSplit, FarmerStaff
+    from django.db.models import Q
+
+    try:
+        if request.content_type and 'application/json' in request.content_type:
+            payload = json.loads(request.body.decode('utf-8'))
+        else:
+            payload = request.POST
+
+        manager_id = payload.get('manager_id')
+        if not manager_id:
+            return JsonResponse({'success': False, 'error': 'Manager selection is required.'}, status=400)
+
+        manager = FarmerStaff.objects.filter(id=manager_id, farmer=farmer_prof).filter(
+            Q(is_role_manager=True) | Q(role__iexact='Manager')
+        ).first()
+
+        if not manager:
+            return JsonResponse({'success': False, 'error': 'Selected manager not found or not authorized.'}, status=404)
+
+        raw_split_ids = payload.get('crop_split_ids')
+        if isinstance(raw_split_ids, str):
+            try:
+                raw_split_ids = json.loads(raw_split_ids)
+            except Exception:
+                raw_split_ids = [s.strip() for s in raw_split_ids.split(',') if s.strip()]
+
+        if raw_split_ids is None:
+            raw_split_ids = []
+
+        valid_split_ids = []
+        for sid in raw_split_ids:
+            try:
+                valid_split_ids.append(int(sid))
+            except (ValueError, TypeError):
+                pass
+
+        # Only IDs belonging to this farmer may be persisted or counted.
+        crops_to_add = list(CropSplit.objects.filter(
+            farm__farmer=farmer_prof,
+            id__in=valid_split_ids
+        ).distinct())
+        valid_split_ids = [cs.id for cs in crops_to_add]
+
+        with transaction.atomic():
+            # 1. Unassign crops previously assigned to this manager that are no
+            # longer checked. Keep any other manager assignments intact.
+            crops_to_remove = CropSplit.objects.filter(
+                farm__farmer=farmer_prof
+            ).filter(
+                Q(supervisors=manager) | Q(supervisor=manager)
+            ).exclude(id__in=valid_split_ids).distinct()
+
+            for cs in crops_to_remove:
+                cs.supervisors.remove(manager)
+                if cs.supervisor_id == manager.id:
+                    cs.supervisor = cs.supervisors.first()
+                    cs.save(update_fields=['supervisor'])
+
+            # 2. Assign every currently checked crop to this manager.
+            for cs in crops_to_add:
+                cs.supervisors.add(manager)
+                if not cs.supervisor_id:
+                    cs.supervisor = manager
+                    cs.save(update_fields=['supervisor'])
+
+        assigned_count = len(crops_to_add)
+
+        # 3. Get distinct lands where this manager now has crops
+        assigned_lands_count = Farm.objects.filter(
+            farmer=farmer_prof
+        ).filter(
+            Q(created_by_staff=manager) | Q(splits__supervisors=manager) | Q(splits__supervisor=manager)
+        ).distinct().count()
+
+        log_action(
+            request,
+            title="Manager Crop Assignments Updated",
+            message=f"Assigned {assigned_count} crop(s) across {assigned_lands_count} land(s) to Manager {manager.name}.",
+            icon_class="ri-user-shared-line",
+            bg_color="success"
+        )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Updated assignments for {manager.name}: {assigned_count} crop(s) assigned across {assigned_lands_count} land(s).',
+            'assigned_count': assigned_count,
+            'assigned_lands_count': assigned_lands_count
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 
 def parse_crop_split_fields(request):
     data = {}
@@ -2020,13 +3244,16 @@ def parse_crop_split_fields(request):
     data['crop_variety'] = request.POST.get('crop_variety') or None
     data['harvest_type'] = request.POST.get('harvest_type') or 'single'
     total_flushes_str = request.POST.get('total_flushes')
-    if total_flushes_str:
-        try:
-            data['total_flushes'] = max(1, int(total_flushes_str))
-        except ValueError:
-            data['total_flushes'] = 1 if data['harvest_type'] == 'single' else 3
+    if data['harvest_type'] in ['multiple', 'Multiple Harvest']:
+        if total_flushes_str:
+            try:
+                data['total_flushes'] = max(2, int(total_flushes_str))
+            except ValueError:
+                data['total_flushes'] = None
+        else:
+            data['total_flushes'] = None
     else:
-        data['total_flushes'] = 1 if data['harvest_type'] == 'single' else 3
+        data['total_flushes'] = 1
     
     sowing_date_str = request.POST.get('sowing_date')
     if sowing_date_str:
@@ -2075,6 +3302,7 @@ def parse_crop_split_fields(request):
     data['crop_notes'] = request.POST.get('crop_notes') or None
     data['seed_details'] = request.POST.get('seed_details') or None
     data['plant_spacing'] = request.POST.get('plant_spacing') or None
+    data['cultivation_method'] = (request.POST.get('cultivation_method') or '').strip() or None
     
     return data
 
@@ -2111,8 +3339,12 @@ def add_crop_split(request):
 
                 acreage = request.POST.get('acreage') or request.POST.get('crop_area') or '1'
                 duration = request.POST.get('growth_duration') or request.POST.get('duration_min') or 90
-                method = request.POST.get('cultivation_method') or 'Standard'
-                supervisor_id = request.POST.get('supervisor') or None
+                raw_supervisors = request.POST.getlist('supervisors') or request.POST.getlist('supervisor')
+                supervisor_ids = [int(s) for s in raw_supervisors if str(s).isdigit() and int(s) > 0]
+                active_mgr = get_active_manager_staff(request)
+                if active_mgr and active_mgr.id not in supervisor_ids:
+                    supervisor_ids.append(active_mgr.id)
+                primary_supervisor_id = supervisor_ids[0] if supervisor_ids else None
 
                 # Check Crop count limit
                 import re
@@ -2130,9 +3362,9 @@ def add_crop_split(request):
                     match_crop = re.search(r'[\d]+', max_crops_str)
                     if match_crop:
                         max_crops = int(match_crop.group())
-                        current_crop_count = CropSplit.objects.filter(farm__farmer=farmer_prof).count()
+                        current_crop_count = CropSplit.objects.filter(farm__farmer=farmer_prof).exclude(stage='Inactive').count()
                         if current_crop_count >= max_crops:
-                            err_msg = f"Cannot add crop segment. Your package allows a maximum of {max_crops} crops."
+                            err_msg = f"Cannot add crop segment. Your package allows a maximum of {max_crops} active crops. Please inactivate another crop first."
                             if is_ajax: return JsonResponse({'success': False, 'error': err_msg})
                             messages.error(request, err_msg)
                             return redirect('farmer-farms')
@@ -2143,7 +3375,7 @@ def add_crop_split(request):
                 except ValueError:
                     split_acreage = 0.0
 
-                allocated = CropSplit.objects.filter(farm=farm).exclude(stage__in=['Harvested', 'Sold']).aggregate(Sum('acreage'))['acreage__sum'] or 0.0
+                allocated = CropSplit.objects.filter(farm=farm).exclude(stage__in=['Harvested', 'Sold', 'Inactive']).aggregate(Sum('acreage'))['acreage__sum'] or 0.0
                 unallocated = float(farm.total_area) - float(allocated)
 
                 if split_acreage > (unallocated + 0.001):
@@ -2154,6 +3386,7 @@ def add_crop_split(request):
 
                 adv_fields = parse_crop_split_fields(request)
                 has_advanced = request.POST.get('has_advanced_details') in ['yes', 'on', 'true', True, '1', 1]
+                method = (request.POST.get('cultivation_method') or adv_fields.get('cultivation_method') or '').strip()
 
                 crop_split = CropSplit.objects.create(
                     farm=farm,
@@ -2173,7 +3406,7 @@ def add_crop_split(request):
                     duration_min=adv_fields.get('duration_min') if has_advanced else None,
                     duration_max=adv_fields.get('duration_max') if has_advanced else None,
                     cultivation_method=method if has_advanced else None,
-                    supervisor_id=supervisor_id if (supervisor_id and has_advanced) else None,
+                    supervisor_id=primary_supervisor_id,
                     start_date=adv_fields.get('start_date'),
                     expected_yield=adv_fields.get('expected_yield') if has_advanced else None,
                     expected_yield_unit=adv_fields.get('expected_yield_unit') if has_advanced else 'Ton',
@@ -2182,16 +3415,21 @@ def add_crop_split(request):
                     plant_spacing=adv_fields.get('plant_spacing') if has_advanced else None,
                 )
 
-                op_name = crop_split.supervisor.name if crop_split.supervisor else get_actor_name(request)
+                if supervisor_ids:
+                    crop_split.supervisors.set(supervisor_ids)
+
+                active_mgr = get_active_manager_staff(request)
+                op_name = active_mgr.name if active_mgr else (request.user.first_name or (crop_split.supervisor.name if crop_split.supervisor else get_actor_name(request)))
 
                 from apps.farmer.models import FarmActivity
+                notes_method = f" using {method} method" if method else ""
                 FarmActivity.objects.create(
                     farm=farm,
                     activity_type='Seeds Sowing',
                     asset_name=crop_split.crop.name if crop_split.crop else 'Crop',
                     operator_name=op_name,
                     quantity_metric=f"{split_acreage} Acres",
-                    notes=f"Initial crop split creation for {crop_split.crop.name if crop_split.crop else 'Crop'} using {method} method."
+                    notes=f"Initial crop split creation for {crop_split.crop.name if crop_split.crop else 'Crop'}{notes_method} by {op_name}. | CropSplit #{crop_split.id}"
                 )
 
                 # Check for auto task generation
@@ -2209,6 +3447,7 @@ def add_crop_split(request):
                             task_date = base_date + timedelta(days=stage.day_offset)
                             FarmTask.objects.create(
                                 farm=farm,
+                                farmer=farmer_prof or (farm.farmer if farm else None),
                                 associated_split=crop_split,
                                 title=stage.milestone_title,
                                 description=f"Activity: {stage.activity_type}",
@@ -2268,7 +3507,7 @@ def edit_crop_split(request):
                         new_acreage = float(split.acreage)
 
                     from django.db.models import Sum
-                    other_splits_area = CropSplit.objects.filter(farm=farm).exclude(id=split.id).exclude(stage__in=['Harvested', 'Sold']).aggregate(Sum('acreage'))['acreage__sum'] or 0.0
+                    other_splits_area = CropSplit.objects.filter(farm=farm).exclude(id=split.id).exclude(stage__in=['Harvested', 'Sold', 'Inactive']).aggregate(Sum('acreage'))['acreage__sum'] or 0.0
                     available = float(farm.total_area) - float(other_splits_area)
                     if new_acreage > (available + 0.001):
                         err_msg = f"Acreage exceeds available land on this farm. Available: {max(0.0, available):.2f} Acres"
@@ -2287,9 +3526,18 @@ def edit_crop_split(request):
                         pass
                 if method:
                     split.cultivation_method = method
-                if supervisor_id is not None:
+                raw_supervisors = request.POST.getlist('supervisors') or request.POST.getlist('supervisor')
+                if raw_supervisors:
+                    supervisor_ids = [int(s) for s in raw_supervisors if str(s).isdigit() and int(s) > 0]
+                    split.supervisors.set(supervisor_ids)
+                    split.supervisor_id = supervisor_ids[0] if supervisor_ids else None
+                elif supervisor_id is not None:
                     split.supervisor_id = supervisor_id if (str(supervisor_id).isdigit() and int(supervisor_id) > 0) else None
-                if stage and stage in ['Sown', 'Vegetative', 'Flowering', 'Yield', 'Harvested', 'Sold']:
+                    if split.supervisor_id:
+                        split.supervisors.set([split.supervisor_id])
+                    else:
+                        split.supervisors.clear()
+                if stage and stage in ['Sown', 'Vegetative', 'Flowering', 'Yield', 'Harvested', 'Sold', 'Inactive']:
                     split.stage = stage
 
                 adv_fields = parse_crop_split_fields(request)
@@ -2310,6 +3558,8 @@ def edit_crop_split(request):
                 if has_advanced:
                     if 'crop_variety' in request.POST:
                         split.crop_variety = adv_fields.get('crop_variety')
+                    if 'cultivation_method' in request.POST:
+                        split.cultivation_method = (request.POST.get('cultivation_method') or '').strip() or None
                     if 'crop_latitude' in request.POST:
                         split.crop_latitude = adv_fields.get('crop_latitude')
                     if 'crop_longitude' in request.POST:
@@ -2343,12 +3593,24 @@ def edit_crop_split(request):
                     split.seed_details = None
                     split.plant_spacing = None
                     split.cultivation_method = None
-                    split.supervisor_id = None
                     split.expected_yield = None
 
                 split.save()
                 crop_name_str = split.crop.name if split.crop else 'Crop'
-                log_action(request, "Crop Segment Updated", f"Crop segment '{crop_name_str}' in '{farm.land_name}' was updated.", icon_class="ri-edit-line", bg_color="info")
+                active_mgr = get_active_manager_staff(request)
+                op_name = active_mgr.name if active_mgr else (request.user.first_name or (split.supervisor.name if split.supervisor else get_actor_name(request)))
+
+                from apps.farmer.models import FarmActivity
+                FarmActivity.objects.create(
+                    farm=farm,
+                    activity_type="Other Land Care",
+                    asset_name=f"{crop_name_str} Details Updated",
+                    operator_name=op_name,
+                    quantity_metric=f"{split.acreage} Ac",
+                    notes=f"Crop segment '{crop_name_str}' details updated by {op_name} | CropSplit #{split.id}."
+                )
+
+                log_action(request, "Crop Segment Updated", f"Crop segment '{crop_name_str}' in '{farm.land_name}' was updated by {op_name}.", icon_class="ri-edit-line", bg_color="info")
                 if is_ajax:
                     return JsonResponse({'success': True, 'message': 'Crop segment updated successfully!'})
                 messages.success(request, "Crop segment updated successfully!")
@@ -2360,6 +3622,7 @@ def edit_crop_split(request):
         return JsonResponse({'success': False, 'error': 'Invalid request'})
     return redirect('farmer-farms')
 
+@transaction.atomic
 def advance_crop_split(request):
     from django.http import JsonResponse
     from apps.farmer.models import CropSplit
@@ -2369,44 +3632,208 @@ def advance_crop_split(request):
     if request.method == "POST":
         split_id = request.POST.get('split_id')
         target_stage = request.POST.get('stage')
+        next_flush = request.POST.get('next_flush')
+        action = request.POST.get('action')
+        mark_completed = request.POST.get('mark_completed') == 'true' or action == 'complete'
         reset_batches = request.POST.get('reset_batches') == 'true'
 
         if split_id and farmer_prof:
             try:
-                split = CropSplit.objects.get(id=split_id, farm__farmer=farmer_prof)
-                valid_stages = ['Sown', 'Vegetative', 'Flowering', 'Yield', 'Harvested', 'Sold']
+                split = CropSplit.objects.select_for_update().get(id=split_id, farm__farmer=farmer_prof)
+                crop_name = split.crop.name if split.crop else 'Crop'
+
+                if mark_completed:
+                    split.stage = 'Harvested'
+                    current_notes = str(split.crop_notes or '')
+                    if '[ALL_FLUSHES_COMPLETED]' not in current_notes:
+                        split.crop_notes = (current_notes + ' [ALL_FLUSHES_COMPLETED]').strip()
+                    split.save()
+
+                    log_action(request, "Crop Cycle Finalized", f"Crop '{crop_name}' all harvest flushes completed in '{split.farm.land_name}'.", icon_class="ri-check-double-line", bg_color="success")
+                    return JsonResponse({
+                        'success': True,
+                        'stage': 'Harvested',
+                        'new_stage': 'Harvested',
+                        'is_completed': True,
+                        'current_flush': split.current_flush,
+                        'harvest_type': split.harvest_type
+                    })
+
+                # 1. Handle Active / Inactive switch toggle specifically
+                if action in ['toggle_status', 'set_active', 'set_inactive'] or target_stage in ['Active', 'Inactive']:
+                    is_activating = (action == 'set_active') or (target_stage == 'Active') or (action == 'toggle_status' and split.stage == 'Inactive')
+                    if is_activating:
+                        # Check subscription limit for active crops
+                        active_sub = farmer_prof.subscriptions.filter(subscription_status='active').order_by('-id').first()
+                        if active_sub and active_sub.package:
+                            max_crops_str = str(active_sub.package.my_crop or '').lower().strip()
+                            if max_crops_str and max_crops_str != "unlimited":
+                                match_crop = re.search(r'\d+', max_crops_str)
+                                if match_crop:
+                                    max_crops = int(match_crop.group())
+                                    current_active_crops = CropSplit.objects.filter(farm__farmer=farmer_prof).exclude(id=split.id).exclude(stage='Inactive').count()
+                                    if current_active_crops >= max_crops:
+                                        return JsonResponse({
+                                            'success': False,
+                                            'limit_reached': True,
+                                            'max_crops': max_crops,
+                                            'current_active': current_active_crops,
+                                            'error': f"You have reached your limit of {max_crops} active crops. Please inactivate another crop to activate this one."
+                                        })
+
+                        # Restore previous stage if saved, else target_stage or default 'Sown'
+                        notes = str(split.crop_notes or '')
+                        m_prev = re.search(r'\[PREV_STAGE:([^\]]+)\]', notes)
+                        if m_prev:
+                            restored_stage = m_prev.group(1).strip()
+                            split.crop_notes = re.sub(r'\[PREV_STAGE:[^\]]+\]', '', notes).strip()
+                        elif target_stage and target_stage in ['Sown', 'Vegetative', 'Flowering', 'Yield', 'Harvested']:
+                            restored_stage = target_stage
+                        else:
+                            restored_stage = 'Sown'
+
+                        split.stage = restored_stage
+                        split.save()
+
+                        from apps.farmer.models import FarmActivity
+                        active_mgr = get_active_manager_staff(request)
+                        op_name = active_mgr.name if active_mgr else (request.user.first_name or (split.supervisor.name if split.supervisor else get_actor_name(request)))
+                        FarmActivity.objects.create(
+                            farm=split.farm,
+                            activity_type="Other Land Care",
+                            asset_name=f"{crop_name} Activated",
+                            quantity_metric=f"{split.acreage} Ac",
+                            operator_name=op_name,
+                            notes=f"Crop cultivation reactivated in '{split.stage}' stage by {op_name} | CropSplit #{split.id}."
+                        )
+                        log_action(request, "Crop Activated", f"Crop '{crop_name}' status set to Active ({split.stage}) in '{split.farm.land_name}'.", icon_class="ri-check-circle-line", bg_color="success")
+                        return JsonResponse({
+                            'success': True,
+                            'is_active': True,
+                            'stage': split.stage,
+                            'new_stage': split.stage,
+                            'current_flush': split.current_flush,
+                            'harvest_type': split.harvest_type,
+                            'message': f"Crop activated in stage '{split.stage}'."
+                        })
+                    else:
+                        # Deactivate crop -> Inactive
+                        notes = str(split.crop_notes or '')
+                        notes = re.sub(r'\[PREV_STAGE:[^\]]+\]', '', notes).strip()
+                        if split.stage != 'Inactive':
+                            notes = f"{notes} [PREV_STAGE:{split.stage}]".strip()
+                        split.crop_notes = notes
+                        split.stage = 'Inactive'
+                        split.save()
+
+                        from apps.farmer.models import FarmActivity
+                        active_mgr = get_active_manager_staff(request)
+                        op_name = active_mgr.name if active_mgr else (request.user.first_name or (split.supervisor.name if split.supervisor else get_actor_name(request)))
+                        FarmActivity.objects.create(
+                            farm=split.farm,
+                            activity_type="Other Land Care",
+                            asset_name=f"{crop_name} Inactivated",
+                            quantity_metric=f"{split.acreage} Ac",
+                            operator_name=op_name,
+                            notes=f"Crop cultivation set to Inactive by {op_name} | CropSplit #{split.id}."
+                        )
+                        log_action(request, "Crop Inactivated", f"Crop '{crop_name}' status set to Inactive in '{split.farm.land_name}'.", icon_class="ri-pause-circle-line", bg_color="secondary")
+                        return JsonResponse({
+                            'success': True,
+                            'is_active': False,
+                            'stage': 'Inactive',
+                            'new_stage': 'Inactive',
+                            'current_flush': split.current_flush,
+                            'harvest_type': split.harvest_type,
+                            'message': "Crop marked as Inactive."
+                        })
+
+                valid_stages = ['Sown', 'Vegetative', 'Flowering', 'Yield', 'Harvested', 'Sold', 'Inactive']
 
                 if target_stage and target_stage in valid_stages:
-                    # Guard Multiple Harvest: do not allow starting new flush if all planned flushes are completed
-                    if target_stage == 'Yield' and (split.harvest_type in ['multiple', 'Multiple Harvest']) and (split.stage in ['Harvested', 'Sold']):
-                        batches = list(split.harvest_batches or [])
-                        current_flush = max([b.get('flush_no', 1) for b in batches], default=1)
-                        total_f = split.total_flushes or 1
-                        if current_flush >= total_f:
-                            return JsonResponse({
-                                'success': False,
-                                'error': f'All {total_f} / {total_f} planned harvest flushes have already been completed.'
-                            })
+                    if target_stage == split.stage and not next_flush and not reset_batches:
+                        return JsonResponse({
+                            'success': True, 'stage': split.stage, 'new_stage': split.stage,
+                            'current_flush': split.current_flush, 'harvest_type': split.harvest_type,
+                            'is_completed': bool(split.crop_notes and '[ALL_FLUSHES_COMPLETED]' in split.crop_notes),
+                        })
+                    # Prevent Single Harvest crops from re-entering Yield or earlier stages once Harvested/Sold
+                    is_multi = split.harvest_type in ['multiple', 'Multiple Harvest']
+                    if not is_multi and split.stage in ['Harvested', 'Sold'] and target_stage != split.stage:
+                        return JsonResponse({
+                            'success': False,
+                            'error': f"'{crop_name}' is a Single Harvest crop and has already been harvested. It cannot re-enter '{target_stage}'."
+                        })
+
+                    # Prevent Multiple Harvest crops from jumping stages once Harvested without next flush
+                    if is_multi and split.stage in ['Harvested', 'Sold'] and target_stage != split.stage and not next_flush:
+                        return JsonResponse({
+                            'success': False,
+                            'error': f"'{crop_name}' Flush #{split.current_flush} has already been harvested. Please use Next Flush Options to initiate the next cycle."
+                        })
+
+                    if split.crop_notes and '[ALL_FLUSHES_COMPLETED]' in split.crop_notes and target_stage != 'Harvested':
+                        return JsonResponse({
+                            'success': False,
+                            'error': f"All harvest flushes for '{crop_name}' have been completed. Cultivation is finished."
+                        })
+
+                    # If currently Inactive and transitioning to an active stage, check crop limit
+                    if split.stage == 'Inactive' and target_stage != 'Inactive':
+                        active_sub = farmer_prof.subscriptions.filter(subscription_status='active').order_by('-id').first()
+                        if active_sub and active_sub.package:
+                            max_crops_str = str(active_sub.package.my_crop or '').lower().strip()
+                            if max_crops_str and max_crops_str != "unlimited":
+                                match_crop = re.search(r'\d+', max_crops_str)
+                                if match_crop:
+                                    max_crops = int(match_crop.group())
+                                    current_active_crops = CropSplit.objects.filter(farm__farmer=farmer_prof).exclude(id=split.id).exclude(stage='Inactive').count()
+                                    if current_active_crops >= max_crops:
+                                        return JsonResponse({
+                                            'success': False,
+                                            'limit_reached': True,
+                                            'max_crops': max_crops,
+                                            'current_active': current_active_crops,
+                                            'error': f"You have reached your limit of {max_crops} active crops. Please inactivate another crop to activate this one."
+                                        })
+
+                    if next_flush:
+                        try:
+                            split.current_flush = int(next_flush)
+                        except (ValueError, TypeError):
+                            split.current_flush = (split.current_flush or 1) + 1
+                    elif target_stage == 'Sown' and split.stage == 'Harvested' and split.harvest_type in ['multiple', 'Multiple Harvest']:
+                        split.current_flush = (split.current_flush or 1) + 1
 
                     split.stage = target_stage
-                    # Never wipe past batches - keep all previous flushes intact!
+                    if split.crop_notes and '[ALL_FLUSHES_COMPLETED]' in split.crop_notes:
+                        split.crop_notes = split.crop_notes.replace('[ALL_FLUSHES_COMPLETED]', '').strip()
                     split.save()
 
                     # Log activity
                     from apps.farmer.models import FarmActivity
-                    op_name = split.supervisor.name if split.supervisor else get_actor_name(request)
+                    active_mgr = get_active_manager_staff(request)
+                    op_name = active_mgr.name if active_mgr else (request.user.first_name or (split.supervisor.name if split.supervisor else get_actor_name(request)))
                     h_type = split.harvest_type or 'Single Harvest'
+                    flush_str = f"Flush #{split.current_flush}" if (split.harvest_type in ['multiple', 'Multiple Harvest']) else ""
                     FarmActivity.objects.create(
                         farm=split.farm,
                         activity_type="Other Land Care",
-                        asset_name=f"{split.crop.name if split.crop else 'Crop'} Phase Update",
+                        asset_name=f"{crop_name} Phase Update",
                         quantity_metric=f"{split.acreage} Ac",
                         operator_name=op_name,
-                        notes=f"Crop cultivation stage updated to '{split.stage}' ({h_type})."
+                        notes=f"Crop cultivation stage updated to '{split.stage}' ({h_type} {flush_str}) by {op_name} | CropSplit #{split.id}."
                     )
 
-                    log_action(request, "Crop Stage Updated", f"Crop '{split.crop.name}' stage set to '{split.stage}' in '{split.farm.land_name}'.", icon_class="ri-refresh-line", bg_color="info")
-                    return JsonResponse({'success': True, 'stage': split.stage, 'new_stage': split.stage, 'harvest_type': split.harvest_type})
+                    log_action(request, "Crop Stage Updated", f"Crop '{crop_name}' stage set to '{split.stage}' ({flush_str}) in '{split.farm.land_name}'.", icon_class="ri-refresh-line", bg_color="info")
+                    return JsonResponse({
+                        'success': True,
+                        'stage': split.stage,
+                        'new_stage': split.stage,
+                        'is_completed': False,
+                        'current_flush': split.current_flush,
+                        'harvest_type': split.harvest_type
+                    })
 
                 stages = ['Sown', 'Vegetative', 'Flowering', 'Yield']
                 if split.stage in stages:
@@ -2416,14 +3843,15 @@ def advance_crop_split(request):
                         split.save()
 
                         from apps.farmer.models import FarmActivity
-                        op_name = split.supervisor.name if split.supervisor else get_actor_name(request)
+                        active_mgr = get_active_manager_staff(request)
+                        op_name = active_mgr.name if active_mgr else (request.user.first_name or (split.supervisor.name if split.supervisor else get_actor_name(request)))
                         FarmActivity.objects.create(
                             farm=split.farm,
                             activity_type="Other Land Care",
                             asset_name=f"{split.crop.name if split.crop else 'Crop'} Phase Update",
                             quantity_metric=f"{split.acreage} Ac",
                             operator_name=op_name,
-                            notes=f"Successfully advanced crop cultivation stage to {split.stage}."
+                            notes=f"Successfully advanced crop cultivation stage to '{split.stage}' by {op_name} | CropSplit #{split.id}."
                         )
 
                         log_action(request, "Crop Stage Advanced", f"Crop '{split.crop.name}' stage advanced to '{split.stage}' in '{split.farm.land_name}'.", icon_class="ri-refresh-line", bg_color="info")
@@ -2446,11 +3874,15 @@ def finalize_harvest_api(request):
         yield_tons = request.POST.get('yield_tons')
         price_per_mt = request.POST.get('price_per_mt')
         total_sale_value = request.POST.get('total_sale_value')
+        harvest_mode = request.POST.get('harvest_mode', 'complete')  # 'next_flush' or 'complete'
 
         if split_id and farmer_prof:
             try:
                 split = CropSplit.objects.get(id=split_id, farm__farmer=farmer_prof)
+                curr_flush = split.current_flush or 1
+                completed_flush = curr_flush
                 split.stage = 'Harvested'
+
                 if yield_tons: split.yield_tons = yield_tons
                 if price_per_mt: split.price_per_mt = price_per_mt
                 if total_sale_value: split.total_sale_value = total_sale_value
@@ -2467,7 +3899,9 @@ def finalize_harvest_api(request):
                 if not isinstance(parsed_batches, list):
                     parsed_batches = []
 
-                unit_str = request.POST.get('unit') or split.expected_yield_unit or 'MT'
+                unit_str = request.POST.get('unit') or split.expected_yield_unit or 'Ton'
+                if unit_str:
+                    split.expected_yield_unit = unit_str
                 if not parsed_batches and yield_tons and float(yield_tons) > 0:
                     parsed_batches = [{
                         "yield": float(yield_tons),
@@ -2476,21 +3910,20 @@ def finalize_harvest_api(request):
                         "quality": "Grade 1",
                         "unit": unit_str,
                         "status": "Ready",
-                        "flush_no": 1
+                        "flush_no": completed_flush
                     }]
 
                 if parsed_batches:
                     existing_batches = list(split.harvest_batches or [])
-                    max_flush = max([b.get('flush_no', 1) for b in existing_batches], default=0)
-                    new_flush_no = max_flush + 1
                     
                     for b in parsed_batches:
-                        if 'flush_no' not in b:
-                            b['flush_no'] = new_flush_no
+                        if 'flush_no' not in b or not b['flush_no']:
+                            b['flush_no'] = completed_flush
                         if 'status' not in b:
                             b['status'] = 'Ready'
                     
-                    all_batches = existing_batches + parsed_batches
+                    from apps.farmer.harvest_batches import normalize_batch_numbers
+                    all_batches = normalize_batch_numbers(normalize_batch_numbers(existing_batches) + parsed_batches)
                     split.harvest_batches = all_batches
 
                     # Cumulative yield & sale value totals across all batches
@@ -2508,37 +3941,27 @@ def finalize_harvest_api(request):
                 import datetime
 
                 unit_str = request.POST.get('unit') or split.expected_yield_unit or 'MT'
-                op_name = split.supervisor.name if split.supervisor else get_actor_name(request)
+                active_mgr = get_active_manager_staff(request)
+                op_name = active_mgr.name if active_mgr else (request.user.first_name or (split.supervisor.name if split.supervisor else get_actor_name(request)))
                 crop_title = split.crop.name if split.crop else 'Crop'
-                sale_val = float(total_sale_value) if total_sale_value else 0.0
-
+                flush_label = f"Flush #{completed_flush}" if (split.harvest_type in ['multiple', 'Multiple Harvest']) else "Harvest"
                 FarmActivity.objects.create(
                     farm=split.farm,
                     activity_type="Other Land Care",
-                    asset_name=f"{crop_title} Harvested",
+                    asset_name=f"{crop_title} ({flush_label})",
                     quantity_metric=f"{yield_tons} {unit_str}",
                     operator_name=op_name,
-                    notes=f"Harvest finalized with yield of {yield_tons} {unit_str} at ₹{price_per_mt}/{unit_str}."
+                    notes=f"{flush_label} finalized with yield of {yield_tons} {unit_str} at ₹{price_per_mt}/{unit_str} by {op_name} | CropSplit #{split.id}."
                 )
 
-                if sale_val > 0:
-                    LedgerTransaction.objects.create(
-                        farmer=farmer_prof,
-                        farm=split.farm,
-                        close_date=datetime.date.today(),
-                        description=f"Harvest Trade Settlement - {crop_title} ({yield_tons} {unit_str})",
-                        category="Harvest Trade",
-                        category_color="#28a745",
-                        status="Income",
-                        amount=sale_val,
-                        quantity=float(yield_tons) if yield_tons else None,
-                        unit=unit_str,
-                        tags=f"CropSplit #{split.id}"
-                    )
-
-                log_action(request, "Harvest Finalized", f"Finalized harvest for '{crop_title}' ({yield_tons} {unit_str}) in '{split.farm.land_name}'.", icon_class="ri-shopping-bag-line", bg_color="success")
+                action_title = f"{flush_label} Finalized"
+                log_action(request, action_title, f"Finalized {flush_label.lower()} for '{crop_title}' ({yield_tons} {unit_str}) in '{split.farm.land_name}'.", icon_class="ri-shopping-bag-line", bg_color="success")
                 return JsonResponse({
                     'success': True,
+                    'harvest_mode': harvest_mode,
+                    'completed_flush': completed_flush,
+                    'current_flush': split.current_flush,
+                    'stage': split.stage,
                     'harvest_batches': split.harvest_batches,
                     'yield_tons': float(split.yield_tons) if split.yield_tons else 0.0,
                     'total_sale_value': float(split.total_sale_value) if split.total_sale_value else 0.0
@@ -2548,9 +3971,11 @@ def finalize_harvest_api(request):
     return JsonResponse({'success': False, 'error': 'Invalid request.'})
 
 @csrf_exempt
+@transaction.atomic
 def sell_crop_split(request):
     from django.http import JsonResponse
     from apps.farmer.models import CropSplit
+    from decimal import Decimal
     import json
     import datetime
 
@@ -2562,7 +3987,7 @@ def sell_crop_split(request):
             if not split_id or not farmer_prof:
                 return JsonResponse({'success': False, 'error': 'Parameters missing.'})
 
-            split = CropSplit.objects.get(id=split_id, farm__farmer=farmer_prof)
+            split = CropSplit.objects.select_for_update().get(id=split_id, farm__farmer=farmer_prof)
 
             yield_val_str = request.POST.get('yield')
             price_val_str = request.POST.get('price')
@@ -2577,62 +4002,160 @@ def sell_crop_split(request):
             batch_index_str = request.POST.get('batch_index')
 
             yield_val = float(yield_val_str) if yield_val_str else 0
-            total_f = float(total_val_str) if total_val_str else (yield_val * (float(price_val_str) if price_val_str else 0))
-            paid_f = float(paid_val) if paid_val else total_f
+            price_val = float(price_val_str) if price_val_str else 0
+            total_f = float(total_val_str) if total_val_str else (yield_val * price_val)
+            paid_f = float(paid_val) if paid_val is not None and paid_val != '' else total_f
+            pending_f = max(0.0, round(total_f - paid_f, 2))
+            if pending_f > 0:
+                payment_status = 'Partial' if paid_f > 0 else 'Pending'
+            else:
+                payment_status = 'Received'
 
-            batches = list(split.harvest_batches or [])
+            import math
+            if not all(math.isfinite(v) for v in (yield_val, price_val, total_f, paid_f)) or yield_val <= 0 or price_val <= 0 or total_f <= 0 or paid_f < 0 or paid_f > total_f:
+                return JsonResponse({'success': False, 'error': 'Enter valid quantity, price and payment amounts.'})
+
+            direct_name = (request.POST.get('direct_customer_name') or '').strip()
+            direct_phone = (request.POST.get('direct_customer_phone') or '').strip()
+            is_direct = customer_name == 'Direct Customer'
+            if is_direct:
+                if not direct_name:
+                    return JsonResponse({'success': False, 'error': 'Enter the direct customer name.'})
+                if not re.fullmatch(r'[0-9]{10,13}', direct_phone):
+                    return JsonResponse({'success': False, 'error': 'Enter a mobile number containing 10 to 13 digits.'})
+                customer_name = direct_name
+
+            from apps.farmer.harvest_batches import normalize_batch_numbers
+            batches = normalize_batch_numbers(split.harvest_batches)
+            if batches:
+                try:
+                    requested_index = int(batch_index_str)
+                    target = batches[requested_index]
+                    if requested_index < 0 or target.get('status') in ('Sold', 'Loss / Discard'):
+                        raise ValueError
+                    available = float(target.get('yield', 0))
+                except (ValueError, TypeError, IndexError):
+                    return JsonResponse({'success': False, 'error': 'This batch is no longer available. Refresh and try again.'})
+            else:
+                available = float(split.yield_tons or 0)
+            if yield_val > available:
+                return JsonResponse({'success': False, 'error': f'Quantity sold cannot exceed the available batch quantity of {available:g} {unit_val}.'})
 
             # Update specific batch if batch_index provided
             if batch_index_str is not None and batch_index_str != '':
                 try:
                     b_idx = int(batch_index_str)
                     if 0 <= b_idx < len(batches):
-                        batches[b_idx]['status'] = 'Sold'
-                        batches[b_idx]['sold_to'] = customer_name
-                        batches[b_idx]['sold_at_price'] = float(price_val_str) if price_val_str else batches[b_idx].get('price', 0)
-                        batches[b_idx]['sold_total'] = total_f
-                        batches[b_idx]['payment_method'] = payment_method
-                        batches[b_idx]['payment_status'] = payment_status
-                        batches[b_idx]['sold_date'] = datetime.date.today().strftime('%d %b %Y')
+                        target_batch = batches[b_idx]
+                        orig_yield = float(target_batch.get('yield', 0))
+
+                        # If user sold less than the full batch quantity, split out the remaining quantity
+                        if 0 < yield_val < orig_yield:
+                            remaining_yield = round(orig_yield - yield_val, 2)
+                            remaining_batch = dict(target_batch)
+                            original_value = float(target_batch.get('saleValue') or 0)
+                            
+                            # Mark the sold batch with the sold quantity
+                            target_batch['yield'] = yield_val
+                            target_batch['status'] = 'Sold'
+                            target_batch['sold_to'] = customer_name
+                            if is_direct:
+                                target_batch['sold_contact'] = direct_phone
+                                target_batch['customer_type'] = 'Direct Customer'
+                            target_batch['sold_at_price'] = price_val if price_val else target_batch.get('price', 0)
+                            target_batch['sold_total'] = total_f
+                            target_batch['paid'] = paid_f
+                            target_batch['pending'] = pending_f
+                            target_batch['payment_method'] = payment_method
+                            target_batch['payment_status'] = payment_status
+                            target_batch['sold_date'] = datetime.date.today().strftime('%d %b %Y')
+
+                            base_price = float(target_batch.get('price', 0)) or price_val
+                            remaining_batch.update({
+                                'yield': remaining_yield,
+                                'unit': target_batch.get('unit', unit_val),
+                                'price': target_batch.get('price', price_val),
+                                'priceUnit': target_batch.get('priceUnit', target_batch.get('unit', unit_val)),
+                                'saleValue': round(original_value * remaining_yield / orig_yield, 2) if original_value else round(remaining_yield * base_price, 2),
+                                'quality': target_batch.get('quality', quality_str),
+                                'status': 'Ready',
+                                'flush_no': target_batch.get('flush_no', 1)
+                            })
+                            if original_value:
+                                target_batch['saleValue'] = round(original_value * yield_val / orig_yield, 2)
+                            # Insert the remaining batch right after the sold batch
+                            batches.insert(b_idx + 1, remaining_batch)
+                        else:
+                            # Full batch sold
+                            target_batch['yield'] = orig_yield if orig_yield > 0 else yield_val
+                            target_batch['status'] = 'Sold'
+                            target_batch['sold_to'] = customer_name
+                            if is_direct:
+                                target_batch['sold_contact'] = direct_phone
+                                target_batch['customer_type'] = 'Direct Customer'
+                            target_batch['sold_at_price'] = price_val if price_val else target_batch.get('price', 0)
+                            target_batch['sold_total'] = total_f
+                            target_batch['paid'] = paid_f
+                            target_batch['pending'] = pending_f
+                            target_batch['payment_method'] = payment_method
+                            target_batch['payment_status'] = payment_status
+                            target_batch['sold_date'] = datetime.date.today().strftime('%d %b %Y')
+
                         split.harvest_batches = batches
                 except (ValueError, IndexError):
-                    pass
+                    raise ValueError('Unable to update this batch. Refresh and try again.')
 
             if batches:
                 all_sold = all(b.get('status') == 'Sold' for b in batches)
                 split.stage = 'Sold' if all_sold else 'Harvested'
+                ready_yield = sum(float(b.get('yield', 0)) for b in batches if b.get('status') not in ['Sold', 'Loss / Discard'])
+                split.yield_tons = max(Decimal('0'), Decimal(str(round(ready_yield, 2))))
             else:
                 split.stage = 'Sold'
+                split.yield_tons = Decimal('0')
 
             split.save()
 
+            tx = None
             if total_f > 0:
                 from datetime import date
                 from apps.farmer.models import FarmerCustomer, FarmerOutstanding, LedgerTransaction
 
-                customer_instance = FarmerCustomer.objects.filter(farmer=farmer_prof, name=customer_name).first()
+                customer_query = FarmerCustomer.objects.filter(farmer=farmer_prof, name=customer_name)
+                if is_direct:
+                    customer_query = customer_query.filter(contact_number=direct_phone)
+                customer_instance = customer_query.first()
+                if not customer_instance and customer_name:
+                    customer_instance = FarmerCustomer.objects.create(
+                        farmer=farmer_prof,
+                        name=customer_name,
+                        contact_number=direct_phone if is_direct else '',
+                        status='Active'
+                    )
 
-                LedgerTransaction.objects.create(
+                pending_note = f" [Paid: ₹{int(paid_f)}, Pending: ₹{int(pending_f)}]" if pending_f > 0 else ""
+
+                tx = LedgerTransaction.objects.create(
                     farmer=farmer_prof,
                     farm=split.farm,
                     close_date=date.today(),
-                    description=f"Sale: {crop_name} ({quality_str}) to {customer_name}",
+                    description=f"Sale: {crop_name} ({quality_str}) to {customer_name}{pending_note}",
                     payment_method=payment_method,
                     category="Sales",
-                    category_color="#28a745" if payment_status in ['Received', 'Paid', 'Settled'] else "#6c757d",
+                    category_color="#28a745" if pending_f <= 0 else ("#f59e0b" if paid_f > 0 else "#dc3545"),
                     tags=f"{crop_name} Sale ({quality_str}) - CropSplit #{split.id}",
                     status=payment_status,
-                    amount=paid_f if paid_f > 0 else total_f,
+                    amount=total_f,
                     quantity=yield_val if yield_val > 0 else None,
                     unit=unit_val
                 )
 
                 # Add to Receivables (Outstanding) if they haven't paid the full amount
-                if total_f > paid_f:
+                if pending_f > 0:
                     FarmerOutstanding.objects.create(
                         farmer=farmer_prof,
                         customer=customer_instance,
-                        invoice_no=f"Sale: {crop_name} - {customer_name}",
+                        invoice_no=f"Sale #{tx.id}: {crop_name} - {customer_name}",
                         due_date=date.today(),
                         amount_total=total_f,
                         amount_paid=paid_f,
@@ -2643,18 +4166,26 @@ def sell_crop_split(request):
             return JsonResponse({
                 'success': True,
                 'sale': {
-                    'description': f"Sale: {crop_name} ({quality_str}) to {customer_name}",
+                    'id': tx.id if tx else None,
+                    'description': tx.description if tx else f"Sale: {crop_name} ({quality_str}) to {customer_name}",
                     'date_formatted': datetime.date.today().strftime('%d %b %Y'),
+                    'created_at_iso': tx.created_at.isoformat() if tx and hasattr(tx, 'created_at') and tx.created_at else datetime.datetime.now().isoformat(),
+                    'close_date': datetime.date.today().strftime('%Y-%m-%d'),
                     'status': payment_status,
+                    'tags': tx.tags if tx else '',
                     'quantity': yield_val,
                     'unit': unit_val,
                     'amount': total_f,
-                    'payment_method': payment_method
+                    'paid': paid_f,
+                    'pending': pending_f,
+                    'payment_method': payment_method,
+                    'customer': customer_name
                 },
                 'batches': batches,
                 'stage': split.stage
             })
         except Exception as e:
+            transaction.set_rollback(True)
             import traceback
             traceback.print_exc()
             return JsonResponse({'success': False, 'error': str(e)})
@@ -2662,18 +4193,100 @@ def sell_crop_split(request):
 
 @csrf_exempt
 def delete_crop_split(request):
+    import re
     from django.http import JsonResponse
-    from apps.farmer.models import CropSplit
+    from apps.farmer.models import CropSplit, FarmActivity, LedgerTransaction, FarmTask, InventoryStockLog
+    from django.db.models import Q
+
+    if get_active_manager_staff(request):
+        return JsonResponse({'success': False, 'error': 'Managers do not have permission to modify crops.'})
 
     farmer_prof = get_farmer_profile(request.user)
 
     if request.method == "POST":
         split_id = request.POST.get('split_id')
+        action = request.POST.get('action')
+
         if split_id and farmer_prof:
             try:
                 split = CropSplit.objects.get(id=split_id, farm__farmer=farmer_prof)
                 crop_name = split.crop.name if split.crop else 'Crop'
                 farm_name = split.farm.land_name
+                split_tag = f"CropSplit #{split.id}"
+
+                # 1. Direct Inactivation Request
+                if action == 'set_inactive':
+                    notes = str(split.crop_notes or '')
+                    notes = re.sub(r'\[PREV_STAGE:[^\]]+\]', '', notes).strip()
+                    if split.stage != 'Inactive':
+                        notes = f"{notes} [PREV_STAGE:{split.stage}]".strip()
+                    split.crop_notes = notes
+                    split.stage = 'Inactive'
+                    split.save()
+
+                    active_mgr = get_active_manager_staff(request)
+                    op_name = active_mgr.name if active_mgr else (request.user.first_name or (split.supervisor.name if split.supervisor else get_actor_name(request)))
+                    FarmActivity.objects.create(
+                        farm=split.farm,
+                        activity_type="Other Land Care",
+                        asset_name=f"{crop_name} Inactivated",
+                        quantity_metric=f"{split.acreage} Ac",
+                        operator_name=op_name,
+                        notes=f"Crop cultivation marked Inactive by {op_name} | {split_tag}."
+                    )
+                    log_action(request, "Crop Inactivated", f"Crop '{crop_name}' in '{farm_name}' marked as Inactive.", icon_class="ri-pause-circle-line", bg_color="warning")
+                    return JsonResponse({
+                        'success': True,
+                        'inactivated': True,
+                        'message': f"Crop '{crop_name}' has been marked as Inactive."
+                    })
+
+                # 2. Check for child module dependencies before allowing hard delete
+                # A) Tasks
+                task_qs = FarmTask.objects.filter(associated_split=split)
+                task_count = task_qs.count()
+
+                # B) Resource Consumptions
+                stock_logs_count = InventoryStockLog.objects.filter(crop_split=split).count()
+                consumption_acts_count = FarmActivity.objects.filter(
+                    farm=split.farm,
+                    activity_type="Resource Consumption"
+                ).filter(
+                    Q(notes__icontains=split_tag) | Q(asset_name__icontains=split_tag)
+                ).count()
+                consumption_count = stock_logs_count + consumption_acts_count
+
+                # C) Expenses / Ledger Transactions
+                task_ids = list(task_qs.values_list('id', flat=True))
+                expense_q = Q(tags__icontains=split_tag) | Q(description__icontains=split_tag)
+                for tid in task_ids:
+                    expense_q |= Q(tags__icontains=f"Task ID: {tid}")
+                expense_count = LedgerTransaction.objects.filter(farmer=farmer_prof).filter(expense_q).count()
+
+                dependencies = []
+                if task_count > 0:
+                    dependencies.append(f"{task_count} Task{'s' if task_count > 1 else ''}")
+                if consumption_count > 0:
+                    dependencies.append(f"{consumption_count} Consumption log{'s' if consumption_count > 1 else ''}")
+                if expense_count > 0:
+                    dependencies.append(f"{expense_count} Expense transaction{'s' if expense_count > 1 else ''}")
+
+                # If ANY module record has been created, BLOCK hard deletion
+                if dependencies:
+                    dep_str = ", ".join(dependencies)
+                    return JsonResponse({
+                        'success': False,
+                        'has_dependencies': True,
+                        'dependencies': dependencies,
+                        'split_id': split.id,
+                        'crop_name': crop_name,
+                        'error': f"Cannot delete '{crop_name}' because it has linked records ({dep_str}). You can mark it as Inactive instead."
+                    })
+
+                # 3. Clean up basic initial setup logs only if no active child dependencies exist
+                FarmActivity.objects.filter(farm=split.farm, notes__icontains=split_tag).delete()
+
+                # Delete the crop split segment
                 split.delete()
 
                 log_action(request, "Crop Segment Removed", f"Crop split '{crop_name}' was removed from '{farm_name}'.", icon_class="ri-delete-bin-line", bg_color="warning")
@@ -2749,13 +4362,22 @@ def delete_task(request):
     from django.http import JsonResponse
     from apps.farmer.models import FarmTask, LedgerTransaction
 
+    if get_active_manager_staff(request):
+        return JsonResponse({"success": False, "error": "Managers do not have permission to delete tasks."})
+
     farmer_prof = get_farmer_profile(request.user)
 
     if request.method == "POST":
         task_id = request.POST.get('task_id')
         if task_id and farmer_prof:
             try:
-                task = FarmTask.objects.get(id=task_id, farmer=farmer_prof)
+                from django.db.models import Q
+                task = FarmTask.objects.filter(
+                    Q(farmer=farmer_prof) | Q(farm__farmer=farmer_prof) | Q(associated_split__farm__farmer=farmer_prof),
+                    id=task_id
+                ).first()
+                if not task:
+                    return JsonResponse({"success": False, "error": "Task not found."})
                 task_title = task.title
                 # Delete any associated labor transaction
                 LedgerTransaction.objects.filter(farmer=farmer_prof, tags=f"Task ID: {task.id}").delete()
@@ -2763,11 +4385,12 @@ def delete_task(request):
 
                 log_action(request, "Task Deleted", f"Task '{task_title}' was removed.", icon_class="ri-delete-bin-line", bg_color="danger")
                 return JsonResponse({"success": True})
-            except FarmTask.DoesNotExist:
-                return JsonResponse({"success": False, "error": "Task not found."})
+            except Exception as e:
+                return JsonResponse({"success": False, "error": str(e)})
     return JsonResponse({"success": False, "error": "Invalid request method."})
 
 @csrf_exempt
+@transaction.atomic
 def add_farm_activity(request):
     from django.http import JsonResponse
     from apps.farmer.models import Farm, FarmActivity, CropSplit, LedgerTransaction, FarmerInventory
@@ -2790,28 +4413,49 @@ def add_farm_activity(request):
                 notes = request.POST.get('notes', '')
                 inv_item_id = request.POST.get('inventory_item') or request.POST.get('inventory_id')
 
-                if inv_item_id:
-                    inv_item = FarmerInventory.objects.filter(id=inv_item_id, farmer=farmer_prof).first()
-                    if inv_item:
-                        try:
-                            qty_val = float(request.POST.get('quantity', 0))
-                            if qty_val > 0:
-                                inv_item.quantity = max(0, inv_item.quantity - qty_val)
-                                if inv_item.quantity <= 0:
-                                    inv_item.quantity = 0
-                                    inv_item.status = 'Out of Stock'
-                                elif inv_item.quantity <= inv_item.safety_stock:
-                                    inv_item.status = 'Low Stock'
-                                else:
-                                    inv_item.status = 'In Stock'
-                                inv_item.save()
-                        except Exception as ex:
-                            print(f"[INVENTORY DEDUCTION ERROR] {ex}")
-
+                crop_split = None
+                crop_name = ""
                 if split_id:
                     crop_split = CropSplit.objects.filter(id=split_id, farm=farm).first()
-                    if crop_split and f"CropSplit #{split_id}" not in notes:
-                        notes = (notes + f" | CropSplit #{split_id} ({crop_split.crop.name if crop_split.crop else 'Crop'})").strip(' |')
+                    if crop_split:
+                        is_crop_final = (
+                            crop_split.is_completed or 
+                            (crop_split.crop_notes and '[ALL_FLUSHES_COMPLETED]' in crop_split.crop_notes) or 
+                            crop_split.stage in ('Sold', 'Harvested')
+                        )
+                        if is_crop_final:
+                            c_name = crop_split.crop.name if crop_split.crop else "Crop"
+                            return JsonResponse({'success': False, 'error': f"Cannot log consumption. Crop '{c_name}' is already finalized/harvested."})
+                        if crop_split.crop:
+                            crop_name = crop_split.crop.name
+                        if f"CropSplit #{split_id}" not in notes:
+                            notes = (notes + f" | CropSplit #{split_id} ({crop_name or 'Crop'})").strip(' |')
+                if not crop_name and farm.crop:
+                    crop_name = farm.crop.name
+
+                from apps.farmer.inventory_consumption import consume_stock, is_equipment
+                resource_type = request.POST.get('resource_type', '')
+                vehicle_id = request.POST.get('vehicle_id')
+                is_vehicle = resource_type in ('Vehicle', 'Vehicle & Fleet', 'Vehicle & Fuel')
+                vehicle = None
+                if is_vehicle:
+                    vehicle = FarmerInventory.objects.filter(id=vehicle_id, farmer=farmer_prof).first() if vehicle_id else None
+                    if not vehicle or not is_equipment(vehicle):
+                        return JsonResponse({'success': False, 'error': 'Select a valid vehicle or machine.'})
+                    if (vehicle.status or '').strip().lower() != 'available':
+                        return JsonResponse({'success': False, 'error': f"{vehicle.item_name} is not available for use right now."})
+                    if not inv_item_id:
+                        return JsonResponse({'success': False, 'error': 'Select a fuel inventory item.'})
+                if inv_item_id:
+                    try:
+                        item = consume_stock(farmer=farmer_prof, item_id=inv_item_id,
+                            quantity=request.POST.get('quantity'), farm=farm, crop_split=crop_split,
+                            fuel_only=is_vehicle, vehicle=vehicle)
+                    except ValueError as exc:
+                        return JsonResponse({'success': False, 'error': str(exc)})
+                    notes = (notes + f" | Inv Ref: inv-{item.id}").strip(' |')
+                    if vehicle:
+                        notes += f" | Vehicle: {vehicle.item_name} | Fuel: {item.item_name}"
 
                 if not op_name or not str(op_name).strip():
                     op_name = get_actor_name(request)
@@ -2826,7 +4470,8 @@ def add_farm_activity(request):
                     amount=amount
                 )
 
-                if amount > 0:
+                # Do NOT create expense for inventory items because inventory purchase was already recorded as expense
+                if amount > 0 and not inv_item_id:
                     tag_str = f"Farm ID: {farm.id}"
                     if split_id:
                         tag_str += f" · CropSplit #{split_id}"
@@ -2846,12 +4491,20 @@ def add_farm_activity(request):
                 return JsonResponse({'success': True, 'activity_id': activity.id})
             except Farm.DoesNotExist:
                 return JsonResponse({'success': False, 'error': 'Farm not found.'})
-    return JsonResponse({'success': False, 'error': 'Invalid request method.'})
+            except Exception as e:
+                transaction.set_rollback(True)
+                import traceback
+                traceback.print_exc()
+                return JsonResponse({'success': False, 'error': f"Failed to record consumption: {str(e)}"})
+    return JsonResponse({'success': False, 'error': 'Invalid request method or unauthenticated.'})
 
 @csrf_exempt
 def delete_farm_activity(request):
     from django.http import JsonResponse
     from apps.farmer.models import FarmActivity
+
+    if get_active_manager_staff(request):
+        return JsonResponse({'success': False, 'error': 'Managers do not have permission to delete activity records.'})
 
     farmer_prof = get_farmer_profile(request.user)
 
@@ -2902,22 +4555,44 @@ def add_farm_task(request):
         except (ValueError, TypeError):
             actual_hours = None
 
+        split = None
+        if split_id:
+            if str(split_id).isdigit():
+                split = CropSplit.objects.filter(id=int(split_id)).first()
+            if split:
+                is_crop_final = (
+                    split.is_completed or 
+                    (split.crop_notes and '[ALL_FLUSHES_COMPLETED]' in split.crop_notes) or 
+                    split.stage in ('Sold', 'Harvested')
+                )
+                if is_crop_final:
+                    crop_name = split.crop.name if split.crop else "Crop"
+                    return JsonResponse({'success': False, 'error': f"Cannot schedule task. Crop '{crop_name}' is already finalized/harvested."})
+
+        farm = None
+        if farm_id:
+            if str(farm_id).isdigit():
+                farm = Farm.objects.filter(id=int(farm_id)).first()
+            elif farmer_prof:
+                farm = Farm.objects.filter(land_name__iexact=str(farm_id).strip(), farmer=farmer_prof).first()
+            else:
+                farm = Farm.objects.filter(land_name__iexact=str(farm_id).strip()).first()
+
+        # Fallback: Link farm from split if farm was not directly specified
+        if not farm and split and split.farm:
+            farm = split.farm
+
+        # Fallback: Link farmer_prof from farm or split if not resolved from request.user
+        if not farmer_prof:
+            if farm and farm.farmer:
+                farmer_prof = farm.farmer
+            elif split and split.farm and split.farm.farmer:
+                farmer_prof = split.farm.farmer
+
         if farmer_prof:
             try:
                 from datetime import date
                 task_date = start_date if start_date else date.today()
-                
-                farm = None
-                if farm_id:
-                    if str(farm_id).isdigit():
-                        farm = Farm.objects.filter(id=int(farm_id), farmer=farmer_prof).first()
-                    else:
-                        farm = Farm.objects.filter(land_name__iexact=str(farm_id).strip(), farmer=farmer_prof).first()
-                
-                split = None
-                if split_id:
-                    if str(split_id).isdigit():
-                        split = CropSplit.objects.filter(id=int(split_id)).first()
 
                 # Fetch category and priority safely
                 category = None
@@ -2953,6 +4628,63 @@ def add_farm_task(request):
                 if valid_worker_ids:
                     first_worker = FarmerStaff.objects.filter(id=valid_worker_ids[0], farmer=farmer_prof).first()
 
+                schedule_type = request.POST.get('schedule_type', 'single')
+                recurring_dates_csv = request.POST.get('recurring_dates_csv', '').strip()
+                recurring_dates = [x.strip() for x in recurring_dates_csv.split(',') if x.strip()] if recurring_dates_csv else []
+
+                workers_to_assign = FarmerStaff.objects.filter(id__in=valid_worker_ids, farmer=farmer_prof) if valid_worker_ids else None
+
+                if schedule_type == 'recurring' and recurring_dates:
+                    daily_hours = None
+                    if start_time and end_time:
+                        try:
+                            from datetime import datetime
+                            t1 = datetime.strptime(str(start_time).strip()[:5], "%H:%M")
+                            t2 = datetime.strptime(str(end_time).strip()[:5], "%H:%M")
+                            diff = (t2 - t1).total_seconds() / 3600.0
+                            if diff < 0:
+                                diff += 24.0
+                            daily_hours = round(diff, 2)
+                        except Exception:
+                            daily_hours = total_hours
+                    else:
+                        daily_hours = total_hours
+
+                    created_tasks = []
+                    for r_date in sorted(list(set(recurring_dates))):
+                        t_item = FarmTask.objects.create(
+                            farm=farm,
+                            farmer=farmer_prof,
+                            title=title,
+                            description=description,
+                            priority_level=priority_lvl,
+                            task_category=category,
+                            priority=priority_name,
+                            work_timeline=work_timeline,
+                            associated_split=split,
+                            assigned_worker=first_worker,
+                            task_date=r_date,
+                            start_date=r_date,
+                            end_date=r_date,
+                            start_time=start_time,
+                            end_time=end_time,
+                            total_hours=daily_hours,
+                            actual_hours=actual_hours
+                        )
+                        if workers_to_assign:
+                            t_item.assigned_workers.set(workers_to_assign)
+                        sync_task_labor_expense(t_item)
+                        created_tasks.append(t_item)
+
+                    farm_name = farm.land_name if farm else "General"
+                    log_action(request, "Task Created", f"{len(created_tasks)} recurring tasks '{title}' scheduled under '{farm_name}'.", icon_class="ri-repeat-2-line", bg_color="success")
+                    return JsonResponse({
+                        'success': True,
+                        'task_id': created_tasks[0].id if created_tasks else None,
+                        'count': len(created_tasks),
+                        'message': f"{len(created_tasks)} recurring tasks scheduled successfully across selected dates!"
+                    })
+
                 task = FarmTask.objects.create(
                     farm=farm,
                     farmer=farmer_prof,
@@ -2973,8 +4705,7 @@ def add_farm_task(request):
                     actual_hours=actual_hours
                 )
                 
-                if valid_worker_ids:
-                    workers_to_assign = FarmerStaff.objects.filter(id__in=valid_worker_ids, farmer=farmer_prof)
+                if workers_to_assign:
                     task.assigned_workers.set(workers_to_assign)
 
                 # Sync labor cost in LedgerTransaction
@@ -2982,7 +4713,7 @@ def add_farm_task(request):
 
                 farm_name = farm.land_name if farm else "General"
                 log_action(request, "Task Created", f"Task '{title}' created under '{farm_name}'.", icon_class="ri-task-line", bg_color="success")
-                return JsonResponse({'success': True, 'task_id': task.id})
+                return JsonResponse({'success': True, 'task_id': task.id, 'message': 'Task created successfully!'})
             except Exception as e:
                 return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid request method.'})
@@ -3026,9 +4757,17 @@ def edit_farm_task(request):
         if task_id and farmer_prof:
             try:
                 from datetime import date
-                task = FarmTask.objects.get(id=task_id, farmer=farmer_prof)
+                from django.db.models import Q
+                task = FarmTask.objects.filter(
+                    Q(farmer=farmer_prof) | Q(farm__farmer=farmer_prof) | Q(associated_split__farm__farmer=farmer_prof),
+                    id=task_id
+                ).first()
+                if not task:
+                    return JsonResponse({'success': False, 'error': 'Task not found.'})
                 if task.status == 'Completed':
                     return JsonResponse({'success': False, 'error': 'Completed tasks cannot be edited.'})
+                if not task.farmer and farmer_prof:
+                    task.farmer = farmer_prof
                 task.title = title
                 task.description = description
                 
@@ -3114,7 +4853,7 @@ def edit_farm_task(request):
                     pass
 
                 log_action(request, "Task Updated", f"Task '{task.title}' was updated.", icon_class="ri-edit-line", bg_color="info")
-                return JsonResponse({'success': True})
+                return JsonResponse({'success': True, 'message': 'Task updated successfully!'})
             except FarmTask.DoesNotExist:
                 return JsonResponse({'success': False, 'error': 'Task not found.'})
             except Exception as e:
@@ -3133,9 +4872,17 @@ def update_farm_task_status(request):
         status = request.POST.get('status')
         if task_id and farmer_prof:
             try:
-                task = FarmTask.objects.get(id=task_id, farmer=farmer_prof)
+                from django.db.models import Q
+                task = FarmTask.objects.filter(
+                    Q(farmer=farmer_prof) | Q(farm__farmer=farmer_prof) | Q(associated_split__farm__farmer=farmer_prof),
+                    id=task_id
+                ).first()
+                if not task:
+                    return JsonResponse({'success': False, 'error': 'Task not found.'})
                 if task.status == 'Completed':
                     return JsonResponse({'success': False, 'error': 'Completed tasks cannot be modified.'})
+                if not task.farmer and farmer_prof:
+                    task.farmer = farmer_prof
                 task.status = status
                 task.save()
                 
@@ -3150,24 +4897,123 @@ def update_farm_task_status(request):
 
 def farmer_profile(request):
     import re
-    from apps.farmer.models import Farm
-    from apps.superadmin.models import Package, Subscription, Document, State, City
+    from apps.farmer.models import Farm, FarmerStaff
+    from apps.superadmin.models import Package, Subscription, Document, State, City, Taluk
 
-    profile = get_farmer_profile(request.user)
+    active_role = request.session.get('active_role', 'farmer')
+    is_manager_mode = (active_role == 'manager')
+
+    staff_obj = None
+    employer_profile = None
+
+    if is_manager_mode:
+        staff_obj = get_active_manager_staff(request)
+
+        if staff_obj:
+            employer_profile = staff_obj.farmer
+            profile = employer_profile
+        else:
+            profile = get_farmer_profile(request.user)
+    else:
+        profile = get_farmer_profile(request.user)
     
-    # Get all active/past subscriptions
-    subscriptions = Subscription.objects.filter(farmer=profile).order_by('-created_at', '-id') if profile else Subscription.objects.none()
-    active_subscription = subscriptions.filter(subscription_status='active').order_by('-id').first()
+    # Get all active/past subscriptions from backend DB
+    from apps.superadmin.subscription_utils import (
+        billing_cycle_duration_label,
+        billing_cycle_label,
+        billing_cycle_unit_label,
+        calculate_plan_switch_quote,
+        get_active_paid_subscription,
+        get_farmer_subscription_details,
+        get_package_cycle_price,
+        has_farmer_used_free_trial,
+        is_package_cycle_active,
+        is_payment_failed,
+        is_payment_pending,
+        is_payment_settled,
+        normalize_billing_cycle,
+    )
 
-    # Get all packages
+    today = timezone.now().date()
+    sub_qs = (
+        Subscription.objects.filter(farmer=profile)
+        .select_related('package', 'scheduled_package')
+        .order_by('-created_at', '-id')
+        if profile
+        else Subscription.objects.none()
+    )
+    subscriptions = list(sub_qs)
+    for s in subscriptions:
+        c = normalize_billing_cycle(s.billing_cycle)
+        s.norm_cycle = c
+        s.cycle_label = billing_cycle_label(c)
+        s.duration_label = billing_cycle_duration_label(c)
+        s.is_settled = is_payment_settled(s.payment_status)
+        s.is_pending = is_payment_pending(s.payment_status)
+        s.is_failed = is_payment_failed(s.payment_status)
+        s.display_amount = s.amount_paid if s.amount_paid is not None else s.monthly_amount
+
+    sub_details = get_farmer_subscription_details(profile)
+    active_subscription = get_active_paid_subscription(profile, today=today)
+    is_subscription_active = bool(active_subscription and active_subscription.package)
+    latest_pending_sub = next((s for s in subscriptions if s.subscription_status == 'pending' and s.is_pending), None)
+
+    if active_subscription:
+        active_cycle = normalize_billing_cycle(active_subscription.billing_cycle)
+        active_cycle_label = billing_cycle_label(active_cycle)
+        active_cycle_unit = billing_cycle_unit_label(active_cycle)
+        current_plan_price = float(
+            active_subscription.monthly_amount
+            if active_subscription.monthly_amount is not None
+            else get_package_cycle_price(active_subscription.package, active_cycle)
+        )
+    else:
+        active_cycle = sub_details.get('billing_cycle') or 'monthly'
+        active_cycle_label = sub_details.get('billing_cycle_label') or 'Monthly'
+        active_cycle_unit = billing_cycle_unit_label(active_cycle)
+        current_plan_price = 0.0
+
+    farmer_used_free_trial = has_farmer_used_free_trial(profile)
+
+    # Get all packages and precompute backend quotes across Monthly, Quarterly, and Annual cycles
     packages = Package.objects.all().order_by('price')
+    packages_list = list(packages)
+    package_quotes = {}
+    for pkg_item in packages_list:
+        pkg_price = float(pkg_item.price or 0.0)
+        is_trial_pkg = bool(pkg_price == 0.0 or 'trial' in (pkg_item.name or '').lower())
+        pkg_item.is_trial = is_trial_pkg
+        pkg_item.is_trial_claimed = bool(is_trial_pkg and farmer_used_free_trial)
+        pkg_item.price_quarterly_effective = get_package_cycle_price(pkg_item, 'quarterly')
+        pkg_item.price_yearly_effective = get_package_cycle_price(pkg_item, 'yearly')
+
+        pkg_quotes_for_cycles = {}
+        for cyc in ('monthly', 'quarterly', 'yearly'):
+            q = calculate_plan_switch_quote(profile, pkg_item, target_cycle=cyc, is_renewal=False)
+            pkg_quotes_for_cycles[cyc] = {
+                **q,
+                'unit_label': billing_cycle_unit_label(cyc),
+                'duration_label': billing_cycle_duration_label(cyc),
+                'is_cycle_active': is_package_cycle_active(pkg_item, cyc),
+                'price': get_package_cycle_price(pkg_item, cyc),
+            }
+        package_quotes[str(pkg_item.id)] = pkg_quotes_for_cycles
+
+        # Populate server-rendered flags for the default active cycle view
+        default_q = pkg_quotes_for_cycles.get(active_cycle, pkg_quotes_for_cycles['monthly'])
+        pkg_item.is_current = bool(default_q['is_current'])
+        pkg_item.is_upgrade = bool(default_q['is_upgrade'])
+        pkg_item.is_downgrade = bool(default_q['is_downgrade'])
+        pkg_item.can_switch = bool(default_q['can_switch'])
+        pkg_item.active_cycle_price = default_q['price']
 
     # Get all uploaded documents
     documents = Document.objects.filter(farmer=profile).order_by('-created_at', '-id') if profile else Document.objects.none()
 
-    # States and Districts for location selects
+    # States, Districts and Taluks for location selects
     states = State.objects.all().order_by('name')
-    districts = City.objects.filter(state=profile.state).order_by('name') if profile and profile.state else City.objects.all().order_by('name')
+    districts = City.objects.filter(state=profile.state).order_by('name') if profile and profile.state else (City.objects.filter(state=states.first()).order_by('name') if states.exists() else City.objects.none())
+    talukas = Taluk.objects.filter(city=profile.district).order_by('name') if profile and profile.district else (Taluk.objects.filter(city=districts.first()).order_by('name') if districts.exists() else Taluk.objects.none())
 
     # Calculate live farm & crop data
     farms = Farm.objects.filter(farmer=profile) if profile else Farm.objects.none()
@@ -3178,27 +5024,226 @@ def farmer_profile(request):
             total_acreage += float(match.group())
 
     first_farm = farms.first()
-    main_crop = first_farm.crop_type.name if first_farm and hasattr(first_farm, 'crop_type') and first_farm.crop_type else 'Paddy / Rice'
+    # Collect all crops configured across farmer lands/farms
+    farmer_crops = []
+    for f in farms.prefetch_related('crops', 'splits'):
+        for c in f.crops.all():
+            if c.name and c.name not in farmer_crops:
+                farmer_crops.append(c.name)
+        if f.crop and f.crop.name and f.crop.name not in farmer_crops:
+            farmer_crops.append(f.crop.name)
+        if f.crop_type and f.crop_type.name and f.crop_type.name not in farmer_crops:
+            farmer_crops.append(f.crop_type.name)
+        for s in f.splits.all():
+            if s.crop and s.crop.name and s.crop.name not in farmer_crops:
+                farmer_crops.append(s.crop.name)
+            elif s.crop_variety and s.crop_variety not in farmer_crops:
+                farmer_crops.append(s.crop_variety)
+
+    main_crop = ", ".join(farmer_crops) if farmer_crops else "-"
     health_index = first_farm.health_indicator if first_farm and hasattr(first_farm, 'health_indicator') and first_farm.health_indicator else '92'
+
+    # Operational limits & usage metrics for subscription progress card (Package user limit applies to Managers)
+    from apps.farmer.models import FarmerStaff
+    manager_count = FarmerStaff.objects.filter(farmer=profile, is_role_manager=True).count() if profile else 0
+    staff_count = manager_count
+    farms_count = farms.count()
+    try:
+        from apps.farmer.models import FarmCrop
+        crop_count = FarmCrop.objects.filter(farm__farmer=profile).count() if profile else 0
+    except Exception:
+        crop_count = farms_count
+
+    pkg = active_subscription.package if (active_subscription and active_subscription.package and active_subscription.subscription_status == 'active') else None
+    has_active_plan = bool(pkg and is_payment_settled(active_subscription.payment_status))
+
+    if pkg and has_active_plan:
+        if str(pkg.my_users or '').strip().lower() == 'unlimited':
+            max_users = "Unlimited"
+            users_pct = 100
+        else:
+            m_users = re.search(r'\d+', str(pkg.my_users or ''))
+            max_users = int(m_users.group()) if m_users else 10
+            users_pct = max(0, min(100, int(((max_users - staff_count) / max_users) * 100))) if max_users > 0 else 100
+
+        m_acres = re.search(r'[\d\.]+', str(pkg.max_acre_support or ''))
+        if str(pkg.max_acre_support or '').strip().lower() == 'unlimited':
+            max_acres_display = "Unlimited"
+            acres_pct = 100
+        elif m_acres:
+            max_acres_val = float(m_acres.group())
+            max_acres_display = f"{max_acres_val:g}"
+            rem_acres = max(0.0, max_acres_val - total_acreage)
+            acres_pct = max(0, min(100, int((rem_acres / max_acres_val) * 100))) if max_acres_val > 0 else 0
+        else:
+            max_acres_display = "Unlimited"
+            acres_pct = 100
+
+        if str(pkg.my_land or '').strip().lower() == 'unlimited':
+            max_farms = "Unlimited"
+            farms_pct = 100
+        else:
+            m_land = re.search(r'\d+', str(pkg.my_land or ''))
+            max_farms = int(m_land.group()) if m_land else 5
+            farms_pct = max(0, min(100, int(((max_farms - farms_count) / max_farms) * 100))) if max_farms > 0 else 100
+
+        if str(pkg.my_crop or '').strip().lower() == 'unlimited':
+            max_crops = "Unlimited"
+            crops_pct = 100
+        else:
+            m_crop = re.search(r'\d+', str(pkg.my_crop or ''))
+            max_crops = int(m_crop.group()) if m_crop else 15
+            crops_pct = max(0, min(100, int(((max_crops - crop_count) / max_crops) * 100))) if max_crops > 0 else 100
+
+        plan_limits = {
+            'has_active_plan': True,
+            'package_name': pkg.name,
+            'users': {'used': staff_count, 'max': max_users, 'pct': users_pct},
+            'acres': {'used': f"{total_acreage:g}", 'max': max_acres_display, 'pct': acres_pct},
+            'farms': {'used': farms_count, 'max': max_farms, 'pct': farms_pct},
+            'crops': {'used': crop_count, 'max': max_crops, 'pct': crops_pct},
+        }
+    else:
+        first_pkg = packages.first() if packages.exists() else None
+        preview_name = first_pkg.name if first_pkg else 'Eco-Starter Package'
+        m_users = re.search(r'\d+', str(first_pkg.my_users if first_pkg else ''))
+        max_users = int(m_users.group()) if m_users else 5
+
+        m_acres = re.search(r'[\d\.]+', str(first_pkg.max_acre_support if first_pkg else ''))
+        max_acres_display = first_pkg.max_acre_support if first_pkg else "15"
+
+        m_land = re.search(r'\d+', str(first_pkg.my_land if first_pkg else ''))
+        max_farms = int(m_land.group()) if m_land else 3
+
+        m_crop = re.search(r'\d+', str(first_pkg.my_crop if first_pkg else ''))
+        max_crops = int(m_crop.group()) if m_crop else 10
+
+        users_pct = 0
+        acres_pct = 0
+        farms_pct = 0
+        crops_pct = 0
+
+        plan_limits = {
+            'has_active_plan': False,
+            'package_name': preview_name,
+            'users': {'used': staff_count, 'max': max_users, 'pct': users_pct},
+            'acres': {'used': f"{total_acreage:g}", 'max': max_acres_display, 'pct': acres_pct},
+            'farms': {'used': farms_count, 'max': max_farms, 'pct': farms_pct},
+            'crops': {'used': crop_count, 'max': max_crops, 'pct': crops_pct},
+        }
+
+    import json
+    active_sub_quote = calculate_plan_switch_quote(profile, None, target_cycle=active_cycle)
+
+    from apps.superadmin.models import SMTPSettings
+    farmer_smtp = SMTPSettings.objects.filter(user=request.user).first()
 
     context = {
         'profile': profile,
+        'employer_profile': employer_profile,
+        'is_manager_mode': is_manager_mode,
+        'staff_obj': staff_obj,
         'active_subscription': active_subscription,
+        'latest_pending_sub': latest_pending_sub,
+        'active_cycle': active_cycle,
+        'active_cycle_label': active_cycle_label,
+        'active_cycle_unit': active_cycle_unit,
+        'active_sub_quote': active_sub_quote,
+        'active_sub_quote_json': json.dumps(active_sub_quote),
+        'package_quotes_json': json.dumps(package_quotes),
         'subscriptions': subscriptions,
-        'packages': packages,
+        'packages': packages_list,
+        'is_subscription_active': is_subscription_active,
+        'current_plan_price': current_plan_price,
+        'farmer_used_free_trial': farmer_used_free_trial,
         'documents': documents,
         'states': states,
         'districts': districts,
-        'total_acreage': f"{total_acreage:g}" if total_acreage > 0 else "25",
+        'talukas': talukas,
+        'total_acreage': f"{total_acreage:g}" if total_acreage > 0 else "0",
+        'staff_count': staff_count,
+        'farms_count': farms_count,
+        'crop_count': crop_count,
         'main_crop': main_crop,
         'health_index': health_index,
+        'plan_limits': plan_limits,
+        'farmer_smtp': farmer_smtp,
     }
     return render(request, "farmer/farmer_profile.html", context)
+
+
+def farmer_mail_settings(request):
+    if not request.user.is_authenticated:
+        return redirect('farmer-login')
+
+    from apps.superadmin.models import SMTPSettings
+    config = SMTPSettings.objects.filter(user=request.user).first()
+    if not config:
+        config = SMTPSettings.objects.create(
+            user=request.user,
+            is_default=False,
+            email_host="smtp.gmail.com",
+            email_port=587,
+            email_use_tls=True,
+            email_use_ssl=False,
+            from_name=request.user.get_full_name() or request.user.username or "My Farm",
+            is_active=False
+        )
+
+    if request.method == "POST":
+        config.email_host = request.POST.get("email_host", "smtp.gmail.com").strip()
+        try:
+            config.email_port = int(request.POST.get("email_port", 587))
+        except (ValueError, TypeError):
+            config.email_port = 587
+        config.email_host_user = request.POST.get("email_host_user", "").strip()
+        pwd = request.POST.get("email_host_password", "").strip()
+        if pwd:
+            config.email_host_password = pwd
+        security = request.POST.get("security_mode", "tls")
+        config.email_use_tls = (security == "tls")
+        config.email_use_ssl = (security == "ssl")
+        config.from_email = request.POST.get("from_email", "").strip() or config.email_host_user
+        config.from_name = request.POST.get("from_name", "").strip() or (request.user.get_full_name() or "My Farm")
+        config.is_active = request.POST.get("is_active") in ["on", "true", "1"]
+        config.save()
+
+        is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest" or request.POST.get("is_ajax") == "1"
+        if is_ajax:
+            return JsonResponse({"status": "success", "message": "Custom SMTP mail settings saved successfully!"})
+
+        messages.success(request, "Custom SMTP mail settings saved successfully!")
+        return redirect("/farmer/profile_view/?tab=mail_settings#mail_settings")
+
+    return redirect("/farmer/profile_view/?tab=mail_settings#mail_settings")
+
+
+def farmer_test_mail(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"success": False, "message": "Authentication required."}, status=401)
+
+    if request.method != "POST":
+        return JsonResponse({"success": False, "message": "POST method required."}, status=405)
+
+    from apps.superadmin.models import SMTPSettings
+    from apps.superadmin.email_utils import test_smtp_connection
+
+    config = SMTPSettings.objects.filter(user=request.user).first()
+    if not config or not config.email_host_user or not config.email_host_password:
+        return JsonResponse({"success": False, "message": "Please enter and save your Email & App Password before testing."}, status=400)
+
+    test_recipient = (request.POST.get("test_email") or "").strip() or (request.user.email if request.user.email else "")
+    if not test_recipient:
+        return JsonResponse({"success": False, "message": "Please specify a test recipient email."}, status=400)
+
+    success, message = test_smtp_connection(config, test_recipient)
+    return JsonResponse({"success": success, "message": message})
 
 def warehouse_stock(request):
     return render(request, "farmer/consumption/warehouse_stock.html")
 def vehicle(request):
     return render(request, "farmer/consumption/vehicle.html")
+@transaction.atomic
 def register(request):
     import datetime
     from apps.farmer.models import Farm, FarmActivity, FarmerInventory, LedgerTransaction
@@ -3227,28 +5272,16 @@ def register(request):
                 notes_info = f"Resource Meter: {resource_type}"
 
                 if inventory_id and resource_type == 'Warehouse':
-                    item = FarmerInventory.objects.filter(id=inventory_id, farmer=profile).first()
-                    if item:
-                        asset_name = item.item_name
-                        notes_info = f"Resource Meter: {resource_type} | Inv Ref: inv-{item.id}"
-                        deduct_qty = float(quantity)
-                        if item.quantity < deduct_qty:
-                            err_msg = f"Cannot log consumption. Entered quantity ({quantity} {item.unit}) exceeds available stock limit ({item.quantity} {item.unit})!"
-                            if is_ajax:
-                                return JsonResponse({'status': 'error', 'message': err_msg}, status=400)
-                            messages.error(request, err_msg)
-                            next_url = request.POST.get('next_url', 'farmer-farms')
-                            return redirect(next_url)
-
-                        item.quantity -= int(deduct_qty)
-                        if item.quantity <= 0:
-                            item.quantity = 0
-                            item.status = 'Out of Stock'
-                        elif item.quantity <= item.safety_stock:
-                            item.status = 'Low Stock'
-                        else:
-                            item.status = 'In Stock'
-                        item.save()
+                    from apps.farmer.inventory_consumption import consume_stock
+                    try:
+                        item = consume_stock(farmer=profile, item_id=inventory_id, quantity=quantity, farm=farm)
+                    except ValueError as exc:
+                        if is_ajax:
+                            return JsonResponse({'status': 'error', 'message': str(exc)}, status=400)
+                        messages.error(request, str(exc))
+                        return redirect(request.POST.get('next_url', 'farmer-farms'))
+                    asset_name = item.item_name
+                    notes_info = f"Resource Meter: {resource_type} | Inv Ref: inv-{item.id}"
 
                 # Log Farm Activity
                 FarmActivity.objects.create(
@@ -3261,8 +5294,8 @@ def register(request):
                     amount=total_amount
                 )
 
-                # Log Farm Expense in Ledger if cost > 0
-                if total_amount > 0:
+                # Log Farm Expense in Ledger if cost > 0 and NOT an inventory item
+                if total_amount > 0 and not inventory_id:
                     cat_map = {'Seeds': 'Seeds', 'Fertilizers & Chemicals': 'Fertilizer', 'Vehicle & Fuel': 'Fuel'}
                     chosen_cat = cat_map.get(resource_type, 'General')
                     LedgerTransaction.objects.create(
@@ -3289,6 +5322,7 @@ def register(request):
                 messages.success(request, f"Logged {quantity} {unit_metric} of '{asset_name}' for farm '{farm.land_name}' (₹{total_amount}).")
 
         except Exception as e:
+            transaction.set_rollback(True)
             print(f"[CONSUMPTION LOG ERROR] {e}")
             if is_ajax:
                 return JsonResponse({'status': 'error', 'message': f"Error logging consumption: {str(e)}"}, status=500)
@@ -3366,7 +5400,11 @@ def financials_sales(request):
 
     from apps.farmer.models import CropSplit, FarmerCustomer, LedgerTransaction, Farm, FarmerVendor, FarmerOutstanding
     profile = get_farmer_profile(request.user)
-    transactions = LedgerTransaction.objects.filter(farmer=profile).order_by('-close_date', '-created_at', '-id')
+    farms = Farm.objects.filter(farmer=profile).order_by('land_name')
+    transactions = LedgerTransaction.objects.filter(farmer=profile).exclude(
+        category='Harvest Trade',
+        description__istartswith='Harvest Trade Settlement'
+    ).order_by('-close_date', '-created_at', '-id')
 
     inflow = transactions.filter(
         Q(tags__icontains='Inflow') | Q(amount__gt=0) | Q(status='Received')
@@ -3404,10 +5442,9 @@ def financials_sales(request):
 
     # Get farmer's customers for sales entries
     customers = FarmerCustomer.objects.filter(farmer=profile).order_by('name')
-    farms = Farm.objects.filter(farmer=profile).order_by('land_name')
     vendors = FarmerVendor.objects.filter(farmer=profile).order_by('vendor_name')
 
-    is_direct_farmer = not (hasattr(request.user, 'staff_profile') and request.user.staff_profile)
+    is_direct_farmer = (request.session.get('active_role') == 'farmer') or (not request.session.get('active_role') and get_farmer_profile(request) is not None and get_active_manager_staff(request) is None)
 
     import json
     import re
@@ -3430,14 +5467,41 @@ def financials_sales(request):
             Q(invoice_no__startswith=f"Sale #{t.id}:") | Q(invoice_no__icontains=f"Sale #{t.id}")
         ).first()
 
+        # If not found directly, check description for [Paid: ..., Pending: ...]
+        desc_str = t.description or ''
+        p_match = re.search(r'\[Paid:\s*₹?([\d\.,]+),\s*Pending:\s*₹?([\d\.,]+)\]', desc_str)
+
+        if not out_rec and p_match:
+            p_val = float(p_match.group(1).replace(',', ''))
+            b_val = float(p_match.group(2).replace(',', ''))
+            # Try to find unlinked outstanding record with matching amounts
+            out_rec = FarmerOutstanding.objects.filter(
+                farmer=profile,
+                amount_total=t.amount,
+                amount_paid=p_val
+            ).first()
+            if out_rec and f"Sale #{t.id}" not in out_rec.invoice_no:
+                out_rec.invoice_no = f"Sale #{t.id}: " + out_rec.invoice_no
+                out_rec.save()
+
         if out_rec:
+            t.outstanding_id = out_rec.id
             t.paid_amount = float(out_rec.amount_paid)
             t.balance_amount = max(0.0, float(out_rec.amount_total) - float(out_rec.amount_paid))
             if t.balance_amount <= 0.001:
                 t.status = 'Received'
             else:
                 t.status = 'Partial' if t.paid_amount > 0 else 'Pending'
+        elif p_match:
+            t.outstanding_id = None
+            t.paid_amount = float(p_match.group(1).replace(',', ''))
+            t.balance_amount = float(p_match.group(2).replace(',', ''))
+            if t.balance_amount <= 0.001:
+                t.status = 'Received'
+            else:
+                t.status = 'Partial' if t.paid_amount > 0 else 'Pending'
         else:
+            t.outstanding_id = None
             t.paid_amount = float(t.amount)
             t.balance_amount = 0.0
             if t.tags:
@@ -3447,6 +5511,52 @@ def financials_sales(request):
                     t.paid_amount = float(paid_match.group(1))
                 if bal_match:
                     t.balance_amount = float(bal_match.group(1))
+            if t.status in ['Pending', 'Unpaid'] and t.balance_amount <= 0.001:
+                t.balance_amount = float(t.amount)
+                t.paid_amount = 0.0
+
+        # Extract customer name and produce details cleanly from description
+        # e.g. "Sale: Carrot (Grade 1) to Direct Customer [Paid: ₹180, Pending: ₹20]"
+        c_name_match = re.search(r'\bto\s+([^\[\]]+?)(?:\s*\[|$)', desc_str)
+        if c_name_match:
+            t.customer_name = c_name_match.group(1).strip()
+        else:
+            t.customer_name = 'Direct Customer' if 'Direct Customer' in desc_str else 'Customer'
+
+        crop_match = re.search(r'Sale:\s*(.*?)\s+\bto\b\s+', desc_str)
+        if crop_match:
+            t.crop_name_display = crop_match.group(1).strip()
+        elif t.category and t.category != 'Sales':
+            t.crop_name_display = t.category
+        else:
+            t.crop_name_display = desc_str.split('[')[0].strip()
+
+        # Format INR currency with Indian commas
+        def fmt_inr_curr(v):
+            try:
+                v_num = float(v or 0)
+                int_part = int(abs(v_num))
+                dec_part = f"{abs(v_num):.2f}".split('.')[1]
+                s = str(int_part)
+                if len(s) > 3:
+                    last3 = s[-3:]
+                    rest = s[:-3]
+                    groups = []
+                    while len(rest) > 2:
+                        groups.insert(0, rest[-2:])
+                        rest = rest[:-2]
+                    if rest:
+                        groups.insert(0, rest)
+                    formatted = ','.join(groups) + ',' + last3
+                else:
+                    formatted = s
+                return f"{formatted}.{dec_part}"
+            except Exception:
+                return f"{v:.2f}"
+
+        t.amount_inr = fmt_inr_curr(t.amount)
+        t.paid_inr = fmt_inr_curr(t.paid_amount)
+        t.balance_inr = fmt_inr_curr(t.balance_amount)
 
     context = {
         'transactions': transactions,
@@ -3463,58 +5573,157 @@ def financials_sales(request):
         'vendors': vendors,
         'farms': farms,
         'is_direct_farmer': is_direct_farmer,
+        'today_str': datetime.date.today().strftime('%Y-%m-%d'),
     }
     return render(request, "farmer/financials_sales.html", context)
 
-def deduct_crop_inventory(profile, crop_name, quantity_tons, farm_instance=None):
+def deduct_crop_inventory(profile, crop_name, quantity_tons, farm_instance=None, buyer_name=None):
     """
     Deducts sold quantity in tons from the farmer's harvested CropSplit inventory.
+    Supports grade-wise deductions when crop_name contains a grade (e.g. "Tomato (Grade 1)" or "Tomato - Grade 1").
     """
     try:
         from decimal import Decimal
+        import datetime
         from django.db.models import Q
         from apps.farmer.models import CropSplit
+        from apps.farmer.harvest_batches import normalize_batch_numbers
         
         if not quantity_tons or float(quantity_tons) <= 0:
             return
             
         remaining = Decimal(str(quantity_tons))
-        clean_name = crop_name.split(' (')[0].strip() if crop_name else ''
+        crop_str = (crop_name or '').strip()
+
+        # Parse crop_name and target grade
+        clean_name = crop_str
+        target_grade = None
+
+        if ' (' in crop_str:
+            parts = crop_str.split(' (', 1)
+            clean_name = parts[0].strip()
+            g_part = parts[1].rstrip(')').strip()
+            if g_part.lower() not in ['all grades', 'all', 'produce', 'blended']:
+                target_grade = g_part
+        elif ' - Grade' in crop_str or ' - grade' in crop_str.lower():
+            parts = crop_str.split(' - ', 1)
+            clean_name = parts[0].strip()
+            target_grade = parts[1].strip()
         
         splits_query = CropSplit.objects.filter(
-            farm__farmer=profile,
-            stage='Harvested'
-        )
+            farm__farmer=profile
+        ).exclude(stage__in=['Completed', 'Inactive'])
+
         if clean_name:
             splits_query = splits_query.filter(
-                Q(crop__name__iexact=crop_name) | Q(crop__name__icontains=clean_name)
+                Q(crop__name__iexact=clean_name) | Q(crop__name__icontains=clean_name) |
+                Q(crop_category__icontains=clean_name) | Q(crop_variety__icontains=clean_name)
             )
         if farm_instance:
-            farm_splits = splits_query.filter(farm=farm_instance).order_by('id')
+            farm_splits = splits_query.filter(farm=farm_instance).order_by('-id')
             if farm_splits.exists():
                 splits_query = farm_splits
             else:
-                splits_query = splits_query.order_by('id')
+                splits_query = splits_query.order_by('-id')
         else:
-            splits_query = splits_query.order_by('id')
+            splits_query = splits_query.order_by('-id')
 
-        for s in splits_query:
+        all_splits = list(splits_query)
+        # Prioritize splits with available stock
+        all_splits.sort(key=lambda s: 0 if ((s.yield_tons and s.yield_tons > 0) or any(b.get('status') not in ['Sold', 'Loss / Discard'] for b in (s.harvest_batches or []))) else 1)
+
+        for s in all_splits:
             if remaining <= Decimal('0'):
                 break
-            available = s.yield_tons or Decimal('0')
-            if available <= remaining:
-                remaining -= available
-                s.yield_tons = Decimal('0')
-                s.stage = 'Sold'
-                if s.price_per_mt:
-                    s.total_sale_value = Decimal('0')
+
+            batches = list(s.harvest_batches or [])
+            if batches:
+                def batch_is_ready(b):
+                    return b.get('status') not in ['Sold', 'Loss / Discard'] and float(b.get('yield', 0)) > 0.0001
+
+                matching_batches = []
+                if target_grade:
+                    matching_batches = [b for b in batches if batch_is_ready(b) and (b.get('quality') or '').strip().lower() == target_grade.lower()]
+
+                if not matching_batches:
+                    matching_batches = [b for b in batches if batch_is_ready(b)]
+
+                for b in matching_batches:
+                    if remaining <= Decimal('0'):
+                        break
+                    b_yield = float(b.get('yield', 0))
+                    if b_yield <= 0.0001:
+                        continue
+
+                    rem_float = float(remaining)
+                    if rem_float >= b_yield - 0.0001:
+                        # Full batch sold
+                        b['status'] = 'Sold'
+                        if buyer_name:
+                            b['sold_to'] = buyer_name
+                        b['sold_date'] = datetime.date.today().strftime('%d %b %Y')
+                        remaining -= Decimal(str(round(b_yield, 2)))
+                    else:
+                        # Partial batch sold: split the batch
+                        sold_qty = round(rem_float, 2)
+                        rem_qty = round(b_yield - sold_qty, 2)
+                        orig_val = float(b.get('saleValue') or 0)
+                        unit_p = float(b.get('price') or 0)
+
+                        b['yield'] = sold_qty
+                        b['status'] = 'Sold'
+                        if buyer_name:
+                            b['sold_to'] = buyer_name
+                        b['sold_date'] = datetime.date.today().strftime('%d %b %Y')
+                        if orig_val > 0:
+                            b['saleValue'] = round(orig_val * sold_qty / b_yield, 2)
+                        else:
+                            b['saleValue'] = round(sold_qty * unit_p, 2)
+
+                        # Remaining ready portion
+                        rem_b = dict(b)
+                        rem_b['yield'] = rem_qty
+                        rem_b['status'] = 'Ready'
+                        rem_b.pop('sold_to', None)
+                        rem_b.pop('sold_date', None)
+                        if orig_val > 0:
+                            rem_b['saleValue'] = round(orig_val * rem_qty / b_yield, 2)
+                        else:
+                            rem_b['saleValue'] = round(rem_qty * unit_p, 2)
+
+                        b_idx = batches.index(b)
+                        batches.insert(b_idx + 1, rem_b)
+                        remaining = Decimal('0')
+                        break
+
+                s.harvest_batches = normalize_batch_numbers(batches)
+                ready_list = [b for b in s.harvest_batches if b.get('status') not in ['Sold', 'Loss / Discard']]
+                rem_y = sum(float(b.get('yield', 0)) for b in ready_list)
+                rem_v = sum(float(b.get('saleValue') or (float(b.get('yield', 0)) * float(b.get('price', 0)))) for b in ready_list)
+                s.yield_tons = Decimal(str(round(rem_y, 2)))
+                s.total_sale_value = Decimal(str(round(rem_v, 2)))
+                if rem_y > 0:
+                    s.price_per_mt = Decimal(str(round(rem_v / rem_y, 2)))
+                if rem_y <= 0.001 and all(b.get('status') == 'Sold' for b in s.harvest_batches):
+                    s.stage = 'Sold'
+                else:
+                    s.stage = 'Harvested'
                 s.save()
             else:
-                s.yield_tons = available - remaining
-                if s.price_per_mt:
-                    s.total_sale_value = s.yield_tons * s.price_per_mt
-                s.save()
-                remaining = Decimal('0')
+                available = s.yield_tons or Decimal('0')
+                if available <= remaining:
+                    remaining -= available
+                    s.yield_tons = Decimal('0')
+                    s.stage = 'Sold'
+                    if s.price_per_mt:
+                        s.total_sale_value = Decimal('0')
+                    s.save()
+                else:
+                    s.yield_tons = available - remaining
+                    if s.price_per_mt:
+                        s.total_sale_value = s.yield_tons * s.price_per_mt
+                    s.save()
+                    remaining = Decimal('0')
     except Exception as e:
         import logging
         logging.error(f"Error deducting crop inventory: {e}")
@@ -3523,67 +5732,122 @@ def deduct_crop_inventory(profile, crop_name, quantity_tons, farm_instance=None)
 def restore_crop_inventory(profile, crop_name, quantity_tons, farm_instance=None):
     """
     Restores sold quantity in tons back to the farmer's harvested CropSplit inventory.
+    Supports grade-wise restoration when crop_name contains a grade (e.g. "Tomato (Grade 1)").
     """
     try:
         from decimal import Decimal
         from django.db.models import Q
         from apps.farmer.models import CropSplit
+        from apps.farmer.harvest_batches import normalize_batch_numbers
         
         if not quantity_tons or float(quantity_tons) <= 0:
             return
             
-        qty_to_restore = Decimal(str(quantity_tons))
-        clean_name = crop_name.split(' (')[0].strip() if crop_name else ''
-        
-        harvested_query = CropSplit.objects.filter(
-            farm__farmer=profile,
-            stage='Harvested'
-        )
+        remaining = Decimal(str(quantity_tons))
+        crop_str = (crop_name or '').strip()
+
+        clean_name = crop_str
+        target_grade = None
+
+        if ' (' in crop_str:
+            parts = crop_str.split(' (', 1)
+            clean_name = parts[0].strip()
+            g_part = parts[1].rstrip(')').strip()
+            if g_part.lower() not in ['all grades', 'all', 'produce', 'blended']:
+                target_grade = g_part
+        elif ' - Grade' in crop_str or ' - grade' in crop_str.lower():
+            parts = crop_str.split(' - ', 1)
+            clean_name = parts[0].strip()
+            target_grade = parts[1].strip()
+
+        splits_query = CropSplit.objects.filter(farm__farmer=profile)
         if clean_name:
-            harvested_query = harvested_query.filter(
-                Q(crop__name__iexact=crop_name) | Q(crop__name__icontains=clean_name)
+            splits_query = splits_query.filter(
+                Q(crop__name__iexact=clean_name) | Q(crop__name__icontains=clean_name) |
+                Q(crop_category__icontains=clean_name) | Q(crop_variety__icontains=clean_name)
             )
         if farm_instance:
-            farm_harvested = harvested_query.filter(farm=farm_instance).order_by('-id')
-            if farm_harvested.exists():
-                harvested_query = farm_harvested
+            farm_splits = splits_query.filter(farm=farm_instance).order_by('-id')
+            if farm_splits.exists():
+                splits_query = farm_splits
             else:
-                harvested_query = harvested_query.order_by('-id')
+                splits_query = splits_query.order_by('-id')
         else:
-            harvested_query = harvested_query.order_by('-id')
+            splits_query = splits_query.order_by('-id')
 
-        target_split = harvested_query.first()
-        if target_split:
-            target_split.yield_tons = (target_split.yield_tons or Decimal('0')) + qty_to_restore
-            if target_split.price_per_mt:
-                target_split.total_sale_value = target_split.yield_tons * target_split.price_per_mt
-            target_split.save()
-            return
+        all_splits = list(splits_query)
+        for s in all_splits:
+            if remaining <= Decimal('0'):
+                break
 
-        sold_query = CropSplit.objects.filter(
-            farm__farmer=profile,
-            stage='Sold'
-        )
-        if clean_name:
-            sold_query = sold_query.filter(
-                Q(crop__name__iexact=crop_name) | Q(crop__name__icontains=clean_name)
-            )
-        if farm_instance:
-            farm_sold = sold_query.filter(farm=farm_instance).order_by('-id')
-            if farm_sold.exists():
-                sold_query = farm_sold
+            batches = list(s.harvest_batches or [])
+            if batches:
+                sold_batches = [b for b in batches if b.get('status') == 'Sold']
+                matching_sold = []
+                if target_grade:
+                    matching_sold = [b for b in sold_batches if (b.get('quality') or '').strip().lower() == target_grade.lower()]
+
+                if not matching_sold:
+                    matching_sold = sold_batches
+
+                # Process sold batches in reverse order (LIFO)
+                for b in reversed(matching_sold):
+                    if remaining <= Decimal('0'):
+                        break
+                    sold_y = float(b.get('yield', 0))
+                    if sold_y <= 0:
+                        continue
+
+                    rem_float = float(remaining)
+                    if rem_float >= sold_y - 0.0001:
+                        b['status'] = 'Ready'
+                        b.pop('sold_to', None)
+                        b.pop('sold_date', None)
+                        remaining -= Decimal(str(round(sold_y, 2)))
+                    else:
+                        restored_qty = round(rem_float, 2)
+                        rem_sold_qty = round(sold_y - restored_qty, 2)
+                        orig_val = float(b.get('saleValue') or 0)
+                        unit_p = float(b.get('price') or 0)
+
+                        b['yield'] = rem_sold_qty
+                        if orig_val > 0:
+                            b['saleValue'] = round(orig_val * rem_sold_qty / sold_y, 2)
+                        else:
+                            b['saleValue'] = round(rem_sold_qty * unit_p, 2)
+
+                        ready_b = dict(b)
+                        ready_b['yield'] = restored_qty
+                        ready_b['status'] = 'Ready'
+                        ready_b.pop('sold_to', None)
+                        ready_b.pop('sold_date', None)
+                        if orig_val > 0:
+                            ready_b['saleValue'] = round(orig_val * restored_qty / sold_y, 2)
+                        else:
+                            ready_b['saleValue'] = round(restored_qty * unit_p, 2)
+
+                        b_idx = batches.index(b)
+                        batches.insert(b_idx + 1, ready_b)
+                        remaining = Decimal('0')
+                        break
+
+                s.harvest_batches = normalize_batch_numbers(batches)
+                ready_list = [b for b in s.harvest_batches if b.get('status') not in ['Sold', 'Loss / Discard']]
+                rem_y = sum(float(b.get('yield', 0)) for b in ready_list)
+                rem_v = sum(float(b.get('saleValue') or (float(b.get('yield', 0)) * float(b.get('price', 0)))) for b in ready_list)
+                s.yield_tons = Decimal(str(round(rem_y, 2)))
+                s.total_sale_value = Decimal(str(round(rem_v, 2)))
+                if rem_y > 0:
+                    s.price_per_mt = Decimal(str(round(rem_v / rem_y, 2)))
+                s.stage = 'Harvested'
+                s.save()
             else:
-                sold_query = sold_query.order_by('-id')
-        else:
-            sold_query = sold_query.order_by('-id')
-
-        sold_split = sold_query.first()
-        if sold_split:
-            sold_split.stage = 'Harvested'
-            sold_split.yield_tons = (sold_split.yield_tons or Decimal('0')) + qty_to_restore
-            if sold_split.price_per_mt:
-                sold_split.total_sale_value = sold_split.yield_tons * sold_split.price_per_mt
-            sold_split.save()
+                s.stage = 'Harvested'
+                s.yield_tons = (s.yield_tons or Decimal('0')) + remaining
+                if s.price_per_mt:
+                    s.total_sale_value = s.yield_tons * s.price_per_mt
+                s.save()
+                remaining = Decimal('0')
     except Exception as e:
         import logging
         logging.error(f"Error restoring crop inventory: {e}")
@@ -3731,7 +5995,7 @@ def add_sale_page(request):
 
             # Deduct sold crop inventory from CropSplit
             if qty and qty > 0 and category:
-                deduct_crop_inventory(profile, category, qty, farm_instance)
+                deduct_crop_inventory(profile, category, qty, farm_instance, buyer_name=buyer_name)
 
             # Create Customer Outstanding record if balance > 0
             if balance_amount > 0:
@@ -3781,28 +6045,26 @@ def add_sale_page(request):
         except Exception as e:
             messages.error(request, f'Error creating sale: {e}')
 
-    crops_splits = CropSplit.objects.filter(farm__farmer=profile, stage='Harvested').select_related('crop', 'farm').values('crop__id', 'crop__name', 'farm__id', 'farm__land_name').distinct()
-    farmer_crops = []
-    for c in crops_splits:
-        splits_qs = CropSplit.objects.filter(farm__farmer=profile, crop__id=c['crop__id'], farm__id=c['farm__id'], stage='Harvested')
-        available = splits_qs.aggregate(Sum('yield_tons'))['yield_tons__sum'] or 0
-        latest_split = splits_qs.order_by('-id').first()
-        price = latest_split.price_per_mt if (latest_split and latest_split.price_per_mt) else 0
-
-        farmer_crops.append({
-            'crop__id': c['crop__id'],
-            'crop__name': c['crop__name'],
-            'farm__id': c['farm__id'],
-            'farm__land_name': c['farm__land_name'],
-            'available': available,
-            'price': float(price)
-        })
+    farmer_crops = get_farmer_sale_crops(profile)
 
     customer_types = CustomerType.objects.filter(is_active=True).order_by('name')
     customers = FarmerCustomer.objects.filter(farmer=profile).select_related('customer_type').order_by('name')
     farms = Farm.objects.filter(farmer=profile).order_by('land_name')
     vendors = FarmerVendor.objects.filter(farmer=profile).order_by('vendor_name')
     expense_types = ExpenseType.objects.filter(is_active=True).order_by('name')
+
+    pre_farm_id = request.GET.get('farm_id') or ''
+    pre_crop = request.GET.get('crop') or ''
+    pre_grade = request.GET.get('grade') or ''
+
+    # Mark pre-selection
+    for crop in farmer_crops:
+        if pre_crop and pre_grade and pre_crop.lower() == crop['base_crop_name'].lower() and pre_grade.lower() == crop['grade'].lower():
+            crop['is_selected'] = True
+            break
+        elif pre_crop and not pre_grade and (pre_crop.lower() == crop['crop__name'].lower() or pre_crop.lower() == crop['base_crop_name'].lower()):
+            crop['is_selected'] = True
+            break
 
     context = {
         'farmer_crops': farmer_crops,
@@ -3812,9 +6074,109 @@ def add_sale_page(request):
         'vendors': vendors,
         'expense_types': expense_types,
         'is_edit': False,
+        'pre_farm_id': pre_farm_id,
+        'pre_crop': pre_crop,
+        'pre_grade': pre_grade,
         'today': datetime.date.today().strftime('%Y-%m-%d'),
     }
     return render(request, "farmer/add_sale.html", context)
+
+
+def get_farmer_sale_crops(profile, is_edit=False, current_category=None, current_qty=0):
+    from decimal import Decimal
+    from django.db.models import Q
+    from apps.farmer.models import CropSplit
+
+    harvest_splits_qs = CropSplit.objects.filter(
+        farm__farmer=profile,
+        stage__in=['Harvested', 'Yield', 'Partially Sold', 'Harvesting']
+    ).select_related('crop', 'farm').order_by('-updated_at', '-id')
+
+    extra_splits = CropSplit.objects.filter(
+        farm__farmer=profile
+    ).exclude(
+        id__in=harvest_splits_qs.values_list('id', flat=True)
+    ).filter(
+        Q(yield_tons__gt=0) | ~Q(harvest_batches=[])
+    ).select_related('crop', 'farm').order_by('-updated_at', '-id')
+
+    all_harvest_splits = list(harvest_splits_qs) + list(extra_splits)
+
+    farmer_crops = []
+    seen_keys = set()
+
+    for s in all_harvest_splits:
+        c_name = s.crop.name if s.crop else (s.crop_category or s.crop_variety or 'Produce')
+        c_id = s.crop.id if s.crop else None
+        f_id = s.farm.id if s.farm else ''
+        f_name = s.farm.land_name if s.farm else 'General Farm'
+        unit_str = s.expected_yield_unit or 'Tons'
+        batches = s.harvest_batches or []
+
+        if batches:
+            ready_batches = [b for b in batches if b.get('status') not in ['Sold', 'Loss / Discard'] and float(b.get('yield', 0)) > 0.0001]
+            if ready_batches:
+                grade_map = {}
+                for b in ready_batches:
+                    q = (b.get('quality') or 'Grade 1').strip()
+                    y = float(b.get('yield', 0))
+                    p = float(b.get('price', 0))
+                    v = float(b.get('saleValue') or (y * p))
+                    u = b.get('unit') or unit_str
+                    if q not in grade_map:
+                        grade_map[q] = {'grade': q, 'yield': 0.0, 'amount': 0.0, 'unit': u, 'price': p}
+                    grade_map[q]['yield'] += y
+                    grade_map[q]['amount'] += v
+                    grade_map[q]['price'] = p
+
+                for q, gdata in grade_map.items():
+                    key = (c_name, q, f_id)
+                    if key not in seen_keys and gdata['yield'] > 0:
+                        seen_keys.add(key)
+                        avg_p = round(gdata['amount'] / gdata['yield'], 2) if gdata['yield'] > 0 else gdata['price']
+                        farmer_crops.append({
+                            'crop__id': c_id,
+                            'base_crop_name': c_name,
+                            'crop__name': f"{c_name} ({q})",
+                            'display_name': f"{c_name} - {q}",
+                            'grade': q,
+                            'farm__id': f_id,
+                            'farm__land_name': f_name,
+                            'available': round(gdata['yield'], 2),
+                            'price': avg_p,
+                            'unit': gdata['unit'],
+                            'is_selected': False,
+                        })
+
+
+        else:
+            avail = float(s.yield_tons or 0)
+            if avail > 0:
+                key = (c_name, '', f_id)
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    farmer_crops.append({
+                        'crop__id': c_id,
+                        'base_crop_name': c_name,
+                        'crop__name': c_name,
+                        'display_name': c_name,
+                        'grade': '',
+                        'farm__id': f_id,
+                        'farm__land_name': f_name,
+                        'available': round(avail, 2),
+                        'price': float(s.price_per_mt or 0),
+                        'unit': unit_str,
+                        'is_selected': False,
+                    })
+
+    if is_edit and current_qty > 0 and current_category:
+        for crop in farmer_crops:
+            if crop['crop__name'] == current_category:
+                crop['available'] = round(crop['available'] + current_qty, 2)
+            elif current_category.split(' (')[0].strip() == crop['base_crop_name']:
+                crop['available'] = round(crop['available'] + current_qty, 2)
+
+    return farmer_crops
 
 def edit_sale_page(request, sale_id):
     import datetime
@@ -3962,7 +6324,7 @@ def edit_sale_page(request, sale_id):
             if old_qty > 0 and old_category:
                 restore_crop_inventory(profile, old_category, old_qty, old_farm)
             if qty and qty > 0 and category:
-                deduct_crop_inventory(profile, category, qty, farm_instance)
+                deduct_crop_inventory(profile, category, qty, farm_instance, buyer_name=buyer_name)
 
             # Update or Create FarmerOutstanding record
             existing_out = FarmerOutstanding.objects.filter(
@@ -4028,22 +6390,20 @@ def edit_sale_page(request, sale_id):
         except Exception as e:
             messages.error(request, f'Error updating sale: {e}')
 
-    crops_splits = CropSplit.objects.filter(farm__farmer=profile, stage='Harvested').select_related('crop', 'farm').values('crop__id', 'crop__name', 'farm__id', 'farm__land_name').distinct()
-    farmer_crops = []
-    for c in crops_splits:
-        splits_qs = CropSplit.objects.filter(farm__farmer=profile, crop__id=c['crop__id'], farm__id=c['farm__id'], stage='Harvested')
-        available = splits_qs.aggregate(Sum('yield_tons'))['yield_tons__sum'] or 0
-        latest_split = splits_qs.order_by('-id').first()
-        price = latest_split.price_per_mt if (latest_split and latest_split.price_per_mt) else 0
+    farmer_crops = get_farmer_sale_crops(profile, is_edit=True, current_category=sale.category, current_qty=old_qty)
+    sale_category = (sale.category or '').strip()
+    sale_base_category = sale_category.split(' (')[0].strip()
+    matching_crop = next((
+        crop for crop in farmer_crops
+        if sale_category == crop['crop__name']
+        or sale_base_category == crop['base_crop_name']
+    ), None)
+    is_other_category = bool(sale_category and matching_crop is None)
 
-        farmer_crops.append({
-            'crop__id': c['crop__id'],
-            'crop__name': c['crop__name'],
-            'farm__id': c['farm__id'],
-            'farm__land_name': c['farm__land_name'],
-            'available': available,
-            'price': float(price)
-        })
+    for crop in farmer_crops:
+        if crop is matching_crop:
+            crop['is_selected'] = True
+            break
 
     customer_types = CustomerType.objects.filter(is_active=True).order_by('name')
     customers = FarmerCustomer.objects.filter(farmer=profile).select_related('customer_type').order_by('name')
@@ -4160,8 +6520,6 @@ def edit_sale_page(request, sale_id):
         })
     linked_expenses_json = json.dumps(linked_expenses_list)
 
-    is_other_category = bool(sale.category and not any(c['crop__name'] == sale.category for c in farmer_crops))
-
     context = {
         'sale': sale,
         'subtotal_valuation': f"{subtotal:.2f}",
@@ -4192,16 +6550,22 @@ def expenses_view(request):
     from django.db.models import Sum, Q, Count
     from django.shortcuts import render
     from apps.farmer.models import Farm, FarmerVendor, LedgerTransaction, FarmerOutstanding
-    from apps.superadmin.models import ExpenseType, ExpenseUnit, DocumentCategory
+    from apps.superadmin.models import ExpenseType, ExpenseUnit, DocumentType
     import datetime
 
     profile = get_farmer_profile(request.user)
+    try:
+        from apps.farmer.recurring_utils import process_recurring_expenses
+        process_recurring_expenses(profile, request=request)
+    except Exception:
+        pass
+
     farms   = Farm.objects.filter(farmer=profile).order_by('land_name')
     vendors = FarmerVendor.objects.filter(farmer=profile).order_by('vendor_name')
 
     expense_types      = ExpenseType.objects.filter(is_active=True).order_by('name')
     expense_units      = ExpenseUnit.objects.filter(is_active=True).order_by('name')
-    document_categories = DocumentCategory.objects.filter(document_type='My Expenses', is_active=True).order_by('name')
+    document_types = DocumentType.objects.filter(is_active=True).order_by('name')
 
     expenses_qs = LedgerTransaction.objects.filter(
         farmer=profile
@@ -4243,7 +6607,32 @@ def expenses_view(request):
     general_cost = total_expenses - seeds_cost - fertilizers_cost
 
     from apps.farmer.models import FarmerInventory
-    inventory_items = FarmerInventory.objects.filter(farmer=profile).values_list('item_name', flat=True).distinct().order_by('item_name')
+    from apps.superadmin.models import InventoryItem
+    farmer_inv_items = FarmerInventory.objects.filter(farmer=profile).order_by('item_name')
+    inventory_items = []
+    seen = set()
+    for fi in farmer_inv_items:
+        if fi.item_name and fi.item_name.strip() and fi.item_name.strip().lower() not in seen:
+            seen.add(fi.item_name.strip().lower())
+            inventory_items.append({
+                'name': fi.item_name.strip(),
+                'unit': fi.unit or '',
+                'category': fi.category or '',
+                'quantity': fi.quantity or 0,
+                'is_existing': True
+            })
+
+    master_items = InventoryItem.objects.filter(is_active=True).order_by('name')
+    for mi in master_items:
+        if mi.name and mi.name.strip() and mi.name.strip().lower() not in seen:
+            seen.add(mi.name.strip().lower())
+            inventory_items.append({
+                'name': mi.name.strip(),
+                'unit': '',
+                'category': getattr(mi.product_type, 'name', '') if hasattr(mi, 'product_type') and mi.product_type else '',
+                'quantity': 0,
+                'is_existing': False
+            })
 
     context = {
         'expenses':            expenses_qs,
@@ -4262,9 +6651,9 @@ def expenses_view(request):
         'vendors':             vendors,
         'expense_types':       expense_types,
         'expense_units':       expense_units,
-        'document_categories': document_categories,
+        'document_types':      document_types,
         'inventory_items':     inventory_items,
-        'is_direct_farmer':    not (hasattr(request.user, 'staff_profile') and request.user.staff_profile),
+        'is_direct_farmer':    (request.session.get('active_role') == 'farmer') or (not request.session.get('active_role') and get_farmer_profile(request) is not None and get_active_manager_staff(request) is None),
     }
     return render(request, "farmer/expenses.html", context)
 
@@ -4277,11 +6666,13 @@ def quick_add_customer_api(request):
         profile = get_farmer_profile(request.user)
         name = request.POST.get('name', '').strip()
         company_name = request.POST.get('company_name', '').strip()
-        contact_number = request.POST.get('contact_number', '').strip()
+        contact_number = request.POST.get('contact_number', '').strip() or request.POST.get('phone', '').strip()
         customer_type_id = request.POST.get('customer_type_id') or None
         
         if not name:
             return JsonResponse({'success': False, 'error': 'Customer name is required'})
+        if contact_number and not re.fullmatch(r'[0-9]{10,13}', contact_number):
+            return JsonResponse({'success': False, 'error': 'Mobile number must contain 10 to 13 digits.'})
             
         ct_obj = CustomerType.objects.filter(id=customer_type_id).first() if customer_type_id else None
         
@@ -4299,6 +6690,7 @@ def quick_add_customer_api(request):
             'success': True,
             'id': cust.id,
             'name': cust.name,
+            'contact_number': cust.contact_number or contact_number or '',
             'company_name': cust.company_name or '',
             'customer_type_id': cust.customer_type_id or ''
         })
@@ -4314,7 +6706,7 @@ def quick_add_customer_type(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Customer type name is required'})
         
-        ct, created = CustomerType.objects.get_or_create(
+        ct, created = get_or_reactivate_master(CustomerType,
             name=name,
             defaults={'description': description, 'is_active': True}
         )
@@ -4335,7 +6727,7 @@ def quick_add_expense_type(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Expense type name is required'})
         
-        et, created = ExpenseType.objects.get_or_create(
+        et, created = get_or_reactivate_master(ExpenseType,
             name=name,
             defaults={'is_vendor_based': is_vendor, 'is_active': True}
         )
@@ -4386,10 +6778,13 @@ def quick_add_expense_unit(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Unit name is required'})
         
-        unit, created = ExpenseUnit.objects.get_or_create(
+        unit, created = get_or_reactivate_master(ExpenseUnit,
             name=name,
             defaults={'slug': slug, 'is_active': True}
         )
+        if not created and request.POST.get('slug'):
+            unit.slug = request.POST.get('slug').strip()
+            unit.save(update_fields=['slug'])
         return JsonResponse({
             'success': True,
             'id': unit.id,
@@ -4410,7 +6805,7 @@ def quick_add_task_category(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Category name is required'})
         
-        category, created = TaskCategory.objects.get_or_create(
+        category, created = get_or_reactivate_master(TaskCategory,
             name=name,
             defaults={
                 'description': description,
@@ -4436,7 +6831,7 @@ def quick_add_task_priority(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Priority name is required'})
             
-        priority, created = TaskPriority.objects.get_or_create(
+        priority, created = get_or_reactivate_master(TaskPriority,
             name=name,
             defaults={'description': description}
         )
@@ -4457,7 +6852,7 @@ def quick_add_inventory_category(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Category name is required'})
         
-        category, created = InventoryCategory.objects.get_or_create(
+        category, created = get_or_reactivate_master(InventoryCategory,
             name=name,
             defaults={'layout_type': layout_type, 'is_active': True}
         )
@@ -4478,7 +6873,7 @@ def quick_add_storage_location(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Location name is required'})
         
-        location, created = StorageLocation.objects.get_or_create(
+        location, created = get_or_reactivate_master(StorageLocation,
             name=name,
             defaults={'is_active': True}
         )
@@ -4498,7 +6893,7 @@ def quick_add_inventory_type(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Inventory Type name is required'})
         
-        inv_type, created = ProductType.objects.get_or_create(
+        inv_type, created = get_or_reactivate_master(ProductType,
             name=name,
             defaults={'is_active': True}
         )
@@ -4514,24 +6909,26 @@ def quick_add_inventory_type(request):
 
 def customer(request):
     from apps.farmer.models import FarmerCustomer, LedgerTransaction
-    from apps.superadmin.models import City, State, DocumentCategory
+    from apps.superadmin.models import City, State, DocumentType
     profile = get_farmer_profile(request.user)
     customers = list(FarmerCustomer.objects.filter(farmer=profile).select_related('document').order_by('-created_at'))
     states = State.objects.filter(country__name__iexact='India').order_by('name')
     if not states.exists():
         states = State.objects.all().order_by('name')
 
-    doc_categories = DocumentCategory.objects.filter(is_active=True).order_by('name')
+    document_types = DocumentType.objects.filter(is_active=True).order_by('name')
 
     state_dict = {str(s.id): s.name for s in states}
     city_dict = {str(c.id): c.name for c in City.objects.all()}
+    from apps.superadmin.models import Taluk
 
     for c in customers:
-        # Load districts for edit modal
-        if c.state and c.state.isdigit():
-            c.state_id = c.state
-            c.district_id = c.district
+        # Load districts & taluks for edit modal
+        if c.state and str(c.state).isdigit():
+            c.state_id = str(c.state)
+            c.district_id = str(c.district) if c.district else ''
             c.districts = list(City.objects.filter(state_id=c.state).order_by('name'))
+            c.taluks = list(Taluk.objects.filter(city_id=c.district_id).order_by('name')) if (c.district_id and c.district_id.isdigit()) else []
         elif c.address and '|' in c.address:
             parts = c.address.split('|')
             if len(parts) >= 3:
@@ -4540,15 +6937,23 @@ def customer(request):
                 c.pincode = c.pincode or parts[2]
                 if c.state_id and c.state_id.isdigit():
                     c.districts = list(City.objects.filter(state_id=c.state_id).order_by('name'))
+                    c.taluks = list(Taluk.objects.filter(city_id=c.district_id).order_by('name')) if (c.district_id and c.district_id.isdigit()) else []
                 else:
                     c.districts = []
+                    c.taluks = []
+            else:
+                c.districts = []
+                c.taluks = []
         else:
             c.districts = []
+            c.taluks = []
 
         # Formatted address
         addr_parts = []
         if c.address and '|' not in c.address:
             addr_parts.append(c.address.strip())
+        if hasattr(c, 'taluk') and c.taluk:
+            addr_parts.append(str(c.taluk).strip())
         if c.district:
             d_name = city_dict.get(str(c.district), c.district)
             if d_name: addr_parts.append(str(d_name).strip())
@@ -4573,9 +6978,9 @@ def customer(request):
         else:
             c.formatted_address = c.address or '—'
 
-        c.transactions = LedgerTransaction.objects.filter(farmer=profile, description__icontains=c.name).order_by('-close_date')
+        import re
+        c.transactions = list(LedgerTransaction.objects.filter(farmer=profile, description__icontains=c.name).order_by('-close_date', '-id'))
 
-        # Calculate pending receivables from Outstanding Invoices or pending transactions
         from django.db.models import Q
         from apps.farmer.models import FarmerOutstanding
 
@@ -4583,19 +6988,44 @@ def customer(request):
             Q(customer=c) | Q(invoice_no__icontains=c.name)
         ).exclude(status='Paid')
 
+        for t in c.transactions:
+            # Check for linked outstanding
+            out_rec = outstanding_invoices.filter(
+                Q(invoice_no__startswith=f"Sale #{t.id}:") | Q(invoice_no__icontains=f"Sale #{t.id}")
+            ).first()
+            desc_m = re.search(r'\[Paid:\s*₹?([\d\.,]+),\s*Pending:\s*₹?([\d\.,]+)\]', t.description or '')
+
+            if out_rec:
+                t.outstanding_id = out_rec.id
+                t.paid_amount = float(out_rec.amount_paid)
+                t.balance_amount = max(0.0, float(out_rec.amount_total) - float(out_rec.amount_paid))
+            elif desc_m:
+                t.outstanding_id = None
+                t.paid_amount = float(desc_m.group(1).replace(',', ''))
+                t.balance_amount = float(desc_m.group(2).replace(',', ''))
+            elif t.status == 'Received' or t.status == 'Paid':
+                t.outstanding_id = None
+                t.paid_amount = float(t.amount)
+                t.balance_amount = 0.0
+            else:
+                t.outstanding_id = None
+                t.paid_amount = 0.0
+                t.balance_amount = float(t.amount)
+
+        # Calculate pending receivables
         pending_due = sum(float(inv.amount_total) - float(inv.amount_paid) for inv in outstanding_invoices)
 
         if not outstanding_invoices.exists():
             pending_due += sum(
-                float(t.amount) for t in c.transactions
-                if t.amount > 0 and t.status in ['Pending', 'In Transit', 'Unpaid']
+                float(getattr(t, 'balance_amount', t.amount)) for t in c.transactions
+                if t.amount > 0 and (t.status in ['Pending', 'In Transit', 'Unpaid', 'Partial'] or getattr(t, 'balance_amount', 0) > 0)
             )
 
         c.receivables = round(pending_due, 2)
         c.payables = 0
         c.outstanding = c.receivables
 
-    context = {'customers': customers, 'states': states, 'doc_categories': doc_categories}
+    context = {'customers': customers, 'states': states, 'document_types': document_types}
     return render(request, "farmer/customer.html", context)
 
 def get_districts(request):
@@ -4618,22 +7048,77 @@ def quick_add_crop(request):
     from apps.superadmin.models import Crop, CropType
     if request.method == "POST":
         name = request.POST.get('crop_name', '').strip()
+        crop_type_id = request.POST.get('crop_type_id', '').strip()
+        crop_type_name = request.POST.get('crop_type_name', '').strip()
+
         if not name:
             return JsonResponse({'success': False, 'error': 'Crop name cannot be empty.'})
-        
-        crop_type = CropType.objects.filter(name__iexact=name).first()
+
+        crop_type = None
+        if crop_type_id:
+            crop_type = CropType.objects.filter(id=crop_type_id).first()
+
+        if not crop_type and crop_type_name:
+            crop_type = CropType.objects.filter(name__iexact=crop_type_name).first()
+            if not crop_type:
+                crop_type = CropType.objects.create(name=crop_type_name, description=f"Crop Type: {crop_type_name}", is_active=True)
+            elif not crop_type.is_active:
+                crop_type.is_active = True
+                crop_type.save(update_fields=['is_active'])
+
+        if not crop_type:
+            crop_type = CropType.objects.filter(name__iexact=name).first()
+        if not crop_type:
+            crop_type = CropType.objects.first()
         if not crop_type:
             crop_type = CropType.objects.create(name=name, description=f"Auto-created crop type for {name}", is_active=True)
-            
+
         crop = Crop.objects.filter(name__iexact=name).first()
         if not crop:
-            crop = Crop.objects.create(name=name, crop_type=crop_type, description=f"Auto-created crop: {name}", is_active=True)
-            
+            crop = Crop.objects.create(name=name, crop_type=crop_type, description=f"Crop: {name}", is_active=True)
+        else:
+            update_fields = []
+            if not crop.is_active:
+                crop.is_active = True
+                update_fields.append('is_active')
+            if crop_type and crop.crop_type != crop_type:
+                crop.crop_type = crop_type
+                update_fields.append('crop_type')
+            if update_fields:
+                crop.save(update_fields=update_fields)
+
         return JsonResponse({
             'success': True,
             'id': crop.id,
-            'crop_type_id': crop_type.id,
+            'crop_type_id': crop.crop_type_id or crop_type.id,
+            'crop_type_name': crop.crop_type.name if crop.crop_type else crop_type.name,
             'name': crop.name
+        })
+    return JsonResponse({'success': False, 'error': 'Invalid request.'})
+
+@csrf_exempt
+def quick_add_crop_type(request):
+    from django.http import JsonResponse
+    from apps.superadmin.models import CropType
+    if request.method == "POST":
+        name = request.POST.get('name', '').strip() or request.POST.get('crop_type_name', '').strip()
+        if not name:
+            return JsonResponse({'success': False, 'error': 'Crop type name cannot be empty.'})
+
+        crop_type = CropType.objects.filter(name__iexact=name).first()
+        created = False
+        if not crop_type:
+            crop_type = CropType.objects.create(name=name, description=f"Crop Type: {name}", is_active=True)
+            created = True
+        elif not crop_type.is_active:
+            crop_type.is_active = True
+            crop_type.save(update_fields=['is_active'])
+
+        return JsonResponse({
+            'success': True,
+            'id': crop_type.id,
+            'name': crop_type.name,
+            'created': created
         })
     return JsonResponse({'success': False, 'error': 'Invalid request.'})
 
@@ -4646,7 +7131,7 @@ def quick_add_soil_type(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Soil type cannot be empty.'})
         
-        soil, created = SoilType.objects.get_or_create(
+        soil, created = get_or_reactivate_master(SoilType,
             name=name,
             defaults={'description': f"Auto-created soil type: {name}", 'is_active': True}
         )
@@ -4666,7 +7151,7 @@ def quick_add_irrigation_type(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Irrigation type cannot be empty.'})
         
-        irrigation, created = IrrigationType.objects.get_or_create(
+        irrigation, created = get_or_reactivate_master(IrrigationType,
             name=name,
             defaults={'description': f"Auto-created irrigation type: {name}", 'is_active': True}
         )
@@ -4686,7 +7171,7 @@ def quick_add_water_source(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Water source cannot be empty.'})
         
-        obj, created = WaterSourceType.objects.get_or_create(
+        obj, created = get_or_reactivate_master(WaterSourceType,
             name=name,
             defaults={'description': f"Auto-created water source: {name}", 'is_active': True}
         )
@@ -4702,7 +7187,7 @@ def quick_add_electricity_type(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Electricity type cannot be empty.'})
         
-        obj, created = ElectricityType.objects.get_or_create(
+        obj, created = get_or_reactivate_master(ElectricityType,
             name=name,
             defaults={'description': f"Auto-created electricity type: {name}", 'is_active': True}
         )
@@ -4718,7 +7203,7 @@ def quick_add_farming_type(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Farming type cannot be empty.'})
         
-        obj, created = FarmingType.objects.get_or_create(
+        obj, created = get_or_reactivate_master(FarmingType,
             name=name,
             defaults={'description': f"Auto-created farming type: {name}", 'is_active': True}
         )
@@ -4734,7 +7219,7 @@ def quick_add_fencing_type(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Fencing type cannot be empty.'})
         
-        obj, created = FencingType.objects.get_or_create(
+        obj, created = get_or_reactivate_master(FencingType,
             name=name,
             defaults={'description': f"Auto-created fencing type: {name}", 'is_active': True}
         )
@@ -4750,7 +7235,7 @@ def quick_add_crop_category(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Crop category cannot be empty.'})
         
-        obj, created = CropCategory.objects.get_or_create(
+        obj, created = get_or_reactivate_master(CropCategory,
             name=name,
             defaults={'description': f"Auto-created crop category: {name}", 'is_active': True}
         )
@@ -4766,7 +7251,7 @@ def quick_add_crop_pattern(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Crop pattern cannot be empty.'})
         
-        obj, created = CropPattern.objects.get_or_create(
+        obj, created = get_or_reactivate_master(CropPattern,
             name=name,
             defaults={'description': f"Auto-created crop pattern: {name}", 'is_active': True}
         )
@@ -4782,7 +7267,7 @@ def quick_add_crop_variety(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Crop variety cannot be empty.'})
         
-        obj, created = CropVariety.objects.get_or_create(
+        obj, created = get_or_reactivate_master(CropVariety,
             name=name,
             defaults={'description': f"Auto-created crop variety: {name}", 'is_active': True}
         )
@@ -4798,7 +7283,7 @@ def quick_add_crop_quality(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Quality name cannot be empty.'})
         
-        obj, created = CropQuality.objects.get_or_create(
+        obj, created = get_or_reactivate_master(CropQuality,
             name=name,
             defaults={'description': f"Auto-created crop quality: {name}", 'is_active': True}
         )
@@ -4814,7 +7299,7 @@ def quick_add_maintenance_schedule(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Maintenance schedule cannot be empty.'})
         
-        obj, created = MaintenanceSchedule.objects.get_or_create(
+        obj, created = get_or_reactivate_master(MaintenanceSchedule,
             name=name,
             defaults={'description': f"Auto-created maintenance schedule: {name}", 'is_active': True}
         )
@@ -4830,9 +7315,25 @@ def quick_add_document_type(request):
         if not name:
             return JsonResponse({'success': False, 'error': 'Document type cannot be empty.'})
         
-        obj, created = DocumentCategory.objects.get_or_create(
+        obj, created = get_or_reactivate_master(DocumentCategory,
             name=name,
             defaults={'document_type': 'My Land', 'description': f"Auto-created document type: {name}", 'is_active': True}
+        )
+        return JsonResponse({'success': True, 'id': obj.id, 'name': obj.name})
+    return JsonResponse({'success': False, 'error': 'Invalid request.'})
+
+@csrf_exempt
+def quick_add_health_indicator(request):
+    from django.http import JsonResponse
+    from apps.superadmin.models import HealthIndicator
+    if request.method == "POST":
+        name = request.POST.get('name', '').strip()
+        if not name:
+            return JsonResponse({'success': False, 'error': 'Health indicator cannot be empty.'})
+        
+        obj, created = get_or_reactivate_master(HealthIndicator,
+            name=name,
+            defaults={'description': f"Auto-created health indicator: {name}", 'is_active': True}
         )
         return JsonResponse({'success': True, 'id': obj.id, 'name': obj.name})
     return JsonResponse({'success': False, 'error': 'Invalid request.'})
@@ -4851,6 +7352,7 @@ MASTER_TYPE_MODEL_MAP = {
     'crop_quality': ('apps.superadmin.models', 'CropQuality', 'name'),
     'maintenance_schedule': ('apps.superadmin.models', 'MaintenanceSchedule', 'name'),
     'document_type': ('apps.superadmin.models', 'DocumentCategory', 'name'),
+    'health_indicator': ('apps.superadmin.models', 'HealthIndicator', 'name'),
     'customer_type': ('apps.superadmin.models', 'CustomerType', 'name'),
     'expense_type': ('apps.superadmin.models', 'ExpenseType', 'name'),
     'unit': ('apps.superadmin.models', 'ExpenseUnit', 'name'),
@@ -4892,7 +7394,14 @@ def quick_list_master_items(request):
             'id': obj.id,
             'name': label
         }
-        if item_type == 'customer':
+        if item_type == 'crop' and getattr(obj, 'crop_type', None):
+            item_entry['subtitle'] = f"Type: {obj.crop_type.name}"
+            item_entry['crop_type'] = obj.crop_type.name
+            item_entry['crop_type_id'] = obj.crop_type.id
+        elif item_type == 'inventory_category' and getattr(obj, 'layout_type', None):
+            item_entry['subtitle'] = f"Layout: {obj.layout_type}"
+            item_entry['layout_type'] = obj.layout_type
+        elif item_type == 'customer':
             extra = []
             if getattr(obj, 'company_name', None):
                 extra.append(obj.company_name)
@@ -4908,6 +7417,9 @@ def quick_delete_master_item(request):
     import importlib
     from django.http import JsonResponse
     
+    if get_active_manager_staff(request):
+        return JsonResponse({'success': False, 'error': 'Managers do not have permission to delete master options.'})
+
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST method required'})
         
@@ -5015,21 +7527,64 @@ def upcoming_payments(request):
 @csrf_exempt
 def pay_customer_outstanding_api(request):
     import datetime
+    import re
     from django.http import JsonResponse
-    from apps.farmer.models import FarmerOutstanding, LedgerTransaction
+    from django.db.models import Q
+    from apps.farmer.models import FarmerOutstanding, LedgerTransaction, CropSplit, FarmerCustomer
 
     farmer_prof = get_farmer_profile(request.user)
 
     if request.method == "POST":
         try:
             o_id = request.POST.get('outstanding_id')
+            t_id = request.POST.get('transaction_id')
             payment_type = request.POST.get('payment_type', 'full')
             pay_amount_str = request.POST.get('amount_paid', '0')
             payment_method = request.POST.get('payment_method', 'Cash')
             notes = request.POST.get('notes', '')
 
-            outstanding = FarmerOutstanding.objects.get(id=o_id, farmer=farmer_prof)
-            remaining = float(outstanding.amount_total) - float(outstanding.amount_paid)
+            outstanding = None
+            if o_id and str(o_id).isdigit():
+                outstanding = FarmerOutstanding.objects.filter(id=int(o_id), farmer=farmer_prof).first()
+
+            sale_trans = None
+            if t_id and str(t_id).isdigit():
+                sale_trans = LedgerTransaction.objects.filter(id=int(t_id), farmer=farmer_prof).first()
+
+            if not outstanding and sale_trans:
+                outstanding = FarmerOutstanding.objects.filter(
+                    farmer=farmer_prof
+                ).filter(
+                    Q(invoice_no__startswith=f"Sale #{sale_trans.id}:") | Q(invoice_no__icontains=f"Sale #{sale_trans.id}")
+                ).first()
+
+            if not outstanding and sale_trans:
+                # Try finding unlinked outstanding with matching amount
+                desc_m = re.search(r'\[Paid:\s*₹?([\d\.,]+),\s*Pending:\s*₹?([\d\.,]+)\]', sale_trans.description or '')
+                if desc_m:
+                    p_val = float(desc_m.group(1).replace(',', ''))
+                    outstanding = FarmerOutstanding.objects.filter(
+                        farmer=farmer_prof,
+                        amount_total=sale_trans.amount,
+                        amount_paid=p_val
+                    ).first()
+                    if outstanding:
+                        outstanding.invoice_no = f"Sale #{sale_trans.id}: " + outstanding.invoice_no
+                        outstanding.save()
+
+            # Determine remaining balance
+            if outstanding:
+                remaining = float(outstanding.amount_total) - float(outstanding.amount_paid)
+            elif sale_trans:
+                desc_m = re.search(r'\[Paid:\s*₹?([\d\.,]+),\s*Pending:\s*₹?([\d\.,]+)\]', sale_trans.description or '')
+                if desc_m:
+                    paid_already = float(desc_m.group(1).replace(',', ''))
+                    remaining = float(desc_m.group(2).replace(',', ''))
+                else:
+                    paid_already = 0.0
+                    remaining = float(sale_trans.amount)
+            else:
+                return JsonResponse({'success': False, 'error': 'Sale record not found.'})
 
             try:
                 typed_amount = float(pay_amount_str)
@@ -5044,43 +7599,91 @@ def pay_customer_outstanding_api(request):
             if pay_amount <= 0:
                 return JsonResponse({'success': False, 'error': 'Invalid payment amount.'})
 
-            import re
+            # If outstanding doesn't exist yet, create it
+            if not outstanding and sale_trans:
+                cust_match = re.search(r'to\s+([^\[\]]+?)(?:\s*\[|$)', sale_trans.description or '')
+                c_name = cust_match.group(1).strip() if cust_match else 'Customer'
+                cust_inst = FarmerCustomer.objects.filter(farmer=farmer_prof, name=c_name).first()
+                if not cust_inst:
+                    cust_inst = FarmerCustomer.objects.create(farmer=farmer_prof, name=c_name, status='Active')
+                outstanding = FarmerOutstanding.objects.create(
+                    farmer=farmer_prof,
+                    customer=cust_inst,
+                    invoice_no=f"Sale #{sale_trans.id}: {c_name}",
+                    due_date=datetime.date.today(),
+                    amount_total=sale_trans.amount,
+                    amount_paid=paid_already,
+                    status='Partial'
+                )
+
             new_amount_paid = float(outstanding.amount_paid) + pay_amount
             outstanding.amount_paid = new_amount_paid
             total_amt = float(outstanding.amount_total)
             new_balance = max(0.0, total_amt - new_amount_paid)
 
-            if new_amount_paid >= total_amt:
+            if new_balance <= 0.01:
                 outstanding.status = 'Paid'
             else:
                 outstanding.status = 'Partial'
 
             outstanding.save()
 
-            # Synchronize linked parent sale transaction if this outstanding was generated from a Sale
-            sale_id_match = re.search(r'Sale #(\d+)', outstanding.invoice_no)
-            sale_trans = None
-            if sale_id_match:
-                sale_id = int(sale_id_match.group(1))
-                sale_trans = LedgerTransaction.objects.filter(farmer=farmer_prof, id=sale_id).first()
-                if sale_trans:
-                    st_tags = sale_trans.tags or ''
-                    if 'Paid:' in st_tags:
-                        st_tags = re.sub(r'Paid:\s*₹?[\d\.]+', f'Paid: ₹{new_amount_paid:.2f}', st_tags)
-                    else:
-                        st_tags += f' | Paid: ₹{new_amount_paid:.2f}'
-                    
-                    if 'Balance:' in st_tags:
-                        st_tags = re.sub(r'Balance:\s*₹?[\d\.]+', f'Balance: ₹{new_balance:.2f}', st_tags)
-                    else:
-                        st_tags += f' | Balance: ₹{new_balance:.2f}'
+            # Synchronize linked parent sale transaction
+            if not sale_trans:
+                sale_id_match = re.search(r'Sale #(\d+)', outstanding.invoice_no)
+                if sale_id_match:
+                    sale_trans = LedgerTransaction.objects.filter(farmer=farmer_prof, id=int(sale_id_match.group(1))).first()
 
-                    sale_trans.tags = st_tags
-                    if new_amount_paid >= total_amt:
-                        sale_trans.status = 'Received'
+            if sale_trans:
+                st_desc = sale_trans.description or ''
+                if new_balance <= 0.01:
+                    sale_trans.status = 'Received'
+                    if '[Paid:' in st_desc:
+                        st_desc = re.sub(r'\s*\[Paid:.*?\]', '', st_desc).strip()
+                else:
+                    sale_trans.status = 'Partial'
+                    if '[Paid:' in st_desc:
+                        st_desc = re.sub(r'\[Paid:.*?\]', f'[Paid: ₹{int(new_amount_paid)}, Pending: ₹{int(new_balance)}]', st_desc)
                     else:
-                        sale_trans.status = 'Partial'
-                    sale_trans.save()
+                        st_desc += f' [Paid: ₹{int(new_amount_paid)}, Pending: ₹{int(new_balance)}]'
+
+                sale_trans.description = st_desc
+
+                st_tags = sale_trans.tags or ''
+                if 'Paid:' in st_tags:
+                    st_tags = re.sub(r'Paid:\s*₹?[\d\.]+', f'Paid: ₹{new_amount_paid:.2f}', st_tags)
+                else:
+                    st_tags += f' | Paid: ₹{new_amount_paid:.2f}'
+
+                if 'Balance:' in st_tags:
+                    st_tags = re.sub(r'Balance:\s*₹?[\d\.]+', f'Balance: ₹{new_balance:.2f}', st_tags)
+                else:
+                    st_tags += f' | Balance: ₹{new_balance:.2f}'
+
+                sale_trans.tags = st_tags
+                sale_trans.save()
+
+                # Sync CropSplit batch if linked
+                split_match = re.search(r'CropSplit #(\d+)', sale_trans.tags or '')
+                if split_match:
+                    try:
+                        split_obj = CropSplit.objects.filter(id=int(split_match.group(1)), farm__farmer=farmer_prof).first()
+                        if split_obj and split_obj.harvest_batches:
+                            batches = split_obj.harvest_batches
+                            for b in batches:
+                                if b.get('status') == 'Sold' and (b.get('pending', 0) > 0 or b.get('payment_status') == 'Partial'):
+                                    b_pending = float(b.get('pending', 0))
+                                    b_paid = float(b.get('paid', 0))
+                                    deduct = min(b_pending, pay_amount)
+                                    b['paid'] = b_paid + deduct
+                                    b['pending'] = max(0, b_pending - deduct)
+                                    if b['pending'] <= 0.01:
+                                        b['payment_status'] = 'Received'
+                                    split_obj.harvest_batches = batches
+                                    split_obj.save()
+                                    break
+                    except Exception:
+                        pass
 
             cust_name = outstanding.customer.name if outstanding.customer else "Customer"
             desc = f"Received Payment for Invoice {outstanding.invoice_no} ({cust_name})"
@@ -5100,10 +7703,19 @@ def pay_customer_outstanding_api(request):
                 amount=pay_amount
             )
 
-            from django.contrib import messages
-            messages.success(request, f'Payment of ₹{pay_amount:.2f} logged successfully!')
+            try:
+                from django.contrib import messages
+                messages.success(request, f'Payment of ₹{pay_amount:.2f} logged successfully!')
+            except Exception:
+                pass
             log_action(request, "Customer Payment Received", f"Received ₹{pay_amount:.2f} for invoice '{outstanding.invoice_no}' ({cust_name}).", icon_class="ri-checkbox-circle-line", bg_color="success")
-            return JsonResponse({'success': True, 'message': 'Payment recorded successfully!'})
+            return JsonResponse({
+                'success': True,
+                'message': f'Payment of ₹{pay_amount:.2f} collected successfully!',
+                'new_balance': new_balance,
+                'new_paid': new_amount_paid,
+                'status': outstanding.status
+            })
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid request method.'})
@@ -5203,7 +7815,16 @@ def add_transaction(request):
 
         # ── Crop split tag ──────────────────────────────────────────
         crop_split_id = request.POST.get('crop_split_id')
+        crop_split_instance = None
         if crop_split_id:
+            from apps.farmer.models import CropSplit
+            crop_split_instance = CropSplit.objects.filter(id=crop_split_id, farm__farmer=profile).first()
+            if not crop_split_instance:
+                return JsonResponse({'success': False, 'error': 'Crop not found.'})
+            if is_outflow and not request.POST.get('transaction_id') and (
+                crop_split_instance.stage in ('Harvested', 'Sold') or crop_split_instance.is_completed
+            ):
+                return JsonResponse({'success': False, 'error': 'New expenses cannot be added while this crop is harvested or completed.'})
             tags = f"{tags} | Crop Split ID: {crop_split_id} | CropSplit #{crop_split_id}"
 
         # ── Vendor ──────────────────────────────────────────────────
@@ -5246,6 +7867,11 @@ def add_transaction(request):
         document_file = request.FILES.get('document_file')
         document_type = request.POST.get('document_type', 'My Expenses')
         if document_file:
+            from auth.helpers import validate_uploaded_file
+            valid_doc, doc_err = validate_uploaded_file(document_file)
+            if not valid_doc:
+                return JsonResponse({'success': False, 'error': doc_err})
+
             import os
             from apps.superadmin.models import Document
             ext = os.path.splitext(document_file.name)[1].lower()
@@ -5287,8 +7913,16 @@ def add_transaction(request):
             transaction.repeat_cycle = repeat_cycle
             transaction.reminder_type = reminder_type
             transaction.reminder_custom_date = reminder_custom_date
+            if is_recurring and not transaction.next_due_date:
+                from apps.farmer.recurring_utils import calculate_next_recurring_date
+                transaction.next_due_date = calculate_next_recurring_date(close_date, repeat_cycle)
             transaction.save()
         else:
+            next_date = None
+            if is_recurring:
+                from apps.farmer.recurring_utils import calculate_next_recurring_date
+                next_date = calculate_next_recurring_date(close_date, repeat_cycle)
+
             transaction = LedgerTransaction.objects.create(
                 farmer=profile,
                 farm=farm_instance,
@@ -5308,7 +7942,16 @@ def add_transaction(request):
                 repeat_cycle=repeat_cycle,
                 reminder_type=reminder_type,
                 reminder_custom_date=reminder_custom_date,
+                next_due_date=next_date,
             )
+
+        # ── Send Recurring Email Confirmation ───────────────────────
+        if is_recurring:
+            try:
+                from apps.superadmin.email_utils import send_recurring_expense_email
+                send_recurring_expense_email(transaction, request=request)
+            except Exception as e:
+                pass
 
         # ── Create outstanding if balance > 0 ───────────────────────
         if is_outflow and balance_amount > 0:
@@ -5319,6 +7962,7 @@ def add_transaction(request):
             )
             FarmerOutstanding.objects.create(
                 farmer=profile,
+                farm=farm_instance,
                 vendor=vendor_instance,
                 invoice_no=invoice_ref,
                 due_date=close_date,
@@ -5335,6 +7979,7 @@ def add_transaction(request):
             ).first()
             FarmerOutstanding.objects.create(
                 farmer=profile,
+                farm=farm_instance,
                 customer=customer_instance,
                 invoice_no=f"Customer: {description} - {category} ({tags})",
                 due_date=close_date,
@@ -5344,11 +7989,12 @@ def add_transaction(request):
             )
 
         # ── Add to inventory ─────────────────────────────────────────
-        if request.POST.get('add_to_inventory') == 'true' and description:
-            from apps.farmer.models import FarmerInventory
+        if request.POST.get('add_to_inventory') in ['true', 'on', '1', True] and description:
+            from apps.farmer.models import FarmerInventory, InventoryStockLog
+            import datetime
             inv_qty = 1
             try:
-                inv_qty = int(float(request.POST.get('quantity', 1) or 1))
+                inv_qty = float(request.POST.get('quantity', 1) or 1)
             except (ValueError, TypeError):
                 inv_qty = 1
             inv_unit = unit or 'Units'
@@ -5356,17 +8002,45 @@ def add_transaction(request):
             
             existing_inv = FarmerInventory.objects.filter(farmer=profile, item_name__iexact=description).first()
             if existing_inv:
-                existing_inv.quantity = float(existing_inv.quantity or 0) + float(inv_qty)
+                old_qty = float(existing_inv.quantity or 0)
+                new_qty = int(old_qty + inv_qty)
+                existing_inv.quantity = new_qty
+                if inv_unit and (not existing_inv.unit or existing_inv.unit == 'Units'):
+                    existing_inv.unit = inv_unit
                 existing_inv.save()
+                
+                # Log stock addition
+                InventoryStockLog.objects.create(
+                    inventory=existing_inv,
+                    farm=farm_instance,
+                    crop_split=crop_split_instance,
+                    action='add',
+                    quantity=inv_qty,
+                    notes=f"Purchased via Expense ({category})",
+                    log_date=close_date or datetime.date.today(),
+                    qty_before=old_qty,
+                    qty_after=new_qty,
+                )
             else:
-                FarmerInventory.objects.create(
+                new_inv = FarmerInventory.objects.create(
                     farmer=profile,
                     farm=farm_instance,
                     item_name=description,
                     category=inv_category,
                     quantity=inv_qty,
                     unit=inv_unit,
-                    unit_price=abs(amount) / max(inv_qty, 1),
+                    unit_price=round(abs(amount) / (float(inv_qty) if float(inv_qty) > 0 else 1.0), 2),
+                )
+                InventoryStockLog.objects.create(
+                    inventory=new_inv,
+                    farm=farm_instance,
+                    crop_split=crop_split_instance,
+                    action='add',
+                    quantity=inv_qty,
+                    notes=f"Purchased via Expense ({category})",
+                    log_date=close_date or datetime.date.today(),
+                    qty_before=0,
+                    qty_after=inv_qty,
                 )
 
         # ── Inflow crop yield deduction ─────────────────────────────
@@ -5440,7 +8114,9 @@ def delete_transaction(request):
         return JsonResponse({'success': False, 'error': 'Invalid request method.'})
 
     # Only direct farmer can delete transactions (not manager/staff)
-    if hasattr(request.user, 'staff_profile') and request.user.staff_profile:
+    active_role = request.session.get('active_role')
+    is_acting_as_staff = (active_role == 'manager') or bool(get_active_manager_staff(request))
+    if is_acting_as_staff:
         return JsonResponse({'success': False, 'error': 'Permission denied. Only the primary Farmer account can delete expense records.'})
 
     farmer_prof = get_farmer_profile(request.user)
@@ -5452,23 +8128,8 @@ def delete_transaction(request):
 
         desc = item.description
 
-        # If this is a sale transaction with crop quantity, restore inventory
-        if item.quantity and float(item.quantity) > 0 and item.category:
-            restore_crop_inventory(farmer_prof, item.category, float(item.quantity), item.farm)
-
-        # Delete any linked outstanding record
-        from apps.farmer.models import FarmerOutstanding
-        from django.db.models import Q
-        FarmerOutstanding.objects.filter(
-            farmer=farmer_prof
-        ).filter(
-            Q(invoice_no__startswith=f"Sale #{item.id}:") | Q(invoice_no__icontains=f"Sale #{item.id}")
-        ).delete()
-
-        # Delete any linked sale expenses
-        LedgerTransaction.objects.filter(farmer=farmer_prof, tags__icontains=f"Linked Sale #{item.id}").delete()
-
-        item.delete()
+        from apps.farmer.sales import delete_ledger_transaction
+        delete_ledger_transaction(item)
         log_action(request, "Expense Deleted", f"Expense '{desc}' (#{t_id}) was deleted.", icon_class="ri-delete-bin-line", bg_color="danger")
         return JsonResponse({'success': True, 'message': 'Expense deleted successfully.'})
     except Exception as e:
@@ -5476,6 +8137,12 @@ def delete_transaction(request):
 
 @csrf_exempt
 def add_customer(request):
+    if request.method == "POST":
+        from apps.farmer.validation import pincode_error
+        error = pincode_error(request)
+        if error is not None:
+            return error
+
     from django.http import JsonResponse
     from apps.farmer.models import FarmerCustomer
 
@@ -5489,6 +8156,7 @@ def add_customer(request):
             email = (request.POST.get('email') or '').strip()
             state = (request.POST.get('state') or '').strip()
             district = (request.POST.get('district') or '').strip()
+            taluk = (request.POST.get('taluk') or '').strip()
             pincode = (request.POST.get('pincode') or '').strip()
             address = (request.POST.get('address') or '').strip()
             gst_number = (request.POST.get('gst_number') or '').strip()
@@ -5521,9 +8189,11 @@ def add_customer(request):
                 cust.email = email
                 cust.state = state
                 cust.district = district
+                cust.taluk = taluk
                 cust.pincode = pincode
                 cust.address = address
                 cust.gst_number = gst_number
+                cust.document_type = document_type
                 if doc:
                     cust.document = doc
                 cust.save()
@@ -5539,9 +8209,11 @@ def add_customer(request):
                     email=email,
                     state=state,
                     district=district,
+                    taluk=taluk,
                     pincode=pincode,
                     address=address,
                     gst_number=gst_number,
+                    document_type=document_type,
                     document=doc
                 )
                 from django.contrib import messages
@@ -5643,7 +8315,7 @@ def delete_outstanding(request):
 @csrf_exempt
 def pay_outstanding(request):
     from django.http import JsonResponse
-    from apps.farmer.models import FarmerOutstanding
+    from apps.farmer.models import FarmerOutstanding, LedgerTransaction, Farm
 
     farmer_prof = get_farmer_profile(request.user)
 
@@ -5652,19 +8324,50 @@ def pay_outstanding(request):
             o_id = request.POST.get('outstanding_id')
             outstanding = FarmerOutstanding.objects.get(id=o_id, farmer=farmer_prof)
 
+            # Determine target farm, category, and vendor
+            target_farm = getattr(outstanding, 'farm', None)
+            target_vendor = getattr(outstanding, 'vendor', None)
+            orig_txn = None
+
+            # Look up matching original transaction to inherit farm/category and reconcile balance
+            clean_invoice = outstanding.invoice_no or ''
+            item_desc = clean_invoice
+            if ' - ' in clean_invoice:
+                item_desc = clean_invoice.split(' - ', 1)[1].strip()
+            elif ':' in clean_invoice:
+                item_desc = clean_invoice.split(':', 1)[1].strip()
+
+            matching_txns = LedgerTransaction.objects.filter(farmer=farmer_prof)
+            if target_vendor:
+                matching_txns = matching_txns.filter(vendor=target_vendor)
+            if item_desc:
+                orig_txn = matching_txns.filter(description__icontains=item_desc).exclude(category='Liability Payment').order_by('-id').first()
+            if not orig_txn and target_vendor:
+                orig_txn = matching_txns.exclude(category='Liability Payment').order_by('-id').first()
+
+            if not target_farm and orig_txn and orig_txn.farm:
+                target_farm = orig_txn.farm
+            if not target_vendor and orig_txn and orig_txn.vendor:
+                target_vendor = orig_txn.vendor
+
+            target_category = orig_txn.category if (orig_txn and orig_txn.category) else "Liability Payment"
+            target_color = orig_txn.category_color if (orig_txn and orig_txn.category_color) else "#6c757d"
+
             # Log the cash payment transaction before clearing liability
             payment_amount = outstanding.amount_total - outstanding.amount_paid
             if payment_amount > 0:
                 import datetime
-                from apps.farmer.models import LedgerTransaction
 
                 desc = f"Settled Liability: {outstanding.invoice_no}"
 
                 LedgerTransaction.objects.create(
                     farmer=farmer_prof,
+                    farm=target_farm,
+                    vendor=target_vendor,
                     close_date=datetime.date.today(),
                     description=desc,
-                    category="Liability Payment",
+                    category=target_category,
+                    category_color=target_color,
                     tags="Outflow" if 'Vendor:' in outstanding.invoice_no else "Inflow",
                     status="Cost" if 'Vendor:' in outstanding.invoice_no else "Income",
                     amount=-payment_amount if 'Vendor:' in outstanding.invoice_no else payment_amount
@@ -5672,6 +8375,8 @@ def pay_outstanding(request):
 
             outstanding.amount_paid = outstanding.amount_total
             outstanding.status = 'Paid'
+            if target_farm and not outstanding.farm:
+                outstanding.farm = target_farm
             outstanding.save()
             from django.contrib import messages
             messages.success(request, 'Payment successful! Liability cleared.')
@@ -5682,7 +8387,14 @@ def pay_outstanding(request):
     return JsonResponse({'success': False, 'error': 'Invalid request method.'})
 
 def vendor(request):
+    if request.method == "POST" and request.POST.get("action") in ("add_vendor", "edit_vendor"):
+        from apps.farmer.validation import pincode_error
+        error = pincode_error(request)
+        if error is not None:
+            return error
+
     from apps.farmer.models import FarmerVendor, FarmerOutstanding, LedgerTransaction
+    from apps.superadmin.models import DocumentType
     profile = get_farmer_profile(request.user)
 
     if request.method == "POST":
@@ -5691,11 +8403,13 @@ def vendor(request):
         from django.shortcuts import redirect
         state_name = ""
         district_name = ""
+        taluk_name = ""
         if action in ("add_vendor", "edit_vendor"):
             state_val = request.POST.get('state')
             district_val = request.POST.get('district')
+            taluk_val = request.POST.get('taluk')
 
-            from apps.superadmin.models import City, State
+            from apps.superadmin.models import City, State, Taluk
             if state_val and state_val.isdigit():
                 state_obj = State.objects.filter(id=state_val).first()
                 state_name = state_obj.name if state_obj else state_val
@@ -5707,6 +8421,12 @@ def vendor(request):
                 district_name = city_obj.name if city_obj else district_val
             else:
                 district_name = district_val
+
+            if taluk_val and taluk_val.isdigit():
+                taluk_obj = Taluk.objects.filter(id=taluk_val).first()
+                taluk_name = taluk_obj.name if taluk_obj else taluk_val
+            else:
+                taluk_name = taluk_val
 
             # Handle Document Upload
             document_file = request.FILES.get('document_file')
@@ -5737,6 +8457,7 @@ def vendor(request):
                     mobile_number=request.POST.get('mobile_number'),
                     state=state_name,
                     district=district_name,
+                    taluk=taluk_name,
                     pincode=request.POST.get('pincode'),
                     address=request.POST.get('address'),
                     gst_number=request.POST.get('gst_number'),
@@ -5756,6 +8477,7 @@ def vendor(request):
                     v.mobile_number = request.POST.get('mobile_number')
                     v.state = state_name
                     v.district = district_name
+                    v.taluk = taluk_name
                     v.pincode = request.POST.get('pincode')
                     v.address = request.POST.get('address')
                     v.gst_number = request.POST.get('gst_number')
@@ -5792,10 +8514,13 @@ def vendor(request):
     vendors = FarmerVendor.objects.filter(farmer=profile).select_related('document').order_by('-created_at')
 
     # Format vendor address & auto-link unlinked Outstandings & Transactions
+    from apps.superadmin.models import City, State, Taluk
     for v in vendors:
         addr_parts = []
         if v.address:
             addr_parts.append(v.address.strip())
+        if hasattr(v, 'taluk') and v.taluk:
+            addr_parts.append(v.taluk.strip())
         if v.district:
             addr_parts.append(v.district.strip())
         if v.state:
@@ -5803,6 +8528,31 @@ def vendor(request):
         if v.pincode:
             addr_parts.append(v.pincode.strip())
         v.formatted_address = ", ".join(addr_parts) if addr_parts else "—"
+
+        # Prepopulate districts & taluks for edit modal
+        v.districts = []
+        v.taluks = []
+        v.state_id = ""
+        v.district_id = ""
+        if v.state:
+            st = State.objects.filter(name__iexact=v.state).first()
+            if not st and v.state.isdigit():
+                st = State.objects.filter(id=v.state).first()
+            if st:
+                v.state_id = str(st.id)
+                v.districts = list(City.objects.filter(state=st).order_by('name').values('id', 'name'))
+
+        if v.district:
+            dt = None
+            if v.districts and st:
+                dt = City.objects.filter(name__iexact=v.district, state=st).first()
+            if not dt:
+                dt = City.objects.filter(name__iexact=v.district).first()
+            if not dt and v.district.isdigit():
+                dt = City.objects.filter(id=v.district).first()
+            if dt:
+                v.district_id = str(dt.id)
+                v.taluks = list(Taluk.objects.filter(city=dt).order_by('name').values('id', 'name'))
 
         # Match invoice_no containing vendor name or part of name
         parts = [p for p in v.vendor_name.split() if len(p) > 2]
@@ -5816,26 +8566,30 @@ def vendor(request):
         FarmerOutstanding.objects.filter(farmer=profile, vendor__isnull=True).filter(q_outs).update(vendor=v)
         LedgerTransaction.objects.filter(farmer=profile, vendor__isnull=True).filter(q_txs).update(vendor=v)
 
-    from apps.superadmin.models import City, State
     states = State.objects.filter(country__name__iexact='India').order_by('name')
     if not states.exists():
         states = State.objects.all().order_by('name')
 
+    document_types = DocumentType.objects.filter(is_active=True).order_by('name')
+
     return render(request, "farmer/vendor.html", {
         "vendors": vendors,
-        "states": states
+        "states": states,
+        "document_types": document_types,
     })
 
 def order(request):
     return render(request, "farmer/order.html")
 def inventory(request):
-    from apps.farmer.models import FarmerInventory
+    from apps.farmer.models import Farm, FarmerInventory, FarmerVendor
     from apps.superadmin.models import ExpenseUnit, InventoryCategory, StorageLocation, ProductType
     from django.db.models import F, ExpressionWrapper, DecimalField, Q, Sum
     import json
 
     profile = get_farmer_profile(request.user)
     inventory_items = FarmerInventory.objects.filter(farmer=profile).order_by('-created_at')
+    farms = Farm.objects.filter(farmer=profile).order_by('land_name')
+    vendors = FarmerVendor.objects.filter(farmer=profile).order_by('vendor_name')
 
     # Get categories list from database settings
     if not InventoryCategory.objects.exists():
@@ -5854,6 +8608,8 @@ def inventory(request):
             'layout_type': cat.layout_type
         })
         category_layouts[cat.name] = cat.layout_type
+        if cat.name == 'Warehouse Stock':
+            category_layouts['Warehouse'] = cat.layout_type
 
     category_layouts_json = json.dumps(category_layouts)
 
@@ -5877,9 +8633,7 @@ def inventory(request):
     mach_q |= (Q(license_plate__isnull=False) & ~Q(license_plate=''))
 
     vehicles = inventory_items.filter(mach_q)
-    warehouse = inventory_items.exclude(id__in=vehicles.values_list('id', flat=True)).annotate(
-        total_price=ExpressionWrapper(F('quantity') * F('unit_price'), output_field=DecimalField(max_digits=14, decimal_places=2))
-    )
+    warehouse = inventory_items.exclude(id__in=vehicles.values_list('id', flat=True))
 
     low_stock_items = warehouse.filter(quantity__lte=F('safety_stock'), quantity__gt=0).count()
     depleted_items = warehouse.filter(quantity=0).count()
@@ -5918,6 +8672,155 @@ def inventory(request):
 
     inventory_types = list(ProductType.objects.filter(is_active=True).order_by('id'))
 
+    # Farms for harvest filter dropdown
+    farms = Farm.objects.filter(farmer=profile).order_by('land_name')
+
+    # Harvest Stock tracking
+    from apps.farmer.models import CropSplit, CropHarvestLoss
+    harvest_splits_qs = CropSplit.objects.filter(
+        farm__farmer=profile,
+        stage__in=['Harvested', 'Sold', 'Partially Sold', 'Yield', 'Harvesting']
+    ).select_related('farm', 'crop').order_by('-updated_at', '-id')
+
+    extra_splits = CropSplit.objects.filter(
+        farm__farmer=profile
+    ).exclude(
+        id__in=harvest_splits_qs.values_list('id', flat=True)
+    ).filter(
+        Q(yield_tons__gt=0) | ~Q(harvest_batches=[])
+    ).select_related('farm', 'crop').order_by('-updated_at', '-id')
+
+    all_raw_splits = list(harvest_splits_qs) + list(extra_splits)
+
+    harvest_stocks = []
+    total_harvest_stock_tons = 0.0
+    total_harvest_val = 0.0
+    total_harvest_loss_tons = 0.0
+    total_harvest_loss_val = 0.0
+
+    for s in all_raw_splits:
+        c_name = s.crop.name if s.crop else (s.crop_category or s.crop_variety or 'Produce')
+        c_variety = s.crop_variety or s.crop_pattern or ''
+        f_name = s.farm.land_name if s.farm else 'General Farm'
+        f_id = s.farm.id if s.farm else ''
+        avail_qty = float(s.yield_tons or 0)
+        p_mt = float(s.price_per_mt or 0)
+        unit = s.expected_yield_unit or 'Tons'
+
+        # Losses for this split
+        split_losses = list(s.losses.all())
+        loss_qty = sum(float(l.loss_quantity) for l in split_losses)
+        loss_val = sum(float(l.estimated_loss_value) for l in split_losses)
+
+        # Harvest batches initial yield & sold tracking
+        batches = s.harvest_batches or []
+        from decimal import Decimal
+
+        grade_splits = []
+        if batches:
+            sold_batch_yield = sum(float(b.get('yield', 0)) for b in batches if b.get('status') == 'Sold')
+            ready_batches = [b for b in batches if b.get('status') not in ['Sold', 'Loss / Discard'] and float(b.get('yield', 0)) > 0.0001]
+            ready_batch_yield = sum(float(b.get('yield', 0)) for b in ready_batches)
+
+            # Ready batches are already adjusted for losses during record_crop_loss.
+            # Thus, ready_batch_yield represents the true remaining available stock.
+            avail_qty = max(0.0, ready_batch_yield)
+            sold_qty = sold_batch_yield
+            # Initial harvest yield equals total produce ever generated: sold + available in stock + loss/waste
+            init_yield = round(sold_qty + avail_qty + loss_qty, 2)
+
+            # Auto-sync split.yield_tons in database
+            target_yield = Decimal(str(round(avail_qty, 2)))
+            if s.yield_tons is None or abs(float(s.yield_tons) - avail_qty) > 0.001:
+                s.yield_tons = target_yield
+                if s.yield_tons <= Decimal('0.001') and all(b.get('status') == 'Sold' for b in batches):
+                    s.stage = 'Sold'
+                s.save(update_fields=['yield_tons', 'stage'])
+
+            # Exact valuation from ready batches (prevents rounding loss, e.g. 55*17.27=949.85 vs 950.00)
+            est_val = sum(float(b.get('saleValue') or (float(b.get('yield', 0)) * float(b.get('price', 0)))) for b in ready_batches)
+            if avail_qty > 0:
+                p_mt = round(est_val / avail_qty, 2)
+            else:
+                p_mt = float(s.price_per_mt or 0)
+
+            # Grade-wise summary
+            grade_map = {}
+            for b in ready_batches:
+                q = (b.get('quality') or 'Grade 1').strip()
+                y = float(b.get('yield', 0))
+                p = float(b.get('price', 0))
+                v = float(b.get('saleValue') or (y * p))
+                u = b.get('unit') or unit
+                if q not in grade_map:
+                    grade_map[q] = {'grade': q, 'yield': 0.0, 'amount': 0.0, 'unit': u, 'price': p}
+                grade_map[q]['yield'] += y
+                grade_map[q]['amount'] += v
+                grade_map[q]['price'] = p
+
+            for q, gdata in grade_map.items():
+                if gdata['yield'] > 0:
+                    avg_rate = round(gdata['amount'] / gdata['yield'], 2) if gdata['yield'] > 0 else gdata['price']
+                    grade_splits.append({
+                        'grade': q,
+                        'yield': round(gdata['yield'], 2),
+                        'price': avg_rate,
+                        'amount': round(gdata['amount'], 2),
+                        'unit': gdata['unit']
+                    })
+        else:
+            avail_qty = float(s.yield_tons if s.yield_tons is not None else (s.expected_yield or 0))
+            init_yield = float(s.expected_yield or avail_qty)
+            if init_yield < (avail_qty + loss_qty):
+                init_yield = avail_qty + loss_qty
+            sold_qty = max(0.0, init_yield - avail_qty - loss_qty)
+            est_val = avail_qty * p_mt
+
+        if avail_qty > 0.001:
+            if sold_qty > 0.001 or loss_qty > 0.001:
+                stock_status = 'In Stock (Partial)'
+                stock_status_badge = 'warning'
+            else:
+                stock_status = 'In Stock'
+                stock_status_badge = 'success'
+        else:
+            if loss_qty >= init_yield and init_yield > 0:
+                stock_status = 'Lost / Waste'
+                stock_status_badge = 'danger'
+            else:
+                stock_status = 'Sold Out'
+                stock_status_badge = 'secondary'
+
+        harvest_stocks.append({
+            'split': s,
+            'id': s.id,
+            'crop_name': c_name,
+            'crop_variety': c_variety,
+            'farm_name': f_name,
+            'farm_id': f_id,
+            'initial_yield': init_yield,
+            'sold_qty': sold_qty,
+            'loss_qty': loss_qty,
+            'loss_val': loss_val,
+            'available_qty': avail_qty,
+            'unit': unit,
+            'price_per_mt': p_mt,
+            'est_value': est_val,
+            'grade_splits': grade_splits,
+            'status': stock_status,
+            'status_badge': stock_status_badge,
+            'losses': split_losses,
+            'batches_count': len(batches),
+            'updated_at': s.updated_at,
+        })
+
+        total_harvest_stock_tons += avail_qty
+        total_harvest_val += est_val
+        total_harvest_loss_tons += loss_qty
+        total_harvest_loss_val += loss_val
+
+    all_crop_losses = CropHarvestLoss.objects.filter(farmer=profile).select_related('split', 'split__farm', 'split__crop').order_by('-loss_date', '-id')
+
     context = {
         'vehicles': vehicles,
         'warehouse': warehouse,
@@ -5931,12 +8834,190 @@ def inventory(request):
         'units': units,
         'locations': locations,
         'inventory_types': inventory_types,
+        'has_fuel_type': any(t.name.strip().lower() == 'fuel' for t in inventory_types),
         'dropdown_categories': dropdown_categories,
         'category_layouts_json': category_layouts_json,
         'all_inventory_items': inventory_items.order_by('item_name'),
         'total_inventory_value': total_inventory_value,
+        'vendors': vendors,
+        'farms': farms,
+        'harvest_stocks': harvest_stocks,
+        'total_harvest_stock_tons': round(total_harvest_stock_tons, 2),
+        'total_harvest_val': round(total_harvest_val, 2),
+        'total_harvest_loss_tons': round(total_harvest_loss_tons, 2),
+        'total_harvest_loss_val': round(total_harvest_loss_val, 2),
+        'all_crop_losses': all_crop_losses,
     }
     return render(request, "farmer/inventory.html", context)
+
+def record_crop_loss(request):
+    from apps.farmer.models import CropSplit, CropHarvestLoss, FarmActivity
+    from django.contrib import messages
+    from django.shortcuts import redirect
+    from decimal import Decimal
+    import datetime
+
+    if request.method == 'POST':
+        profile = get_farmer_profile(request.user)
+        split_id = request.POST.get('split_id')
+        loss_qty_raw = request.POST.get('loss_quantity', '0')
+        loss_reason = (request.POST.get('loss_reason') or 'Spoilage / Rot').strip()
+        loss_date_raw = request.POST.get('loss_date')
+        notes = (request.POST.get('notes') or '').strip()
+
+        try:
+            loss_qty = Decimal(str(loss_qty_raw))
+        except Exception:
+            loss_qty = Decimal('0')
+
+        if loss_qty <= Decimal('0'):
+            messages.error(request, "Please enter a valid loss quantity greater than zero.")
+            return redirect(request.META.get('HTTP_REFERER', '/farmer/inventory/') + '#harvest_stock')
+
+        try:
+            split = CropSplit.objects.get(id=split_id, farm__farmer=profile)
+        except CropSplit.DoesNotExist:
+            messages.error(request, "Harvest stock record not found.")
+            return redirect(request.META.get('HTTP_REFERER', '/farmer/inventory/') + '#harvest_stock')
+
+        available = split.yield_tons or Decimal('0')
+        if loss_qty > available:
+            messages.error(request, f"Loss quantity ({loss_qty} Tons) cannot exceed available stock ({available} Tons).")
+            return redirect(request.META.get('HTTP_REFERER', '/farmer/inventory/') + '#harvest_stock')
+
+        try:
+            loss_date = datetime.datetime.strptime(loss_date_raw, '%Y-%m-%d').date() if loss_date_raw else datetime.date.today()
+        except Exception:
+            loss_date = datetime.date.today()
+
+        price = split.price_per_mt or Decimal('0')
+        est_val_raw = request.POST.get('estimated_loss_value')
+        try:
+            est_val = Decimal(str(est_val_raw)) if est_val_raw else (loss_qty * price)
+        except Exception:
+            est_val = loss_qty * price
+
+        # Deduct from split yield_tons
+        split.yield_tons = max(Decimal('0'), available - loss_qty)
+        if split.yield_tons <= Decimal('0.001'):
+            split.yield_tons = Decimal('0')
+            split.stage = 'Sold'
+        if split.price_per_mt:
+            split.total_sale_value = split.yield_tons * split.price_per_mt
+
+        # Also deduct from ready batches in harvest_batches if present
+        if split.harvest_batches:
+            rem_loss = float(loss_qty)
+            batches = list(split.harvest_batches)
+            for b in batches:
+                if b.get('status') != 'Sold' and rem_loss > 0:
+                    b_yield = float(b.get('yield', 0))
+                    if b_yield <= rem_loss:
+                        rem_loss -= b_yield
+                        b['yield'] = 0.0
+                        b['status'] = 'Loss / Discard'
+                    else:
+                        b['yield'] = round(b_yield - rem_loss, 2)
+                        rem_loss = 0.0
+            split.harvest_batches = batches
+
+        split.save()
+
+        # Create CropHarvestLoss record
+        CropHarvestLoss.objects.create(
+            farmer=profile,
+            split=split,
+            loss_date=loss_date,
+            loss_quantity=loss_qty,
+            unit=split.expected_yield_unit or "Tons",
+            loss_reason=loss_reason,
+            estimated_loss_value=est_val,
+            notes=notes
+        )
+
+        crop_name = split.crop.name if split.crop else (split.crop_category or 'Produce')
+        try:
+            FarmActivity.objects.create(
+                farm=split.farm,
+                activity_type="Crop Loss / Wastage",
+                asset_name=f"{crop_name} - {loss_qty} {split.expected_yield_unit or 'Tons'}",
+                quantity_metric=f"{loss_qty} {split.expected_yield_unit or 'Tons'}",
+                operator_name=request.user.get_full_name() or request.user.username,
+                notes=f"Reason: {loss_reason}. {notes}".strip(),
+                amount=float(est_val)
+            )
+        except Exception:
+            pass
+
+        messages.success(request, f"Successfully recorded {loss_qty} Tons loss for {crop_name}. Remaining stock: {split.yield_tons} Tons.")
+        return redirect(request.META.get('HTTP_REFERER', '/farmer/inventory/') + '#harvest_stock')
+
+    return redirect('/farmer/inventory/#harvest_stock')
+
+def crop_loss_history_page(request):
+    from apps.farmer.models import CropHarvestLoss, Farm
+    profile = get_farmer_profile(request.user)
+
+    losses_qs = CropHarvestLoss.objects.filter(farmer=profile).select_related('split', 'split__farm', 'split__crop').order_by('-loss_date', '-id')
+
+    total_loss_qty = sum(float(l.loss_quantity) for l in losses_qs)
+    total_loss_val = sum(float(l.estimated_loss_value) for l in losses_qs)
+    total_incidents = losses_qs.count()
+
+    reasons_count = {}
+    for l in losses_qs:
+        r = l.loss_reason or 'Other'
+        reasons_count[r] = reasons_count.get(r, 0) + 1
+    most_common_reason = max(reasons_count, key=reasons_count.get) if reasons_count else "None"
+
+    farms = Farm.objects.filter(farmer=profile).order_by('land_name')
+
+    crop_names = []
+    for l in losses_qs:
+        cn = l.split.crop.name if l.split and l.split.crop else (l.split.crop_category if l.split else 'Produce')
+        if cn and cn not in crop_names:
+            crop_names.append(cn)
+    crop_names.sort()
+
+    pre_crop = request.GET.get('crop', '').strip()
+    pre_farm = request.GET.get('farm', '').strip()
+
+    context = {
+        'all_crop_losses': losses_qs,
+        'total_loss_qty': round(total_loss_qty, 2),
+        'total_loss_val': round(total_loss_val, 2),
+        'total_incidents': total_incidents,
+        'most_common_reason': most_common_reason,
+        'farms': farms,
+        'crop_names': crop_names,
+        'pre_crop': pre_crop,
+        'pre_farm': pre_farm,
+    }
+    return render(request, "farmer/crop_loss_history.html", context)
+
+def crop_loss_history_api(request):
+    from apps.farmer.models import CropHarvestLoss
+    from django.http import JsonResponse
+    profile = get_farmer_profile(request.user)
+    split_id = request.GET.get('split_id')
+    qs = CropHarvestLoss.objects.filter(farmer=profile)
+    if split_id:
+        qs = qs.filter(split_id=split_id)
+    losses_data = []
+    for l in qs.select_related('split', 'split__farm', 'split__crop').order_by('-loss_date', '-id'):
+        crop_title = l.split.crop.name if l.split.crop else (l.split.crop_category or 'Produce')
+        losses_data.append({
+            'id': l.id,
+            'date': l.loss_date.strftime('%Y-%m-%d'),
+            'farm': l.split.farm.land_name if l.split.farm else 'General Farm',
+            'crop': crop_title,
+            'quantity': float(l.loss_quantity),
+            'unit': l.unit,
+            'reason': l.loss_reason,
+            'estimated_value': float(l.estimated_loss_value),
+            'notes': l.notes or ''
+        })
+    return JsonResponse({'success': True, 'losses': losses_data})
 
 def add_stock_log(request):
     from django.http import HttpResponseRedirect
@@ -5987,22 +9068,84 @@ def add_stock_log(request):
 
 def inventory_stock_logs_api(request, item_id):
     from django.http import JsonResponse
-    from apps.farmer.models import FarmerInventory, InventoryStockLog
+    from django.db.models import Q
+    from apps.farmer.models import FarmerInventory, InventoryStockLog, FarmActivity
     profile = get_farmer_profile(request.user)
     try:
         item = FarmerInventory.objects.get(id=item_id, farmer=profile)
     except FarmerInventory.DoesNotExist:
         return JsonResponse({'error': 'Not found'}, status=404)
-    logs = InventoryStockLog.objects.filter(inventory=item).order_by('-log_date', '-created_at')[:50]
-    data = [{
-        'action': log.action,
-        'quantity': log.quantity,
-        'unit': item.unit,
-        'notes': log.notes or '',
-        'log_date': log.log_date.strftime('%d %b %Y') if log.log_date else '',
-        'qty_before': log.qty_before,
-        'qty_after': log.qty_after,
-    } for log in logs]
+    logs = InventoryStockLog.objects.filter(inventory=item).select_related('farm', 'crop_split', 'crop_split__crop').order_by('-log_date', '-created_at')[:100]
+    data = []
+    seen_log_keys = set()
+    for log in logs:
+        farm_name = log.farm.land_name if log.farm else ''
+        crop_name = (log.crop_split.crop.name if log.crop_split and log.crop_split.crop else '') or ''
+
+        if (not farm_name or not crop_name) and log.notes:
+            try:
+                parts = log.notes.split('|')
+                for p in parts:
+                    if not farm_name and 'Farm:' in p:
+                        farm_name = p.split('Farm:')[1].strip()
+                    elif not crop_name and 'Crop:' in p:
+                        crop_name = p.split('Crop:')[1].strip()
+            except Exception:
+                pass
+
+        is_cons = bool(farm_name or crop_name or (log.notes and ('Farm' in log.notes or 'Consumption' in log.notes)))
+        data.append({
+            'id': log.id,
+            'action': log.action,
+            'quantity': log.quantity,
+            'unit': item.unit,
+            'notes': log.notes or '',
+            'farm_name': farm_name,
+            'crop_name': crop_name,
+            'is_consumption': is_cons,
+            'log_date': log.log_date.strftime('%d %b %Y') if log.log_date else '',
+            'qty_before': log.qty_before,
+            'qty_after': log.qty_after,
+        })
+        if log.log_date:
+            seen_log_keys.add((log.log_date, log.quantity))
+
+    # Also include any past FarmActivity recorded for this item
+    past_activities = FarmActivity.objects.filter(
+        farm__farmer=profile,
+        activity_type='Resource Consumption'
+    ).filter(
+        Q(asset_name__iexact=item.item_name) | Q(notes__icontains=f"inv-{item.id}")
+    ).select_related('farm').order_by('-created_at')[:30]
+
+    for act in past_activities:
+        act_date = act.created_at.date() if act.created_at else None
+        q_val = 0.0
+        try:
+            q_val = float(act.quantity_metric.split()[0])
+        except Exception:
+            q_val = 0.0
+        if (act_date, q_val) not in seen_log_keys and q_val > 0:
+            c_name = act.farm.crop.name if act.farm and act.farm.crop else ""
+            if "CropSplit #" in (act.notes or ''):
+                try:
+                    c_name = act.notes.split('(')[1].split(')')[0].strip()
+                except Exception:
+                    pass
+            data.append({
+                'id': f"act_{act.id}",
+                'action': 'remove',
+                'quantity': q_val,
+                'unit': item.unit,
+                'notes': act.notes or '',
+                'farm_name': act.farm.land_name if act.farm else '',
+                'crop_name': c_name,
+                'is_consumption': True,
+                'log_date': act_date.strftime('%d %b %Y') if act_date else '',
+                'qty_before': '—',
+                'qty_after': '—',
+            })
+
     return JsonResponse({'item_name': item.item_name, 'unit': item.unit, 'current_qty': float(item.quantity), 'logs': data})
 
 def inventory_out_logs(request):
@@ -6066,7 +9209,7 @@ def return_out_logs_api(request):
     })
 
 def add_inventory(request):
-    from apps.farmer.models import FarmerInventory
+    from apps.farmer.models import Farm, FarmerInventory, FarmerVendor, LedgerTransaction
     if request.method == "POST":
         profile = get_farmer_profile(request.user)
         item_name = request.POST.get('item_name')
@@ -6098,8 +9241,32 @@ def add_inventory(request):
         purchase_date = request.POST.get('purchase_date') or None
         description = request.POST.get('description', '')
 
-        FarmerInventory.objects.create(
+        # Vendor handling
+        vendor_id = request.POST.get('vendor_id')
+        vendor_instance = None
+        if vendor_id:
+            vendor_instance = FarmerVendor.objects.filter(id=vendor_id, farmer=profile).first()
+
+        farm_id = request.POST.get('farm_id')
+        farm_instance = Farm.objects.filter(id=farm_id, farmer=profile).first() if farm_id else None
+
+        total_p = 0.0
+        try:
+            qty_f = float(quantity or 1)
+            up_f = float(unit_price or 0)
+            total_p = round(qty_f * up_f, 2)
+        except Exception:
+            total_p = 0.0
+        if total_p == 0 and unit_price:
+            try:
+                total_p = float(unit_price)
+            except Exception:
+                pass
+
+        item = FarmerInventory.objects.create(
             farmer=profile,
+            farm=farm_instance,
+            vendor=vendor_instance,
             item_name=item_name,
             category=category,
             quantity=quantity,
@@ -6118,6 +9285,7 @@ def add_inventory(request):
             pollution_file=pollution_file,
             pollution_expiry=pollution_expiry,
             unit_price=unit_price,
+            total_price=total_p,
             rental_available=rental_available,
             rental_price=rental_price,
             rental_unit=rental_unit,
@@ -6125,13 +9293,53 @@ def add_inventory(request):
             description=description
         )
         log_action(request, "Inventory Added", f"Inventory item '{item_name}' ({quantity} {unit}) created.", icon_class="ri-archive-line", bg_color="success")
+
+        # Record in Expenses if requested
+        record_as_expense = request.POST.get('record_as_expense') in ['on', 'true', '1', True]
+        if record_as_expense:
+            try:
+                qty_f = float(quantity or 1)
+                up_f = float(unit_price or 0)
+                total_cost = qty_f * up_f
+            except (ValueError, TypeError):
+                total_cost = 0.0
+
+            if total_cost > 0:
+                from django.utils import timezone
+                import datetime
+                tx_date = timezone.now().date()
+                if purchase_date:
+                    try:
+                        tx_date = datetime.datetime.strptime(str(purchase_date), "%Y-%m-%d").date()
+                    except Exception:
+                        tx_date = timezone.now().date()
+
+                v_info = f" from {vendor_instance.vendor_name}" if vendor_instance else ""
+                LedgerTransaction.objects.create(
+                    farmer=profile,
+                    farm=farm_instance,
+                    vendor=vendor_instance,
+                    close_date=tx_date,
+                    description=f"Inventory Purchase - {item_name} ({quantity} {unit}){v_info}",
+                    payment_method="Cash",
+                    category=category or "Inventory",
+                    category_color="#f1732a",
+                    tags=f"Outflow | Inventory ID: {item.id} | Inventory: {item_name}",
+                    status="Cost",
+                    amount=-abs(total_cost),
+                    balance_due=0,
+                    quantity=quantity,
+                    unit=unit
+                )
+                from django.contrib import messages
+                messages.success(request, f"Item added and ₹{total_cost:,.2f} recorded under Expenses!")
     return redirect('farmer-inventory')
 
 @csrf_exempt
 def update_inventory(request):
     from django.contrib import messages
     from django.http import JsonResponse
-    from apps.farmer.models import FarmerInventory
+    from apps.farmer.models import Farm, FarmerInventory, LedgerTransaction
 
     if request.method == "POST":
         profile = get_farmer_profile(request.user)
@@ -6139,10 +9347,14 @@ def update_inventory(request):
         if item_id and profile:
             try:
                 item = FarmerInventory.objects.get(id=item_id, farmer=profile)
+                original_item_name = item.item_name
                 item.item_name = request.POST.get('item_name', item.item_name)
                 item.category = request.POST.get('category', item.category)
+                farm_id = request.POST.get('farm_id')
+                if farm_id is not None:
+                    item.farm = Farm.objects.filter(id=farm_id, farmer=profile).first() if farm_id else None
                 if request.POST.get('quantity') is not None and request.POST.get('quantity') != '':
-                    item.quantity = int(request.POST.get('quantity'))
+                    item.quantity = float(request.POST.get('quantity'))
                 if request.POST.get('unit'):
                     item.unit = request.POST.get('unit')
                 if request.POST.get('safety_stock') is not None and request.POST.get('safety_stock') != '':
@@ -6184,6 +9396,14 @@ def update_inventory(request):
                 if price_val is not None and price_val != '':
                     item.unit_price = price_val
 
+                # The list and summary cards use the persisted total_price,
+                # while the edit modal only calculates it for display. Keep
+                # the stored value in sync whenever quantity or price changes.
+                item.total_price = round(
+                    Decimal(str(item.quantity or 0)) * Decimal(str(item.unit_price or 0)),
+                    2,
+                )
+
                 if 'rental_available' in request.POST:
                     item.rental_available = request.POST.get('rental_available') in ['on', 'true', '1', True]
                 elif item.category in ['Vehicles & Fleet', 'Machinery', 'Tools', 'Tool & Implements']:
@@ -6219,12 +9439,36 @@ def update_inventory(request):
                 poll_exp = request.POST.get('pollution_expiry')
                 if poll_exp:
                     item.pollution_expiry = poll_exp
-                elif poll_exp == '':
-                    item.pollution_expiry = None
+                vendor_id = request.POST.get('vendor_id')
+                if vendor_id is not None:
+                    if vendor_id in ['', '0', 'none']:
+                        item.vendor = None
+                    else:
+                        from apps.farmer.models import FarmerVendor
+                        item.vendor = FarmerVendor.objects.filter(id=vendor_id, farmer=profile).first()
 
                 item.save()
-
-                item.save()
+                # Keep the automatic purchase expense on the same farm as its
+                # inventory item.  The ID tag ensures that only this item's
+                # generated expense is changed, never an unrelated expense.
+                linked_expenses = LedgerTransaction.objects.filter(
+                    farmer=profile,
+                    tags__contains=f"Inventory ID: {item.id}",
+                )
+                if linked_expenses.exists():
+                    linked_expenses.update(farm=item.farm)
+                else:
+                    # Entries created before the inventory ID tag was added may
+                    # be linked only when there is exactly one unambiguous match.
+                    # This avoids assigning a farm to a different repeat purchase.
+                    legacy_expenses = LedgerTransaction.objects.filter(
+                        farmer=profile,
+                        farm__isnull=True,
+                        tags=f"Outflow | Inventory: {original_item_name}",
+                        description__startswith=f"Inventory Purchase - {original_item_name} (",
+                    )
+                    if legacy_expenses.count() == 1:
+                        legacy_expenses.update(farm=item.farm)
                 log_action(request, "Inventory Updated", f"Inventory item '{item.item_name}' was updated.", icon_class="ri-edit-line", bg_color="info")
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.POST.get('is_ajax') == '1':
                     return JsonResponse({'success': True, 'message': 'Item updated successfully!'})
@@ -6292,19 +9536,36 @@ def toggle_inventory_rental(request):
         profile = get_farmer_profile(request.user)
         item_id = request.POST.get('item_id')
         rental_available = request.POST.get('rental_available') in ['true', '1', True, 'on']
+        rental_price = request.POST.get('rental_price')
+        rental_unit = request.POST.get('rental_unit')
+
         if item_id and profile:
             try:
                 item = FarmerInventory.objects.get(id=item_id, farmer=profile)
                 item.rental_available = rental_available
-                if rental_available and item.status not in ['Available', 'Booked', 'Rented', 'Maintenance']:
-                    item.status = 'Available'
-                elif not rental_available and item.status in ['Available', 'Booked', 'Rented']:
-                    item.status = 'Operational'
+
+                if rental_available:
+                    if rental_price:
+                        try:
+                            item.rental_price = float(rental_price)
+                        except (ValueError, TypeError):
+                            pass
+                    if rental_unit:
+                        item.rental_unit = str(rental_unit).strip()
+                    if item.status not in ['Available', 'Booked', 'Rented', 'Maintenance']:
+                        item.status = 'Available'
+                else:
+                    if item.status in ['Available', 'Booked', 'Rented']:
+                        item.status = 'Operational'
+
                 item.save()
-                log_action(request, "Rental Status Changed", f"Item '{item.item_name}' rental availability changed to {'On' if rental_available else 'Off'}.", icon_class="ri-toggle-line", bg_color="info")
+                rate_text = f" at ₹{item.rental_price} / {item.rental_unit}" if rental_available and item.rental_price else ""
+                log_action(request, "Rental Status Changed", f"Item '{item.item_name}' rental availability changed to {'On' if rental_available else 'Off'}{rate_text}.", icon_class="ri-toggle-line", bg_color="info")
                 return JsonResponse({
                     'success': True,
                     'rental_available': item.rental_available,
+                    'rental_price': str(item.rental_price) if item.rental_price else '',
+                    'rental_unit': item.rental_unit or 'Per Day',
                     'status': item.status,
                     'message': f"Rental {'enabled' if rental_available else 'disabled'} successfully"
                 })
@@ -6319,10 +9580,7 @@ def quick_add_inventory_category(request):
         name = request.POST.get('name', '').strip()
         layout_type = request.POST.get('layout_type', 'Warehouse').strip()
         if name:
-            cat, created = InventoryCategory.objects.get_or_create(name=name, defaults={'layout_type': layout_type, 'is_active': True})
-            if not cat.is_active:
-                cat.is_active = True
-                cat.save()
+            cat, created = get_or_reactivate_master(InventoryCategory, name=name, defaults={'layout_type': layout_type, 'is_active': True})
             return JsonResponse({'success': True, 'name': cat.name, 'layout_type': cat.layout_type})
         return JsonResponse({'success': False, 'error': 'Category name is required.'})
     return JsonResponse({'success': False, 'error': 'Invalid request method.'})
@@ -6334,10 +9592,7 @@ def quick_add_storage_location(request):
     if request.method == "POST":
         name = request.POST.get('name', '').strip()
         if name:
-            loc, created = StorageLocation.objects.get_or_create(name=name, defaults={'is_active': True})
-            if not loc.is_active:
-                loc.is_active = True
-                loc.save()
+            loc, created = get_or_reactivate_master(StorageLocation, name=name, defaults={'is_active': True})
             return JsonResponse({'success': True, 'name': loc.name})
         return JsonResponse({'success': False, 'error': 'Location name is required.'})
     return JsonResponse({'success': False, 'error': 'Invalid request method.'})
@@ -6349,10 +9604,7 @@ def quick_add_inventory_type(request):
     if request.method == "POST":
         name = request.POST.get('name', '').strip()
         if name:
-            pt, created = ProductType.objects.get_or_create(name=name, defaults={'is_active': True})
-            if not pt.is_active:
-                pt.is_active = True
-                pt.save()
+            pt, created = get_or_reactivate_master(ProductType, name=name, defaults={'is_active': True})
             return JsonResponse({'success': True, 'name': pt.name})
         return JsonResponse({'success': False, 'error': 'Inventory type name is required.'})
     return JsonResponse({'success': False, 'error': 'Invalid request method.'})
@@ -6423,10 +9675,26 @@ def manage_employee(request):
         attendances = []
         for d in days:
             att = StaffAttendance.objects.filter(staff=staff, date=d['date_obj']).first()
+            is_before_joining = bool(staff.date_of_joining and d['date_obj'] < staff.date_of_joining)
+            is_disabled = d["is_future"] or is_suspended or is_before_joining
             if att:
-                attendances.append({"status": att.status, "date": d['key'], "is_future": d["is_future"], "is_today": d["is_today"]})
+                attendances.append({
+                    "status": att.status,
+                    "date": d['key'],
+                    "is_future": d["is_future"],
+                    "is_today": d["is_today"],
+                    "is_before_joining": is_before_joining,
+                    "is_disabled": is_disabled
+                })
             else:
-                attendances.append({"status": "-", "date": d['key'], "is_future": d["is_future"], "is_today": d["is_today"]})
+                attendances.append({
+                    "status": "-",
+                    "date": d['key'],
+                    "is_future": d["is_future"],
+                    "is_today": d["is_today"],
+                    "is_before_joining": is_before_joining,
+                    "is_disabled": is_disabled
+                })
         role_display = "Role Manager" if staff.is_role_manager else (staff.role if staff.role else "Employee")
         attend_employees.append({
             "id": staff.id,
@@ -6437,6 +9705,7 @@ def manage_employee(request):
             "designation": staff.designation.name if staff.designation else "",
             "status": staff.status,
             "is_suspended": is_suspended,
+            "date_of_joining": staff.date_of_joining.strftime("%Y-%m-%d") if staff.date_of_joining else "",
             "attendance": attendances
         })
 
@@ -6470,12 +9739,13 @@ def manage_employee(request):
         total_worked = present_days + (half_days * 0.5)
         absent_days = absent_days_count + (half_days * 0.5)
 
-        gross = float(staff.base_daily_rate) * total_worked
+        daily_rate = float(staff.base_daily_rate or 0)
+        gross = round(daily_rate * total_worked, 2)
 
         advances = StaffAdvance.objects.filter(staff=staff, is_paid=False)
-        total_advance = sum(a.amount for a in advances)
+        total_advance = round(float(sum(a.amount for a in advances)), 2)
 
-        net_pay = gross - float(total_advance)
+        net_pay = max(0.0, round(gross - total_advance, 2))
 
         # Only lock the button if there is nothing new to pay or if suspended
         already_paid = is_suspended or (total_worked == 0 and last_payroll and last_payroll.month == current_month_str)
@@ -6486,11 +9756,11 @@ def manage_employee(request):
             "role": staff.role,
             "status": staff.status,
             "is_suspended": is_suspended,
-            "base_rate": float(staff.salary) if staff.salary is not None else float(staff.base_daily_rate),
+            "base_rate": round(float(staff.salary), 2) if staff.salary is not None else round(daily_rate, 2),
             "salary_frequency": staff.salary_frequency if staff.salary_frequency else "Daily",
             "present_days": total_worked,
             "absent_days": absent_days,
-            "advance": float(total_advance),
+            "advance": total_advance,
             "gross": gross,
             "net_pay": net_pay,
             "already_paid": already_paid
@@ -6520,27 +9790,17 @@ def manage_employee(request):
     payroll_data = [{"name": month, "transactions": trans, "id": month.replace(' ', '-').lower()} for month, trans in grouped_payrolls.items()]
     historic_payrolls_count = historic_payrolls.count()
 
-    permissions = [
-        "Farms",
-        "Market & Resources Hub",
-        "Task",
-        "Financials & Sales",
-        "Inventory",
-        "Outstanding",
-        "Employee Management",
-        "Users Management",
-        "Smart Farming Guide",
-        "My Documents",
-        "Profile & Subscription"
-    ]
+    from apps.farmer.access import available_manager_permissions
+    permissions = available_manager_permissions(farmer_prof)
 
     total_staff = staff_members.count()
     active_staff = staff_members.filter(status="0").count()
     suspended_staff = staff_members.filter(status="1").count()
     admins_staff = staff_members.filter(role__icontains="Manager").count() + staff_members.filter(role__icontains="Admin").count()
 
-    from apps.superadmin.models import Designation
+    from apps.superadmin.models import Designation, DocumentType
     designations = Designation.objects.filter(is_active=True).order_by('name')
+    document_types = DocumentType.objects.filter(is_active=True).order_by('name')
 
     active_tab = request.GET.get('tab', 'users')
     if active_tab not in ['users', 'daily_attendance', 'paycheck_payroll', 'employee_advance']:
@@ -6575,6 +9835,7 @@ def manage_employee(request):
         "admins_staff": admins_staff,
         "today_str": today.strftime("%Y-%m-%d"),
         "designations": designations,
+        "document_types": document_types,
         "staff_roles": staff_roles,
     })
 
@@ -6600,6 +9861,12 @@ def update_attendance(request):
                 staff = FarmerStaff.objects.get(id=emp_id, farmer=farmer_prof)
                 if str(staff.status) == "1":
                     return JsonResponse({"success": False, "error": "Cannot mark attendance for suspended/locked staff."})
+
+                if staff.date_of_joining and parsed_date < staff.date_of_joining:
+                    return JsonResponse({
+                        "success": False,
+                        "error": f"Cannot mark attendance before joining date ({staff.date_of_joining.strftime('%d-%m-%Y')})."
+                    })
 
                 if status == "-":
                     StaffAttendance.objects.filter(staff=staff, date=att_date).delete()
@@ -6650,7 +9917,11 @@ def bulk_update_attendance(request):
                     pass
 
             count = 0
+            skipped_joining = 0
             for staff in active_staff:
+                if staff.date_of_joining and parsed_date < staff.date_of_joining:
+                    skipped_joining += 1
+                    continue
                 if status == "-":
                     StaffAttendance.objects.filter(staff=staff, date=att_date).delete()
                 else:
@@ -6663,7 +9934,10 @@ def bulk_update_attendance(request):
                 count += 1
 
             log_action(request, "Bulk Attendance Updated", f"Bulk attendance for {count} staff on {att_date} set to '{status}'.", icon_class="ri-calendar-check-line", bg_color="success")
-            return JsonResponse({"success": True, "count": count, "date": att_date, "status": status})
+            msg = f"Bulk attendance updated for {count} staff."
+            if skipped_joining > 0:
+                msg += f" (Skipped {skipped_joining} staff before their joining date)"
+            return JsonResponse({"success": True, "count": count, "date": att_date, "status": status, "skipped_joining": skipped_joining, "message": msg})
         except Exception as e:
             return JsonResponse({"success": False, "error": str(e)})
 
@@ -6677,13 +9951,23 @@ def add_advance(request):
 
     if request.method == "POST":
         emp_id = request.POST.get('employee_id')
-        amount = request.POST.get('amount')
+        raw_amount = request.POST.get('amount')
         method = request.POST.get('method')
         if emp_id and farmer_prof:
             try:
                 staff = FarmerStaff.objects.get(id=emp_id, farmer=farmer_prof)
                 if str(staff.status) == "1":
                     return JsonResponse({"success": False, "error": "Cannot issue advance to suspended/locked staff."})
+
+                try:
+                    amount_val = float(raw_amount or 0)
+                except (ValueError, TypeError):
+                    amount_val = 0.0
+
+                if amount_val > 99999:
+                    return JsonResponse({"success": False, "error": "Maximum advance amount allowed is ₹99,999."})
+
+                amount = min(99999.0, max(0.0, amount_val))
 
                 StaffAdvance.objects.create(
                     staff=staff,
@@ -6727,13 +10011,29 @@ def execute_paycheck(request):
 
     if request.method == "POST":
         emp_id = request.POST.get('employee_id')
-        advance = request.POST.get('advance')
-        incentive = request.POST.get('incentive')
+        raw_advance = request.POST.get('advance')
+        raw_incentive = request.POST.get('incentive')
         method = request.POST.get('method')
-        net_pay = request.POST.get('net_pay')
+        raw_net_pay = request.POST.get('net_pay')
         gross = request.POST.get('gross')
         present = request.POST.get('present')
         month_str = date.today().strftime("%B %Y").upper()
+
+        try:
+            advance = min(99999.0, max(0.0, float(raw_advance or 0)))
+        except (ValueError, TypeError):
+            advance = 0.0
+
+        try:
+            incentive = min(99999.0, max(0.0, float(raw_incentive or 0)))
+        except (ValueError, TypeError):
+            incentive = 0.0
+
+        try:
+            net_pay = min(99999999.0, max(0.0, float(raw_net_pay or 0)))
+        except (ValueError, TypeError):
+            net_pay = 0.0
+
         if emp_id and farmer_prof:
             try:
                 staff = FarmerStaff.objects.get(id=emp_id, farmer=farmer_prof)
@@ -6744,7 +10044,7 @@ def execute_paycheck(request):
                     staff=staff,
                     month=month_str,
                     base_rate=staff.base_daily_rate,
-                    present_days=float(present),
+                    present_days=float(present or 0),
                     advance_deduction=advance,
                     incentives=incentive,
                     net_pay=net_pay,
@@ -6753,7 +10053,47 @@ def execute_paycheck(request):
 
                 from apps.farmer.models import StaffAdvance, StaffAttendance
                 StaffAttendance.objects.filter(staff=staff, is_paid=False).update(is_paid=True)
-                StaffAdvance.objects.filter(staff=staff, is_paid=False).update(is_paid=True)
+
+                unpaid_advances = StaffAdvance.objects.filter(staff=staff, is_paid=False)
+                total_unpaid = round(float(sum(a.amount for a in unpaid_advances)), 2)
+
+                if advance > 0:
+                    if total_unpaid == 0:
+                        # Advance was entered directly in the payment run sheet / modal
+                        StaffAdvance.objects.create(
+                            staff=staff,
+                            amount=advance,
+                            payment_method=method or "Bank Transfer Wire",
+                            is_paid=True
+                        )
+                    elif advance > total_unpaid:
+                        unpaid_advances.update(is_paid=True)
+                        diff = round(advance - total_unpaid, 2)
+                        StaffAdvance.objects.create(
+                            staff=staff,
+                            amount=diff,
+                            payment_method=method or "Bank Transfer Wire",
+                            is_paid=True
+                        )
+                    else:
+                        rem = advance
+                        for adv in unpaid_advances.order_by('date', 'id'):
+                            adv_amt = float(adv.amount or 0)
+                            if rem >= adv_amt:
+                                adv.is_paid = True
+                                adv.save()
+                                rem -= adv_amt
+                            elif rem > 0:
+                                adv.amount = round(adv_amt - rem, 2)
+                                adv.save()
+                                StaffAdvance.objects.create(
+                                    staff=staff,
+                                    amount=rem,
+                                    payment_method=adv.payment_method,
+                                    is_paid=True
+                                )
+                                rem = 0
+                                break
 
                 log_action(request, "Paycheck Executed", f"Payroll of ₹{net_pay} processed for '{staff.name}'.", icon_class="ri-bank-card-line", bg_color="success")
                 return JsonResponse({"success": True})
@@ -6798,31 +10138,108 @@ def update_employee_rate(request):
     return JsonResponse({"success": False})
 
 
+def get_staff_payment_history(request):
+    from apps.farmer.models import FarmerStaff, StaffAdvance, StaffPayroll
+
+    farmer_prof = get_farmer_profile(request.user)
+    if not farmer_prof:
+        return JsonResponse({"success": False, "error": "Unauthorized farmer profile."})
+
+    staff_id = request.GET.get('staff_id') or request.POST.get('staff_id')
+    if not staff_id:
+        return JsonResponse({"success": False, "error": "Staff ID is required."})
+
+    try:
+        staff = FarmerStaff.objects.get(id=staff_id, farmer=farmer_prof)
+    except FarmerStaff.DoesNotExist:
+        return JsonResponse({"success": False, "error": "Staff member not found."})
+
+    advances_qs = StaffAdvance.objects.filter(staff=staff).order_by('-date', '-id')
+    payrolls_qs = StaffPayroll.objects.filter(staff=staff).order_by('-paid_on', '-id')
+
+    total_advance = sum(float(a.amount or 0) for a in advances_qs)
+    pending_advance = sum(float(a.amount or 0) for a in advances_qs if not a.is_paid)
+    settled_advance = sum(float(a.amount or 0) for a in advances_qs if a.is_paid)
+
+    total_disbursed = sum(float(p.net_pay or 0) for p in payrolls_qs)
+    total_incentives = sum(float(p.incentives or 0) for p in payrolls_qs)
+    total_advance_deducted = sum(float(p.advance_deduction or 0) for p in payrolls_qs)
+
+    advances_data = []
+    for a in advances_qs:
+        advances_data.append({
+            "id": a.id,
+            "amount": float(a.amount or 0),
+            "date": a.date.strftime("%d %b, %Y") if a.date else "—",
+            "payment_method": a.payment_method or "Bank Transfer",
+            "is_paid": bool(a.is_paid),
+            "status_label": "Settled via Payroll" if a.is_paid else "Pending Deduction"
+        })
+
+    payrolls_data = []
+    for p in payrolls_qs:
+        payrolls_data.append({
+            "id": p.id,
+            "month": p.month or "—",
+            "paid_on": p.paid_on.strftime("%d %b, %Y") if p.paid_on else "—",
+            "base_rate": float(p.base_rate or 0),
+            "present_days": p.present_days,
+            "absent_days": p.absent_days,
+            "advance_deduction": float(p.advance_deduction or 0),
+            "incentives": float(p.incentives or 0),
+            "net_pay": float(p.net_pay or 0),
+            "payment_method": p.payment_method or "Cash Handout"
+        })
+
+    profile_img_url = staff.profile_image.url if staff.profile_image else ""
+    desig_name = staff.designation.name if staff.designation else "Not Assigned"
+
+    return JsonResponse({
+        "success": True,
+        "staff": {
+            "id": staff.id,
+            "name": staff.name,
+            "role": "Role Manager" if staff.is_role_manager else (staff.role or "Employee"),
+            "designation": desig_name,
+            "mobile": staff.mobile_number,
+            "salary": float(staff.salary or 0),
+            "salary_frequency": staff.salary_frequency or "Daily",
+            "status": "Active" if staff.status == "0" else "Suspended",
+            "profile_image": profile_img_url
+        },
+        "summary": {
+            "total_advance": round(total_advance, 2),
+            "pending_advance": round(pending_advance, 2),
+            "settled_advance": round(settled_advance, 2),
+            "total_disbursed": round(total_disbursed, 2),
+            "total_incentives": round(total_incentives, 2),
+            "total_advance_deducted": round(total_advance_deducted, 2),
+            "advance_count": advances_qs.count(),
+            "payroll_count": payrolls_qs.count()
+        },
+        "advances": advances_data,
+        "payrolls": payrolls_data
+    })
+
+
 def manage_users(request):
     eco_modules = [
         {"name": "Dashboard", "icon": "ri-bar-chart-line", "active": True},
         {"name": "Farms", "icon": "ri-plant-line", "active": False},
     ]
-    permissions = [
-        "Farms",
-        "Market & Resources Hub",
-        "Task",
-        "Financials & Sales",
-        "Inventory",
-        "Outstanding",
-        "Employee Management",
-        "Users Management",
-        "Smart Farming Guide",
-        "My Documents",
-        "Profile & Subscription"
-    ]
     from apps.farmer.models import FarmerStaff
-    farmer_prof = request.user.staff_profile.farmer if hasattr(request.user, 'staff_profile') and request.user.staff_profile else request.user.profile
+    farmer_prof = get_farmer_profile(request.user)
+    from apps.farmer.access import available_manager_permissions
+    permissions = available_manager_permissions(farmer_prof)
     staff_members = FarmerStaff.objects.filter(farmer=farmer_prof)
     total_staff = staff_members.count()
     active_staff = staff_members.filter(status="0").count()
     suspended_staff = staff_members.filter(status="1").count()
     admins_staff = staff_members.filter(role__icontains="Manager").count() + staff_members.filter(role__icontains="Admin").count()
+
+    from apps.superadmin.models import Designation, DocumentType
+    designations = Designation.objects.filter(is_active=True).order_by('name')
+    document_types = DocumentType.objects.filter(is_active=True).order_by('name')
 
     return render(request, "farmer/manage_users.html",{
         "eco_modules": eco_modules,
@@ -6832,6 +10249,8 @@ def manage_users(request):
         "active_staff": active_staff,
         "suspended_staff": suspended_staff,
         "admins_staff": admins_staff,
+        "designations": designations,
+        "document_types": document_types,
     })
 
 @csrf_exempt
@@ -6846,31 +10265,56 @@ def add_staff_api(request):
 
     if request.method == "POST":
         try:
-            farmer_prof = request.user.staff_profile.farmer if hasattr(request.user, 'staff_profile') and request.user.staff_profile else request.user.profile
-            # Check User count limit
-            active_sub = farmer_prof.subscriptions.filter(subscription_status='active').order_by('-id').first()
-            if not active_sub or not active_sub.package:
-                return JsonResponse({'success': False, 'error': 'No active subscription found. Please subscribe to a package first.'})
+            farmer_prof = get_farmer_profile(request.user)
 
-            max_users_str = str(active_sub.package.my_users).lower() if active_sub.package.my_users else "unlimited"
-            if max_users_str != "unlimited":
-                match_user = re.search(r'[\d]+', max_users_str)
-                if match_user:
-                    max_users = int(match_user.group())
-                    current_user_count = FarmerStaff.objects.filter(farmer=farmer_prof).count()
-                    if current_user_count >= max_users:
-                        return JsonResponse({'success': False, 'error': f'Cannot add employee. Your package allows a maximum of {max_users} users/employees.'})
+            status = request.POST.get('status', '0')
+            is_manager = request.POST.get('is_manager') == 'true'
+            role = "Manager" if is_manager else "Employee"
 
-            name = request.POST.get('name')
-            mobile = request.POST.get('mobile')
+            # Check User Manager limit ONLY if adding a Manager. Regular Employees/Workers are Unlimited!
+            if is_manager:
+                active_sub = farmer_prof.subscriptions.filter(subscription_status='active').order_by('-id').first()
+                if not active_sub or not active_sub.package:
+                    return JsonResponse({'success': False, 'error': 'No active subscription found. Please subscribe to a package first.'})
+
+                max_users_str = str(active_sub.package.my_users).lower() if active_sub.package.my_users else "unlimited"
+                if max_users_str != "unlimited":
+                    match_user = re.search(r'[\d]+', max_users_str)
+                    if match_user:
+                        max_managers = int(match_user.group())
+                        current_manager_count = FarmerStaff.objects.filter(farmer=farmer_prof, is_role_manager=True).count()
+                        if current_manager_count >= max_managers:
+                            return JsonResponse({'success': False, 'error': f'Cannot add Manager. Your package allows a maximum of {max_managers} User Managers.'})
+
+            name = (request.POST.get('name') or '').strip()
+            mobile = (request.POST.get('mobile') or '').strip()
+
+            if not name:
+                return JsonResponse({'success': False, 'error': 'Full Name is required.'})
+
+            if not mobile:
+                return JsonResponse({'success': False, 'error': 'Mobile number is required.'})
+
+            from apps.superadmin.phone_utils import check_farm_staff_mobile
+            is_taken, err_msg = check_farm_staff_mobile(farmer_prof, mobile)
+            if is_taken:
+                return JsonResponse({'success': False, 'error': err_msg})
+
             dob = request.POST.get('dob')
+            doj = request.POST.get('doj')
             gender = request.POST.get('gender')
             doc_type = request.POST.get('doc_type')
             doc_file = request.FILES.get('doc_file')
             profile_image = request.FILES.get('profile_image')
-            status = request.POST.get('status', '0')
-            is_manager = request.POST.get('is_manager') == 'true'
-            role = "Manager" if is_manager else "Employee"
+
+            from auth.helpers import validate_uploaded_file, ALLOWED_IMAGE_EXTENSIONS, ALLOWED_DOCUMENT_EXTENSIONS
+            valid_doc, doc_err = validate_uploaded_file(doc_file, ALLOWED_DOCUMENT_EXTENSIONS)
+            if not valid_doc:
+                return JsonResponse({'success': False, 'error': doc_err})
+
+            valid_img, img_err = validate_uploaded_file(profile_image, ALLOWED_IMAGE_EXTENSIONS)
+            if not valid_img:
+                return JsonResponse({'success': False, 'error': img_err})
 
             salary_frequency = request.POST.get('salary_frequency')
             salary = request.POST.get('salary')
@@ -6902,40 +10346,43 @@ def add_staff_api(request):
             except Exception:
                 selected_perms = request.POST.getlist('permissions')
 
-            if perm_all:
-                assigned_permissions = ["ALL"]
-            else:
-                assigned_permissions = selected_perms if isinstance(selected_perms, list) else []
+            from apps.farmer.access import normalized_manager_permissions
+            assigned_permissions = normalized_manager_permissions(
+                farmer_prof, selected_perms if isinstance(selected_perms, list) else [], perm_all
+            ) if is_manager else []
 
-            # Auto-create User account linked to Mobile Number for OTP login
+            # Auto-create User account linked to Mobile Number for login ONLY if Manager
             user_obj = None
-            username = request.POST.get('username') or mobile
-            password = request.POST.get('password')
+            if is_manager:
+                username = request.POST.get('username') or mobile
+                password = request.POST.get('password')
 
-            if username:
-                user_obj = User.objects.filter(username=username).first()
-                if not user_obj:
-                    if password:
-                        user_obj = User.objects.create_user(username=username, password=password)
-                    else:
-                        user_obj = User.objects.create_user(username=username)
-                        user_obj.set_unusable_password()
-                        user_obj.save()
+                if username:
+                    from apps.superadmin.phone_utils import find_profile_by_phone
+                    existing_identity = find_profile_by_phone(username)
+                    user_obj = existing_identity.user if existing_identity else User.objects.filter(username=username).first()
+                    if not user_obj:
+                        if password:
+                            user_obj = User.objects.create_user(username=username, password=password)
+                        else:
+                            user_obj = User.objects.create_user(username=username)
+                            user_obj.set_unusable_password()
+                            user_obj.save()
 
-                    if hasattr(user_obj, 'profile'):
-                        user_obj.profile.mobile_number = mobile
-                        user_obj.profile.role = 'staff'
-                        user_obj.profile.save()
+                        if hasattr(user_obj, 'profile'):
+                            user_obj.profile.mobile_number = mobile
+                            user_obj.profile.role = 'staff'
+                            user_obj.profile.save()
 
-                user_obj.is_active = (str(status) != "1")
-                user_obj.save()
+            staff_user = user_obj
 
             staff = FarmerStaff.objects.create(
-                user=user_obj,
+                user=staff_user,
                 farmer=farmer_prof,
                 name=name,
                 mobile_number=mobile,
                 date_of_birth=dob if dob else None,
+                date_of_joining=doj if doj else timezone.now().date(),
                 gender=gender,
                 document_type=doc_type,
                 document_file=doc_file,
@@ -6971,19 +10418,47 @@ def update_staff_api(request):
             staff_id = request.POST.get('staff_id')
             staff = FarmerStaff.objects.get(id=staff_id, farmer=farmer_prof)
 
-            staff.name = request.POST.get('name')
-            staff.mobile_number = request.POST.get('mobile')
+            new_name = (request.POST.get('name') or '').strip()
+            new_mobile = (request.POST.get('mobile') or '').strip()
+
+            if new_mobile:
+                from apps.superadmin.phone_utils import check_farm_staff_mobile
+                is_taken, err_msg = check_farm_staff_mobile(
+                    farmer_prof,
+                    new_mobile,
+                    exclude_staff_id=staff.id
+                )
+                if is_taken:
+                    return JsonResponse({'success': False, 'error': err_msg})
+                staff.mobile_number = new_mobile
+
+            if new_name:
+                staff.name = new_name
+
 
             dob = request.POST.get('dob')
             if dob: staff.date_of_birth = dob
+            elif request.POST.get('clear_dob') == 'true': staff.date_of_birth = None
+
+            doj = request.POST.get('doj')
+            if doj: staff.date_of_joining = doj
+            elif request.POST.get('clear_doj') == 'true': staff.date_of_joining = None
 
             staff.gender = request.POST.get('gender')
             staff.document_type = request.POST.get('doc_type')
-
+            from auth.helpers import validate_uploaded_file, ALLOWED_IMAGE_EXTENSIONS, ALLOWED_DOCUMENT_EXTENSIONS
             if request.FILES.get('doc_file'):
+                valid_doc, doc_err = validate_uploaded_file(request.FILES.get('doc_file'), ALLOWED_DOCUMENT_EXTENSIONS)
+                if not valid_doc:
+                    return JsonResponse({'success': False, 'error': doc_err})
                 staff.document_file = request.FILES.get('doc_file')
+            elif request.POST.get('remove_doc_file') == 'true':
+                staff.document_file = None
 
             if request.FILES.get('profile_image'):
+                valid_img, img_err = validate_uploaded_file(request.FILES.get('profile_image'), ALLOWED_IMAGE_EXTENSIONS)
+                if not valid_img:
+                    return JsonResponse({'success': False, 'error': img_err})
                 staff.profile_image = request.FILES.get('profile_image')
             elif request.POST.get('remove_profile_image') == 'true':
                 staff.profile_image = None
@@ -6991,6 +10466,21 @@ def update_staff_api(request):
 
             staff.status = request.POST.get('status', '0')
             is_manager = request.POST.get('is_manager') == 'true'
+
+            # Check User Manager limit if promoting an employee to Manager
+            if is_manager and not staff.is_role_manager:
+                active_sub = farmer_prof.subscriptions.filter(subscription_status='active').order_by('-id').first()
+                if active_sub and active_sub.package:
+                    max_users_str = str(active_sub.package.my_users).lower() if active_sub.package.my_users else "unlimited"
+                    if max_users_str != "unlimited":
+                        import re
+                        match_user = re.search(r'[\d]+', max_users_str)
+                        if match_user:
+                            max_managers = int(match_user.group())
+                            current_manager_count = FarmerStaff.objects.filter(farmer=farmer_prof, is_role_manager=True).exclude(id=staff.id).count()
+                            if current_manager_count >= max_managers:
+                                return JsonResponse({'success': False, 'error': f'Cannot promote to Manager. Your package allows a maximum of {max_managers} User Managers.'})
+
             staff.is_role_manager = is_manager
             staff.role = "Manager" if is_manager else "Employee"
 
@@ -7031,36 +10521,38 @@ def update_staff_api(request):
             except Exception:
                 selected_perms = request.POST.getlist('permissions')
 
-            if perm_all:
-                staff.permissions = ["ALL"]
-            else:
-                staff.permissions = selected_perms if isinstance(selected_perms, list) else []
+            from apps.farmer.access import normalized_manager_permissions
+            staff.permissions = normalized_manager_permissions(
+                farmer_prof, selected_perms if isinstance(selected_perms, list) else [], perm_all
+            ) if is_manager else []
 
-            # Ensure user account is linked to mobile number for OTP login
-            username = request.POST.get('username') or staff.mobile_number
-            password = request.POST.get('password')
+            # Ensure user account is linked to mobile number for login ONLY for Managers
+            if is_manager:
+                username = request.POST.get('username') or staff.mobile_number
+                password = request.POST.get('password')
 
-            if staff.user:
-                if username and username != staff.user.username:
-                    if not User.objects.filter(username=username).exclude(id=staff.user.id).exists():
-                        staff.user.username = username
-                if password:
-                    staff.user.set_password(password)
-                staff.user.is_active = (str(staff.status) != "1")
-                staff.user.save()
-            elif username:
-                user_obj = User.objects.filter(username=username).first()
-                if not user_obj:
+                if staff.user:
+                    if username and username != staff.user.username:
+                        if not User.objects.filter(username=username).exclude(id=staff.user.id).exists():
+                            staff.user.username = username
                     if password:
-                        user_obj = User.objects.create_user(username=username, password=password)
-                    else:
-                        user_obj = User.objects.create_user(username=username)
-                        user_obj.set_unusable_password()
-                        user_obj.save()
-                user_obj.is_active = (str(staff.status) != "1")
-                user_obj.save()
-                staff.user = user_obj
-
+                        staff.user.set_password(password)
+                    staff.user.save()
+                elif username:
+                    from apps.superadmin.phone_utils import find_profile_by_phone
+                    existing_identity = find_profile_by_phone(username)
+                    user_obj = existing_identity.user if existing_identity else User.objects.filter(username=username).first()
+                    if not user_obj:
+                        if password:
+                            user_obj = User.objects.create_user(username=username, password=password)
+                        else:
+                            user_obj = User.objects.create_user(username=username)
+                            user_obj.set_unusable_password()
+                            user_obj.save()
+                        user_obj.profile.role = 'staff'
+                        user_obj.profile.mobile_number = staff.mobile_number
+                        user_obj.profile.save(update_fields=['role', 'mobile_number'])
+                    staff.user = user_obj
             staff.save()
             log_action(request, "Staff/Manager Account Updated", f"Staff/Manager '{staff.name}' details were updated.", icon_class="ri-user-settings-line", bg_color="info")
             return JsonResponse({'success': True, 'message': 'Staff/Manager updated successfully'})
@@ -7088,6 +10580,20 @@ def delete_staff_api(request):
     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
 
+def check_staff_mobile(request):
+    """
+    Live AJAX check endpoint to verify whether a mobile number is already taken.
+    """
+    mobile = request.GET.get('mobile', '').strip()
+    staff_id = request.GET.get('staff_id')
+    if not mobile or len(mobile) < 7:
+        return JsonResponse({'is_taken': False})
+    farmer_prof = get_farmer_profile(request.user)
+    from apps.superadmin.phone_utils import check_farm_staff_mobile
+    is_taken, err_msg = check_farm_staff_mobile(farmer_prof, mobile, exclude_staff_id=staff_id)
+    return JsonResponse({'is_taken': is_taken, 'error': err_msg if is_taken else ''})
+
+
 @csrf_exempt
 def quick_add_designation(request):
     from django.http import JsonResponse
@@ -7109,6 +10615,31 @@ def quick_add_designation(request):
             'success': True,
             'id': desig.id,
             'name': desig.name,
+        })
+    return JsonResponse({'success': False, 'error': 'Invalid request'})
+
+
+@csrf_exempt
+def quick_add_staff_document_type(request):
+    from django.http import JsonResponse
+    from apps.superadmin.models import DocumentType
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '').strip()
+        if not name:
+            return JsonResponse({'success': False, 'error': 'Document type name is required.'})
+
+        dt = DocumentType.objects.filter(name__iexact=name).first()
+        if not dt:
+            dt = DocumentType.objects.create(name=name, description=description, is_active=True)
+        elif not dt.is_active:
+            dt.is_active = True
+            dt.save()
+
+        return JsonResponse({
+            'success': True,
+            'id': dt.id,
+            'name': dt.name,
         })
     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
@@ -7365,10 +10896,61 @@ def manage_market(request):
             'name': r.equipment_name,
             'class': r.hardware_class,
             'price': r.price_per_day.normalize() if r.price_per_day else '',
-            'owner': r.owner_name,
-            'phone': r.contact_phone,
-            'rating': r.condition_rating,
-            'status': r.status,
+            'rental_unit': 'Per Day',
+            'unit_short': 'day',
+            'owner': r.owner_name or 'Platform Fleet',
+            'phone': r.contact_phone or '',
+            'rating': r.condition_rating or 'Good',
+            'status': r.status or 'Available',
+            'is_own': False,
+            'is_farmer': False
+        })
+
+    from apps.farmer.models import FarmerInventory
+    farmer_rentals = FarmerInventory.objects.filter(rental_available=True).select_related('farmer', 'farmer__user').order_by('-created_at')
+    for fr in farmer_rentals:
+        condition = "Good"
+        if fr.status in ["Maintenance", "Needs Repair"]:
+            condition = "Needs Repair"
+        elif fr.status in ["Available", "Operational"]:
+            condition = "Good"
+
+        unit_str = fr.rental_unit or 'Per Day'
+        unit_lower = unit_str.lower()
+        if 'hour' in unit_lower:
+            unit_short = 'hr'
+        elif 'week' in unit_lower:
+            unit_short = 'wk'
+        elif 'month' in unit_lower:
+            unit_short = 'mo'
+        elif 'acre' in unit_lower:
+            unit_short = 'acre'
+        else:
+            unit_short = 'day'
+
+        is_own = False
+        if profile and fr.farmer_id == profile.id:
+            is_own = True
+            owner_display = "You (Own)"
+        else:
+            owner_display = fr.farmer.company_name or (fr.farmer.user.get_full_name() if fr.farmer and fr.farmer.user else "Farmer")
+
+        farmer_phone = fr.farmer.mobile_number if fr.farmer and hasattr(fr.farmer, 'mobile_number') and fr.farmer.mobile_number else (fr.farmer.user.username if fr.farmer and fr.farmer.user else '')
+
+        formatted_rentals.append({
+            'id': f"farmer_{fr.id}",
+            'inventory_id': fr.id,
+            'name': fr.item_name,
+            'class': fr.category or ('Tool' if 'Tool' in (fr.category or '') else 'Machinery'),
+            'price': fr.rental_price.normalize() if fr.rental_price else (fr.unit_price.normalize() if fr.unit_price else '0'),
+            'rental_unit': unit_str,
+            'unit_short': unit_short,
+            'owner': owner_display,
+            'phone': farmer_phone,
+            'rating': condition,
+            'status': fr.status if fr.status in ['Available', 'Booked', 'Rented', 'Maintenance', 'Operational'] else 'Available',
+            'is_own': is_own,
+            'is_farmer': True
         })
 
     guidelines_list = Guideline.objects.all().order_by('-created_at')
@@ -7408,7 +10990,7 @@ def quick_add_service_class(request):
         name = request.POST.get("name", "").strip()
         if not name:
             return JsonResponse({"success": False, "error": "Service Class name cannot be empty."})
-        obj, created = LocationCategory.objects.get_or_create(
+        obj, created = get_or_reactivate_master(LocationCategory,
             name=name,
             defaults={"description": f"Auto-created service class: {name}", "is_active": True}
         )
@@ -7460,7 +11042,14 @@ def manage_task(request):
     task_categories = TaskCategory.objects.filter(is_active=True).order_by('name')
     task_priorities = TaskPriority.objects.filter(is_active=True).order_by('id')
 
-    tasks = FarmTask.objects.filter(farmer=farmer_prof).order_by('-created_at') if farmer_prof else FarmTask.objects.none()
+    from django.db.models import Q
+    if farmer_prof:
+        FarmTask.objects.filter(farmer__isnull=True, farm__farmer=farmer_prof).update(farmer=farmer_prof)
+        FarmTask.objects.filter(farmer__isnull=True, associated_split__farm__farmer=farmer_prof).update(farmer=farmer_prof)
+
+    tasks = FarmTask.objects.filter(
+        Q(farmer=farmer_prof) | Q(farm__farmer=farmer_prof) | Q(associated_split__farm__farmer=farmer_prof)
+    ).distinct().order_by('-created_at') if farmer_prof else FarmTask.objects.none()
     total_tasks = tasks.count()
     pending_tasks = tasks.filter(status='Pending').count()
     active_tasks = tasks.filter(status='In Progress').count()
@@ -7593,19 +11182,100 @@ def delete_farmer_blueprint_stage(request):
         return redirect(f'/farmer/manage_task/?blueprint_id={blueprint_id}')
     return redirect('/farmer/manage_task/')
 def update_profile(request):
+    if request.method == "POST" and "pincode" in request.POST:
+        from apps.farmer.validation import pincode_error
+        error = pincode_error(request)
+        if error is not None:
+            return error
+
     if request.method == "POST":
         if request.user.is_authenticated:
             user = request.user
+            active_role = request.session.get('active_role', 'farmer')
+            is_manager_mode = (active_role == 'manager')
+            is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.POST.get('is_ajax') == '1'
+
+            # ---------------------------------------------------------
+            # MANAGER MODE: Update Manager's OWN staff details (NOT Employer)
+            # ---------------------------------------------------------
+            if is_manager_mode:
+                from apps.farmer.models import FarmerStaff
+                staff_obj = get_active_manager_staff(request)
+                if not staff_obj:
+                    return JsonResponse({'success': False, 'error': 'Select an active workspace.'}, status=403)
+
+                name = (request.POST.get('name') or request.POST.get('first_name') or request.POST.get('farmer_name') or '').strip()
+                if name:
+                    user.first_name = name
+                    user.save()
+                    if staff_obj:
+                        staff_obj.name = name
+
+                mobile_number = (request.POST.get('mobile_number') or '').strip()
+                if mobile_number and staff_obj:
+                    staff_obj.mobile_number = mobile_number
+
+                email = (request.POST.get('email') or '').strip()
+                if email:
+                    user.email = email
+                    user.save()
+
+                if 'gender' in request.POST and staff_obj:
+                    staff_obj.gender = request.POST.get('gender', '').strip()
+
+                dob_val = request.POST.get('date_of_birth') or request.POST.get('dob')
+                if dob_val and staff_obj:
+                    try:
+                        staff_obj.date_of_birth = dob_val
+                    except Exception:
+                        pass
+
+                if 'address' in request.POST and staff_obj:
+                    staff_obj.address = request.POST.get('address', '').strip()
+
+                if 'profile_image' in request.FILES and staff_obj:
+                    img_file = request.FILES['profile_image']
+                    if img_file.size <= 10 * 1024 * 1024:
+                        staff_obj.profile_image = img_file
+
+                if staff_obj:
+                    staff_obj.save()
+
+                # Sync user personal profile avatar/name if present
+                personal_profile = getattr(user, 'profile', None)
+                if personal_profile and hasattr(user, 'profile'):
+                    if name:
+                        personal_profile.user.first_name = name
+                    if 'profile_image' in request.FILES:
+                        personal_profile.profile_image = request.FILES['profile_image']
+                    personal_profile.save()
+
+                log_action(request, "Manager Profile Updated", "Manager personal profile details updated.", icon_class="ri-user-settings-line", bg_color="primary")
+
+                if is_ajax:
+                    return JsonResponse({
+                        'success': True,
+                        'status': 'success',
+                        'message': 'Manager profile updated successfully!',
+                        'profile_image_url': staff_obj.profile_image.url if staff_obj and staff_obj.profile_image else ''
+                    })
+
+                messages.success(request, "Manager profile updated successfully!")
+                return redirect('/farmer/profile_view/#basic_info')
+
+            # ---------------------------------------------------------
+            # FARMER MODE: Update Farmer Owner profile
+            # ---------------------------------------------------------
             profile = get_farmer_profile(user)
             if not profile:
                 profile = getattr(user, 'profile', None)
 
-            is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.POST.get('is_ajax') == '1'
-
             # 1. Update user fields
-            first_name = request.POST.get('first_name') or request.POST.get('name') or request.POST.get('farmer_name')
-            if first_name:
-                user.first_name = first_name.strip()
+            full_name = (request.POST.get('full_name') or request.POST.get('name') or request.POST.get('first_name') or request.POST.get('farmer_name') or '').strip()
+            if full_name:
+                user.first_name = full_name
+                if 'full_name' in request.POST or 'name' in request.POST or 'farmer_name' in request.POST:
+                    user.last_name = ''
                 user.save()
 
             last_name = request.POST.get('last_name')
@@ -7677,22 +11347,35 @@ def update_profile(request):
                     profile.educational_qualification = request.POST.get('educational_qualification', '').strip()
 
                 # 6. Location / Address Details
-                state_val = request.POST.get('state')
-                if state_val:
-                    from apps.superadmin.models import State
-                    st = State.objects.filter(id=state_val).first() or State.objects.filter(name__iexact=state_val).first()
-                    if st:
+                if 'state' in request.POST:
+                    state_val = request.POST.get('state')
+                    if state_val:
+                        from apps.superadmin.models import State
+                        st = State.objects.filter(id=state_val).first() or State.objects.filter(name__iexact=state_val).first()
                         profile.state = st
+                    else:
+                        profile.state = None
 
-                district_val = request.POST.get('district')
-                if district_val:
-                    from apps.superadmin.models import City
-                    ct = City.objects.filter(id=district_val).first() or City.objects.filter(name__iexact=district_val).first()
-                    if ct:
+                if 'district' in request.POST:
+                    district_val = request.POST.get('district')
+                    if district_val:
+                        from apps.superadmin.models import City
+                        ct = City.objects.filter(id=district_val).first() or City.objects.filter(name__iexact=district_val).first()
                         profile.district = ct
+                    else:
+                        profile.district = None
 
                 if 'taluka' in request.POST:
-                    profile.taluka = request.POST.get('taluka', '').strip()
+                    taluka_val = (request.POST.get('taluka') or '').strip()
+                    if taluka_val:
+                        if taluka_val.isdigit():
+                            from apps.superadmin.models import Taluk
+                            t_obj = Taluk.objects.filter(id=taluka_val).first()
+                            profile.taluka = t_obj.name if t_obj else taluka_val
+                        else:
+                            profile.taluka = taluka_val
+                    else:
+                        profile.taluka = ""
                 if 'village' in request.POST:
                     profile.village = request.POST.get('village', '').strip()
                 if 'pincode' in request.POST:
@@ -7788,7 +11471,7 @@ def send_real_sms(mobile_number, otp_code):
     return False
 
 def landing_page(request):
-    packages = Package.objects.all().order_by('price')
+    packages = Package.objects.filter(is_active=True).order_by('price')
     return render(request, "farmer/landing_page.html", {"packages": packages})
 
 def send_otp(request):
@@ -7806,12 +11489,12 @@ def send_otp(request):
         # Check if user already exists
         user = User.objects.filter(username=mobile_number).first()
         if not user:
-            # Create user with password as username/mobile
             user = User.objects.create_user(
                 username=mobile_number,
-                password=mobile_number,
                 first_name=fullname
             )
+            user.set_unusable_password()
+            user.save()
         else:
             user.first_name = fullname
             user.save()
@@ -7831,9 +11514,6 @@ def send_otp(request):
             "mobile_number": mobile_number,
             "sms_sent": sms_sent
         }
-        if not sms_sent:
-            response_data["otp"] = otp_code
-            response_data["note"] = "SMS gateway not configured or failed. Using fallback OTP display."
 
         return JsonResponse(response_data)
     return JsonResponse({"status": "error", "message": "Invalid request method."}, status=400)
@@ -7870,27 +11550,17 @@ def verify_otp_and_payment(request):
             return JsonResponse({"status": "error", "message": "Selected plan not found."}, status=404)
 
         # Create Razorpay Order
-        key_id = os.environ.get("RAZORPAY_KEY_ID", "rzp_test_cjiZ7kyueJCUGb")
-        key_secret = os.environ.get("RAZORPAY_KEY_SECRET", "fG0zEeXUiJKNbggEKRhsJf0k")
-
-        order_id = ""
-        amount_paise = int(package.price * 100)
-        try:
-            url = "https://api.razorpay.com/v1/orders"
-            auth = (key_id, key_secret)
-            data = {
-                "amount": amount_paise,
-                "currency": "INR",
-                "receipt": f"rcpt_{profile.id}_{package.id}"
-            }
-            res = requests.post(url, auth=auth, json=data, timeout=5)
-            if res.status_code in [200, 201]:
-                order_id = res.json().get("id")
-        except Exception as e:
-            print(f"Razorpay order creation error: {e}")
-
-        if not order_id:
-            order_id = f"order_mock_{random.randint(100000, 999999)}"
+        from apps.superadmin.razorpay_utils import create_razorpay_order, get_razorpay_credentials
+        from apps.superadmin.subscription_utils import get_package_cycle_price, normalize_billing_cycle
+        billing_cycle = normalize_billing_cycle(request.POST.get("billing_cycle", "monthly"))
+        creds = get_razorpay_credentials()
+        key_id = creds["key_id"]
+        amount_paise = int(round(get_package_cycle_price(package, billing_cycle) * 100))
+        order_id, is_live, err_msg = create_razorpay_order(
+            amount_paise=amount_paise,
+            receipt=f"rcpt_{profile.id}_{package.id}",
+            notes={"package_name": package.name, "mobile_number": profile.mobile_number, "billing_cycle": billing_cycle}
+        )
 
         return JsonResponse({
             "status": "otp_verified",
@@ -7900,86 +11570,410 @@ def verify_otp_and_payment(request):
             "package_name": package.name,
             "fullname": user.first_name,
             "mobile_number": profile.mobile_number,
-            "package_id": package.id
+            "package_id": package.id,
+            "billing_cycle": billing_cycle,
         })
     return JsonResponse({"status": "error", "message": "Invalid request method."}, status=400)
 
+
 def verify_payment(request):
     if request.method == "POST":
+        from apps.superadmin.subscription_utils import (
+            billing_cycle_label,
+            complete_farmer_subscription_payment,
+            mark_pending_subscription_status,
+            normalize_billing_cycle,
+        )
+
+        status_action = (request.POST.get("payment_status") or request.POST.get("status") or "").strip().lower()
         razorpay_payment_id = request.POST.get("razorpay_payment_id", "").strip()
         razorpay_order_id = request.POST.get("razorpay_order_id", "").strip()
         razorpay_signature = request.POST.get("razorpay_signature", "").strip()
         package_id = request.POST.get("package_id", "").strip()
         mobile_number = request.POST.get("mobile_number", "").strip()
-
-        if not razorpay_payment_id or not razorpay_order_id or not razorpay_signature or not package_id or not mobile_number:
-            return JsonResponse({"status": "error", "message": "Payment details missing."}, status=400)
-
-        # Verify Razorpay signature
-        import hashlib
-        import hmac
-        key_secret = os.environ.get("RAZORPAY_KEY_SECRET", "fG0zEeXUiJKNbggEKRhsJf0k")
-        msg = f"{razorpay_order_id}|{razorpay_payment_id}"
-        generated_signature = hmac.new(
-            key=key_secret.encode(),
-            msg=msg.encode(),
-            digestmod=hashlib.sha256
-        ).hexdigest()
-
-        # signature mismatch check bypassed for testing convenience if signature verification has issues
-        # but here we implement standard check and log the validation
-        if generated_signature != razorpay_signature:
-            print("Warning: Razorpay signature verification failed. Bypassing check for test mode.")
-            # For robust testing with mock keys, let's log the error but still proceed.
-            # (If the user wants strict check, they can enforce it in production. Let's allow fallback in test mode)
+        billing_cycle = normalize_billing_cycle(request.POST.get("billing_cycle", "monthly"))
+        is_renewal = request.POST.get("is_renewal", "").strip().lower() in ["true", "1"]
 
         # Retrieve user and profile
-        user = User.objects.filter(username=mobile_number).first()
-        if not user:
-            return JsonResponse({"status": "error", "message": "User not found."}, status=404)
+        if request.user.is_authenticated:
+            user = request.user
+            profile = get_farmer_profile(user)
+        else:
+            from apps.superadmin.phone_utils import find_profile_by_phone
+            profile = find_profile_by_phone(mobile_number, role='farmer')
+            if profile:
+                user = profile.user
+            else:
+                user = User.objects.filter(username=mobile_number).first()
+                if not user:
+                    return JsonResponse({"status": "error", "message": "User not found."}, status=404)
+                profile = get_farmer_profile(user)
 
-        profile, created = Profile.objects.get_or_create(user=user)
-        if created or not profile.role:
-            profile.role = 'farmer'
-            profile.mobile_number = mobile_number
-            profile.save()
+        if not profile:
+            profile, created = Profile.objects.get_or_create(user=user)
+            if created or not profile.role:
+                profile.role = 'farmer'
+                profile.mobile_number = mobile_number
+                profile.save()
 
-        # Retrieve package
+        # Explicit payment failure / dismissal notification from checkout UI
+        if status_action in ("failed", "cancelled", "canceled"):
+            mark_pending_subscription_status(profile, razorpay_order_id=razorpay_order_id, new_status=status_action)
+            return JsonResponse({"status": status_action, "message": "Pending payment recorded as " + status_action + "."})
+
+        if not razorpay_payment_id or not razorpay_order_id or not package_id or not mobile_number:
+            return JsonResponse({"status": "error", "message": "Payment details missing."}, status=400)
+
         package = Package.objects.filter(id=package_id).first()
         if not package:
             return JsonResponse({"status": "error", "message": "Selected plan not found."}, status=404)
 
-        # Create Subscription (End date 1 month from now)
-        start_date = datetime.date.today()
-        end_date = start_date + datetime.timedelta(days=30)
-
-        # Cancel existing subscriptions
-        Subscription.objects.filter(farmer=profile, subscription_status='active').update(subscription_status='cancelled')
-
-        subscription = Subscription.objects.create(
-            farmer=profile,
+        success, err_msg, subscription, _ = complete_farmer_subscription_payment(
+            farmer_profile=profile,
             package=package,
-            monthly_amount=package.price,
-            auto_renew=True,
-            payment_status="success",
-            subscription_status="active",
-            end_date=end_date
+            razorpay_order_id=razorpay_order_id,
+            razorpay_payment_id=razorpay_payment_id,
+            razorpay_signature=razorpay_signature,
+            billing_cycle=billing_cycle,
+            is_renewal=is_renewal,
+            mobile_number=mobile_number,
+            request=request,
         )
+        if not success or not subscription:
+            return JsonResponse({"status": "error", "message": err_msg or "Payment verification failed."}, status=400)
 
-        # Log the user in
-        login(request, user)
+        # Log the user in if not already authenticated
+        if not request.user.is_authenticated:
+            user.backend = 'django.contrib.auth.backends.ModelBackend'
+            login(request, user)
 
+        request.session['active_role'] = 'farmer'
+        request.session['active_farmer_id'] = profile.id
+        request.session['active_staff_id'] = None
+
+        sub_cycle = normalize_billing_cycle(subscription.billing_cycle)
         return JsonResponse({
             "status": "success",
             "data": {
-                "fullname": user.first_name,
+                "subscription_id": subscription.id,
+                "fullname": user.get_full_name() or user.first_name,
                 "mobile_number": profile.mobile_number,
-                "package_name": package.name,
-                "package_price": float(package.price),
-                "dashboard_url": "/farmer/dashboard/"
+                "package_name": subscription.package.name if subscription.package else package.name,
+                "package_price": float(subscription.monthly_amount or 0),
+                "amount_paid": float(subscription.effective_amount_paid or 0),
+                "billing_cycle": sub_cycle,
+                "billing_cycle_label": billing_cycle_label(sub_cycle),
+                "start_date": subscription.start_date.strftime("%d-%b-%Y") if subscription.start_date else "",
+                "end_date": subscription.end_date.strftime("%d-%b-%Y") if subscription.end_date else "",
+                "dashboard_url": "/profile_view/#basic_info"
             }
         })
     return JsonResponse({"status": "error", "message": "Invalid request method."}, status=400)
+
+
+# -------------------------
+# FARMER REGISTRATION FLOW
+# -------------------------
+
+def farmer_register(request):
+    """
+    Renders the Farmer Registration onboarding page.
+    Flow: Step 1: Mobile & OTP -> Step 2: Basic Profile Data -> Step 3: Subscription & Dashboard Access
+    """
+    from apps.superadmin.models import Package, State
+    packages = Package.objects.filter(is_active=True).order_by('price')
+    states = State.objects.filter(status="0").order_by('name')
+    if not states.exists():
+        states = State.objects.all().order_by('name')
+
+    prefill_mobile = (request.GET.get('mobile') or '').strip()
+    prefill_package_id = (request.GET.get('package_id') or '').strip()
+    prefill_cycle = (request.GET.get('cycle') or 'monthly').strip().lower()
+
+    context = {
+        'packages': packages,
+        'states': states,
+        'prefill_mobile': prefill_mobile,
+        'prefill_package_id': prefill_package_id,
+        'prefill_cycle': prefill_cycle,
+    }
+    return render(request, "farmer/register.html", context)
+
+
+def register_send_otp(request):
+    """
+    Step 1: Validates mobile number and sends SMS OTP for registration.
+    """
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "Invalid request method."}, status=405)
+
+    mobile = (request.POST.get('mobile') or '').strip()
+    clean_digits = re.sub(r'[^0-9]', '', mobile)
+    if len(clean_digits) > 10 and clean_digits.startswith('91'):
+        clean_digits = clean_digits[2:]
+
+    if not clean_digits or len(clean_digits) < 10 or len(clean_digits) > 15:
+        return JsonResponse({"status": "error", "message": "Please enter a valid 10-digit mobile number."}, status=400)
+
+    # Check if number is already registered as an active farmer
+    from apps.superadmin.phone_utils import find_profile_by_phone, find_staff_by_phone
+    existing_prof = find_profile_by_phone(clean_digits, role='farmer')
+    if existing_prof:
+        return JsonResponse({
+            "status": "error",
+            "already_registered": True,
+            "message": "This mobile number is already registered. Please login instead."
+        }, status=400)
+
+    # Check cooldown (30s)
+    last_otp_time = request.session.get('reg_otp_time', 0)
+    current_time = timezone.now().timestamp()
+    if current_time - last_otp_time < 30:
+        remaining = max(1, int(30 - (current_time - last_otp_time)))
+        return JsonResponse({
+            "status": "error",
+            "message": f"Please wait {remaining} seconds before requesting a new OTP."
+        }, status=429)
+
+    # Generate 6-digit OTP
+    otp = str(random.randint(100000, 999999))
+
+    # Send SMS
+    from apps.superadmin.views import send_otp_sms
+    success, message = send_otp_sms(clean_digits, otp)
+    if not success:
+        return JsonResponse({"status": "error", "message": f"Failed to send SMS: {message}"}, status=500)
+
+    # Save to session
+    request.session['reg_mobile'] = clean_digits
+    request.session['reg_otp'] = otp
+    request.session['reg_otp_time'] = current_time
+    request.session['reg_verified'] = False
+
+    return JsonResponse({
+        "status": "success",
+        "message": f"OTP sent successfully to +91 {clean_digits}.",
+        "mobile": clean_digits
+    })
+
+
+def register_resend_otp(request):
+    """
+    Resends OTP for registration with cooldown checking.
+    """
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "Invalid request method."}, status=405)
+
+    mobile = request.session.get('reg_mobile')
+    if not mobile:
+        return JsonResponse({"status": "error", "message": "Session expired. Please enter your mobile number again."}, status=400)
+
+    last_otp_time = request.session.get('reg_otp_time', 0)
+    current_time = timezone.now().timestamp()
+    if current_time - last_otp_time < 30:
+        remaining = max(1, int(30 - (current_time - last_otp_time)))
+        return JsonResponse({"status": "error", "message": f"Please wait {remaining}s before requesting new OTP."}, status=429)
+
+    otp = str(random.randint(100000, 999999))
+    from apps.superadmin.views import send_otp_sms
+    success, message = send_otp_sms(mobile, otp)
+    if not success:
+        return JsonResponse({"status": "error", "message": f"Failed to send SMS: {message}"}, status=500)
+
+    request.session['reg_otp'] = otp
+    request.session['reg_otp_time'] = current_time
+
+    return JsonResponse({
+        "status": "success",
+        "message": f"New OTP sent successfully to +91 {mobile}."
+    })
+
+
+def register_verify_otp(request):
+    """
+    Step 1 Completion: Verifies entered 6-digit OTP.
+    """
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "Invalid request method."}, status=405)
+
+    otp_entered = (request.POST.get('otp') or '').strip()
+    session_otp = request.session.get('reg_otp')
+    otp_time = request.session.get('reg_otp_time')
+    mobile = request.session.get('reg_mobile')
+
+    if not session_otp or not otp_time or not mobile:
+        return JsonResponse({"status": "error", "message": "Session expired. Please start registration again."}, status=400)
+
+    if timezone.now().timestamp() - otp_time > 600: # 10 mins
+        return JsonResponse({"status": "error", "message": "OTP has expired. Please request a new one."}, status=400)
+
+    if otp_entered != session_otp:
+        return JsonResponse({"status": "error", "message": "Invalid OTP. Please check and try again."}, status=400)
+
+    request.session['reg_verified'] = True
+
+    return JsonResponse({
+        "status": "success",
+        "message": "Mobile number verified successfully!",
+        "mobile": mobile
+    })
+
+
+def register_save_profile(request):
+    """
+    Step 2: Saves the basic profile data for the newly registered farmer.
+    """
+    if request.method == "POST":
+        from apps.farmer.validation import pincode_error
+        error = pincode_error(request)
+        if error is not None:
+            return error
+
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "Invalid request method."}, status=405)
+
+    if not request.session.get('reg_verified'):
+        return JsonResponse({"status": "error", "message": "Please verify your mobile number with OTP first."}, status=403)
+
+    mobile = request.session.get('reg_mobile')
+    if not mobile:
+        return JsonResponse({"status": "error", "message": "Session expired. Please start again."}, status=400)
+
+    full_name = (request.POST.get('full_name') or request.POST.get('first_name') or '').strip()
+    if not full_name:
+        return JsonResponse({"status": "error", "message": "Full Name is required."}, status=400)
+
+
+    email = (request.POST.get('email') or '').strip()
+    farmer_type = (request.POST.get('farmer_type') or 'individual').strip().lower()
+    company_name = (request.POST.get('company_name') or '').strip() if farmer_type == 'company' else ''
+    state_id = request.POST.get('state_id') or None
+    district_id = request.POST.get('district_id') or None
+    taluk_val = (request.POST.get('taluk') or '').strip()
+    village = (request.POST.get('village') or '').strip()
+    pincode = (request.POST.get('pincode') or '').strip()
+    address = (request.POST.get('address') or '').strip()
+
+    from auth.models import Profile
+    from apps.superadmin.models import State, City, Taluk
+
+    state_obj = None
+    if state_id:
+        state_obj = State.objects.filter(id=state_id).first()
+
+    district_obj = None
+    if district_id:
+        district_obj = City.objects.filter(id=district_id).first()
+
+    taluk_name = taluk_val
+    if taluk_val and taluk_val.isdigit():
+        t_obj = Taluk.objects.filter(id=taluk_val).first()
+        if t_obj:
+            taluk_name = t_obj.name
+
+    user = User.objects.filter(username=mobile).first()
+    if not user:
+        user = User.objects.create(username=mobile)
+    user.first_name = full_name
+    user.last_name = ''
+    if email:
+        user.email = email
+    user.set_unusable_password()
+    user.save()
+
+    profile, created = Profile.objects.get_or_create(user=user)
+    profile.role = 'farmer'
+    profile.mobile_number = mobile
+    if email:
+        profile.email = email
+    profile.farmer_type = farmer_type
+    if company_name:
+        profile.company_name = company_name
+    profile.state = state_obj
+    profile.district = district_obj
+    profile.taluka = taluk_name
+    profile.village = village
+    profile.pincode = pincode
+    profile.address = address
+    profile.is_verified = True
+    profile.status = 'Active'
+    profile.save()
+
+    try:
+        if profile.email:
+            from apps.superadmin.email_utils import send_welcome_email
+            send_welcome_email(profile, request=request)
+    except Exception as e:
+        print(f"[Email Trigger Error - Welcome]: {e}")
+
+    request.session['reg_user_id'] = user.id
+
+    return JsonResponse({
+        "status": "success",
+        "message": "Basic profile saved successfully!",
+        "data": {
+            "user_id": user.id,
+            "fullname": user.get_full_name() or user.first_name,
+            "mobile": mobile
+        }
+    })
+
+
+def register_create_order(request):
+    """
+    Step 3: Creates Razorpay order for the selected subscription package & billing cycle.
+    """
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "Invalid request method."}, status=405)
+
+    from apps.superadmin.models import Package
+    from apps.superadmin.subscription_utils import initiate_farmer_subscription_order, normalize_billing_cycle
+
+    package_id = request.POST.get('package_id')
+    billing_cycle = normalize_billing_cycle(request.POST.get('billing_cycle') or 'monthly')
+
+    package = Package.objects.filter(id=package_id).first()
+    if not package:
+        return JsonResponse({"status": "error", "message": "Selected plan not found."}, status=404)
+
+    user_id = request.session.get('reg_user_id')
+    mobile = request.session.get('reg_mobile')
+    user = None
+    if user_id:
+        user = User.objects.filter(id=user_id).first()
+    if not user and mobile:
+        user = User.objects.filter(username=mobile).first()
+
+    if not user:
+        return JsonResponse({"status": "error", "message": "User session not found. Please complete profile details first."}, status=400)
+
+    profile = getattr(user, 'profile', None)
+    if not profile:
+        from auth.models import Profile
+        profile, _ = Profile.objects.get_or_create(user=user, defaults={'role': 'farmer', 'mobile_number': mobile or user.username})
+
+    success, err_msg, _, order_payload = initiate_farmer_subscription_order(
+        farmer_profile=profile,
+        user=user,
+        target_package=package,
+        target_cycle=billing_cycle,
+        is_renewal=False,
+    )
+    if not success or not order_payload:
+        return JsonResponse({"status": "error", "message": err_msg}, status=400)
+
+    return JsonResponse({
+        "status": "success",
+        "key_id": order_payload['key_id'],
+        "order_id": order_payload['order_id'],
+        "amount": order_payload['amount'],
+        "price_inr": order_payload['net_payable'],
+        "package_name": order_payload['package_name'],
+        "package_id": order_payload['package_id'],
+        "billing_cycle": order_payload['billing_cycle'],
+        "fullname": order_payload['fullname'],
+        "mobile_number": order_payload['mobile_number'],
+    })
 
 
 def guidelines(request):
@@ -7988,69 +11982,71 @@ def guidelines(request):
 
 def switch_plan(request):
     import json
-    import os
-    import random
-
-    import requests
     from django.http import JsonResponse
 
     from apps.superadmin.models import Package
+    from apps.superadmin.subscription_utils import (
+        calculate_plan_switch_quote,
+        cancel_scheduled_subscription_switch,
+        initiate_farmer_subscription_order,
+        normalize_billing_cycle,
+        schedule_subscription_switch,
+    )
+
     if request.method == 'POST' and request.user.is_authenticated:
         try:
-            if request.content_type == 'application/json':
+            if request.content_type and 'application/json' in request.content_type:
                 data = json.loads(request.body)
             else:
                 data = request.POST
+
+            farmer_profile = get_farmer_profile(request.user)
+            if not farmer_profile:
+                return JsonResponse({'success': False, 'error': 'Farmer profile not found.'}, status=403)
+
+            action = str(data.get('action') or 'initiate').strip().lower()
+
+            if action == 'cancel_scheduled_switch':
+                ok, msg = cancel_scheduled_subscription_switch(farmer_profile)
+                return JsonResponse({'success': ok, 'message': msg} if ok else {'success': False, 'error': msg})
+
             package_id = data.get('package_id')
+            is_renewal = str(data.get('is_renewal', False)).strip().lower() in ('true', '1', 'yes')
+            billing_cycle = normalize_billing_cycle(data.get('billing_cycle') or 'monthly')
             package = Package.objects.filter(id=package_id).first()
-            if package:
-                amount_paise = int(package.price * 100)
-                if amount_paise == 0:
-                    return JsonResponse({
-                        'success': True,
-                        'order_id': f"order_mock_{random.randint(100000, 999999)}",
-                        'amount': 0,
-                        'key_id': 'mock_key',
-                        'package_name': package.name,
-                        'mobile_number': request.user.username,
-                        'fullname': request.user.first_name,
-                        'package_id': package.id
-                    })
+            if not package:
+                return JsonResponse({'success': False, 'error': 'Package not found'}, status=404)
 
-                key_id = os.environ.get("RAZORPAY_KEY_ID", "rzp_test_cjiZ7kyueJCUGb")
-                key_secret = os.environ.get("RAZORPAY_KEY_SECRET", "fG0zEeXUiJKNbggEKRhsJf0k")
-                order_id = ""
-                try:
-                    url = "https://api.razorpay.com/v1/orders"
-                    auth = (key_id, key_secret)
-                    payload = {
-                        "amount": amount_paise,
-                        "currency": "INR",
-                        "receipt": f"rcpt_{request.user.id}_{package.id}"
-                    }
-                    res = requests.post(url, auth=auth, json=payload, timeout=5)
-                    if res.status_code in [200, 201]:
-                        order_id = res.json().get("id")
-                except Exception as e:
-                    print("Error creating Razorpay order:", e)
+            if action == 'quote':
+                quote = calculate_plan_switch_quote(
+                    farmer_profile, package, target_cycle=billing_cycle, is_renewal=is_renewal
+                )
+                return JsonResponse({'success': True, 'quote': quote})
 
-                if not order_id:
-                    order_id = f"order_mock_{random.randint(100000, 999999)}"
+            if action == 'schedule_switch':
+                ok, msg, quote = schedule_subscription_switch(farmer_profile, package, target_cycle=billing_cycle)
+                if not ok:
+                    return JsonResponse({'success': False, 'error': msg, 'quote': quote}, status=400)
+                return JsonResponse({'success': True, 'scheduled': True, 'message': msg, 'quote': quote})
 
-                return JsonResponse({
-                    'success': True,
-                    'key_id': key_id,
-                    'order_id': order_id,
-                    'amount': amount_paise,
-                    'package_name': package.name,
-                    'fullname': request.user.first_name,
-                    'mobile_number': request.user.username,
-                    'package_id': package.id
-                })
-            return JsonResponse({'success': False, 'error': 'Package not found'})
+            ok, err_msg, quote, order_payload = initiate_farmer_subscription_order(
+                farmer_profile=farmer_profile,
+                user=request.user,
+                target_package=package,
+                target_cycle=billing_cycle,
+                is_renewal=is_renewal,
+            )
+            if not ok or not order_payload:
+                return JsonResponse({'success': False, 'error': err_msg, 'quote': quote}, status=400)
+
+            return JsonResponse({
+                'success': True,
+                **order_payload,
+            })
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
-    return JsonResponse({'success': False, 'error': 'Invalid request'})
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
 
 
 # -------------------------

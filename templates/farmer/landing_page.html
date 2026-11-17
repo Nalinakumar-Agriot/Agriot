@@ -368,8 +368,9 @@
       </div>
       <a href="https://agriotwifarm.com/blogs/" class="element-item">Blogs</a>
       <a href="https://agriotwifarm.com/contact-us/" class="element-item">Contact Us</a>
+      <a href="{% url 'farmer-login' %}" class="element-item" style="color: #63771F;"><i class="ri-login-box-line me-1"></i>Login</a>
     </div>
-    <a href="https://agriotwifarm.com/contact-us/" class="button-get-started">
+    <a href="{% url 'farmer-register' %}" class="button-get-started">
       <span class="text-white">Get Started</span>
     </a>
   </div>
@@ -392,13 +393,44 @@
         Transform your agricultural operations with real-time IoT sensors, precise weather forecasting, and automated irrigation management.
       </p>
     </div>
-    <div class="py-5">
-      <div class="row g-4">
+    <div class="py-4">
+      <!-- ── Billing Cycle Switcher Tabs (Monthly / Quarterly / Yearly) ── -->
+      <div class="d-flex justify-content-center mb-5">
+        <div class="p-1 rounded-pill bg-white shadow-sm border d-inline-flex align-items-center gap-1" style="background: #ffffff; border: 1px solid #e2e8f0;">
+          <button type="button" class="btn btn-sm rounded-pill px-4 py-2 fw-bold landing-billing-cycle-btn active" data-cycle="monthly" style="background: #648c34; color: #ffffff;">
+            <i class="ri-calendar-line me-1"></i> Monthly
+          </button>
+          <button type="button" class="btn btn-sm rounded-pill px-4 py-2 fw-semibold text-secondary bg-transparent landing-billing-cycle-btn" data-cycle="quarterly">
+            <i class="ri-calendar-2-line me-1"></i> Quarterly
+            <span class="badge bg-primary-subtle text-primary ms-1" style="font-size:10px;">3 Months</span>
+          </button>
+          <button type="button" class="btn btn-sm rounded-pill px-4 py-2 fw-semibold text-secondary bg-transparent landing-billing-cycle-btn" data-cycle="yearly">
+            <i class="ri-calendar-check-line me-1"></i> Annual
+            <span class="badge bg-success-subtle text-success ms-1" style="font-size:10px;">Best Value (12 Mo)</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="row g-4" id="landingPackagesContainer">
         {% for package in packages %}
-          <div class="col-md-4">
-            <div class="pkg-card{% if package.id == 2 or package.name == 'Bumper Yield Professional' %} featured{% endif %}">
-              {% if package.id == 2 or package.name == 'Bumper Yield Professional' %}
-                <div class="popular-badge">POPULAR</div>
+          <div class="col-md-4 pkg-landing-col"
+               id="pkg_col_{{ package.id }}"
+               data-active-monthly="{% if package.is_active_monthly %}true{% else %}false{% endif %}"
+               data-active-quarterly="{% if package.is_active_quarterly %}true{% else %}false{% endif %}"
+               data-active-yearly="{% if package.is_active_yearly %}true{% else %}false{% endif %}">
+            <div class="pkg-card{% if package.show_badge %} featured{% endif %}"
+                 data-price-monthly="{{ package.price|floatformat:0 }}"
+                 data-orig-monthly="{{ package.display_original_price|default:package.price|floatformat:0 }}"
+                 data-save-monthly="{{ package.discount_amount|floatformat:0 }}"
+                 data-price-quarterly="{{ package.price_quarterly|default:''|floatformat:0 }}"
+                 data-orig-quarterly="{{ package.display_original_quarterly|default:package.price_quarterly|default:''|floatformat:0 }}"
+                 data-save-quarterly="{{ package.discount_amount_quarterly|floatformat:0 }}"
+                 data-price-yearly="{{ package.price_yearly|default:''|floatformat:0 }}"
+                 data-orig-yearly="{{ package.display_original_yearly|default:package.price_yearly|default:''|floatformat:0 }}"
+                 data-save-yearly="{{ package.discount_amount_yearly|floatformat:0 }}"
+                 data-discount="{{ package.discount|default:'' }}">
+              {% if package.show_badge %}
+                <div class="popular-badge">{{ package.badge_text|default:"POPULAR" }}</div>
               {% endif %}
               <div class="border-bottom mb-4">
                 <div class="pkg-card-title">{{ package.name }}</div>
@@ -406,10 +438,33 @@
                   {{ package.description }}
                 </div>
               </div>
-              <div class="pkg-price d-flex align-items-baseline gap-1">
-                <span class="fs-1 fw-bold text-dark">₹{{ package.price|floatformat:0 }}</span>
-                <span class="text-muted" style="font-size: 14px; font-weight: 500;">/month</span>
+
+              <!-- Price Display with Actual, Discount & Payable Amount -->
+              <div class="mb-3">
+                <div class="d-flex align-items-center justify-content-between mb-1" style="min-height: 22px;">
+                  <div class="landing-actual-wrap" {% if not package.display_original_price %}style="visibility: hidden;"{% endif %}>
+                    <span class="text-muted small">Actual:</span>
+                    <del class="text-muted fw-bold ms-1">₹<span class="landing-val-actual">{{ package.display_original_price|default:package.price|floatformat:0 }}</span></del>
+                  </div>
+                  {% if package.discount %}
+                    <span class="badge bg-success text-white fw-bold shadow-xs px-2 py-1" style="font-size: 11px; border-radius: 6px;">
+                      <i class="ri-discount-percent-line me-1"></i>{{ package.discount }}
+                    </span>
+                  {% endif %}
+                </div>
+
+                <div class="pkg-price d-flex align-items-baseline gap-2">
+                  <span class="fs-1 fw-bold text-dark">₹<span class="landing-val-payable">{{ package.price|floatformat:0 }}</span></span>
+                  <span class="text-muted landing-val-unit" style="font-size: 14px; font-weight: 500;">/month</span>
+                </div>
+
+                <div class="landing-save-wrap mt-1" {% if not package.display_original_price %}style="visibility: hidden;"{% endif %}>
+                  <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 11px;">
+                    <i class="ri-check-line me-1"></i>Save ₹<span class="landing-val-save">{{ package.discount_amount|floatformat:0 }}</span>
+                  </span>
+                </div>
               </div>
+
               <div class="pkg-section-scroll">
                 {% if package.my_land %}
                   <div class="pkg-section-label d-flex align-items-start gap-2">
@@ -432,7 +487,11 @@
                 {% if package.max_acre_support %}
                   <div class="pkg-section-label d-flex align-items-start gap-2">
                     <i class="ri-check-line"></i>
-                    <span>Coverage: Up to {{ package.max_acre_support }} Acres</span>
+                    {% if package.max_acre_support|lower == 'unlimited' %}
+                      <span>Coverage: Unlimited Acres</span>
+                    {% else %}
+                      <span>Coverage: Up to {{ package.max_acre_support }} Acres</span>
+                    {% endif %}
                   </div>
                 {% endif %}
 
@@ -444,10 +503,8 @@
                 {% endfor %}
               </div>
               <div class="pkg-button-section" style="transform: translateY(11px);">
-                <a href="#farmer_registration"
-                  class="btn btn-sm w-100 fw-bold {% if package.id == 2 or package.name == 'Bumper Yield Professional' %}pkg-btn-solid text-white{% else %}pkg-btn-outline{% endif %} select-package-btn"
-                  data-bs-toggle="modal"
-                  data-bs-target="#add_registration_modal"
+                <a href="{% url 'farmer-register' %}?package_id={{ package.id }}"
+                  class="btn btn-sm w-100 fw-bold {% if package.show_badge %}pkg-btn-solid text-white{% else %}pkg-btn-outline{% endif %} select-package-btn"
                   data-package-id="{{ package.id }}"
                   data-package-name="{{ package.name }}"
                   data-package-price="{{ package.price|floatformat:0 }}">
@@ -459,7 +516,18 @@
               </div>
             </div>
           </div>
+        {% empty %}
+          <div class="col-12 text-center py-5">
+            <p class="text-muted">No packages available at the moment.</p>
+          </div>
         {% endfor %}
+        <div id="noCyclePackagesAlert" class="col-12 text-center py-5" style="display: none;">
+          <div class="p-4 rounded-4 bg-light border d-inline-block shadow-sm">
+            <i class="ri-information-line text-muted fs-3 mb-2 d-block"></i>
+            <h6 class="fw-semibold text-dark mb-1">No Packages Available</h6>
+            <p class="text-muted small mb-0">There are currently no active packages offered for this billing cycle.</p>
+          </div>
+        </div>
       </div>
     </div></div>
   </div>
@@ -617,11 +685,7 @@
           <span id="timer" class="text-muted small">Resend OTP in 30s</span>
           <a href="#" id="resend-link" class="d-none small fw-semibold" style="color: #63771F;">Resend OTP</a>
         </div>
-        <div id="landing-otp-box" class="mt-3 text-center d-none">
-          <div class="alert alert-warning py-2 px-3 m-0 d-inline-block fw-bold" style="background-color: #fff3cd; color: #856404; border: 1px dashed #ffc107; border-radius: 8px; font-size: 15px;">
-            OTP: <span id="landing-display-otp" style="letter-spacing: 2px;"></span>
-          </div>
-        </div>
+
       </div>
     </div>
   </div>
@@ -784,14 +848,7 @@
         let verifyText = `We've sent a 6-digit verification code to <strong>+91 ${mobile}</strong>.`;
         document.getElementById('verify-mobile-label').innerHTML = verifyText;
 
-        if (data.otp) {
-          const otpBox = document.getElementById('landing-otp-box');
-          const otpDisplay = document.getElementById('landing-display-otp');
-          if (otpBox && otpDisplay) {
-            otpDisplay.textContent = data.otp;
-            otpBox.classList.remove('d-none');
-          }
-        }
+
 
         // Switch modals
         regModal.hide();
@@ -1005,6 +1062,89 @@
     // Send OTP
     triggerSendOTP(this);
   });
+  // Landing Page Billing Cycle Switcher Tabs with Active Status Filtering
+  function filterLandingPackages(cycle) {
+    let visibleCount = 0;
+    document.querySelectorAll('.pkg-landing-col').forEach(col => {
+      let isCycleActive = true;
+      if (cycle === 'yearly') {
+        isCycleActive = (col.dataset.activeYearly === 'true');
+      } else if (cycle === 'quarterly') {
+        isCycleActive = (col.dataset.activeQuarterly === 'true');
+      } else {
+        isCycleActive = (col.dataset.activeMonthly === 'true');
+      }
+
+      if (isCycleActive) {
+        col.style.display = '';
+        visibleCount++;
+      } else {
+        col.style.display = 'none';
+      }
+
+      const card = col.querySelector('.pkg-card');
+      if (card) {
+        const valPayable = card.querySelector('.landing-val-payable');
+        const valActual = card.querySelector('.landing-val-actual');
+        const valUnit = card.querySelector('.landing-val-unit');
+        const valSave = card.querySelector('.landing-val-save');
+        const actualWrap = card.querySelector('.landing-actual-wrap');
+        const saveWrap = card.querySelector('.landing-save-wrap');
+        const btn = card.querySelector('.select-package-btn');
+
+        let price = '', orig = '', save = '', unit = '';
+        if (cycle === 'yearly') {
+          price = card.dataset.priceYearly;
+          orig = card.dataset.origYearly || card.dataset.priceYearly;
+          save = card.dataset.saveYearly || '0';
+          unit = '/year';
+        } else if (cycle === 'quarterly') {
+          price = card.dataset.priceQuarterly;
+          orig = card.dataset.origQuarterly || card.dataset.priceQuarterly;
+          save = card.dataset.saveQuarterly || '0';
+          unit = '/quarter';
+        } else {
+          price = card.dataset.priceMonthly;
+          orig = card.dataset.origMonthly || card.dataset.priceMonthly;
+          save = card.dataset.saveMonthly || '0';
+          unit = '/month';
+        }
+
+        if (valPayable && price) valPayable.innerText = price;
+        if (valActual && orig) valActual.innerText = orig;
+        if (valUnit) valUnit.innerText = unit;
+        if (valSave) valSave.innerText = save;
+        if (btn && price) btn.dataset.packagePrice = price;
+
+        const hasDiscount = parseFloat(save) > 0;
+        if (actualWrap) actualWrap.style.visibility = hasDiscount ? 'visible' : 'hidden';
+        if (saveWrap) saveWrap.style.visibility = hasDiscount ? 'visible' : 'hidden';
+      }
+    });
+
+    const noAlert = document.getElementById('noCyclePackagesAlert');
+    if (noAlert) {
+      noAlert.style.display = (visibleCount === 0) ? 'block' : 'none';
+    }
+  }
+
+  document.querySelectorAll('.landing-billing-cycle-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.landing-billing-cycle-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'transparent';
+        b.style.color = '#64748b';
+      });
+      this.classList.add('active');
+      this.style.background = '#648c34';
+      this.style.color = '#ffffff';
+
+      filterLandingPackages(this.dataset.cycle);
+    });
+  });
+
+  // Filter for initial active cycle (monthly)
+  filterLandingPackages('monthly');
 </script>
 
 {% endblock %}

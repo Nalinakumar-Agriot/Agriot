@@ -23,6 +23,7 @@
 
 {% block page_css %}
 {{ block.super }}
+{% include "layout/partials/report_toolbar_styles.html" %}
 <style>
   .nav-pills .nav-link.active,
   .nav-pills .show > .nav-link {
@@ -122,6 +123,7 @@ $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
 });
 
 $(document).ready(function () {
+    $.fn.dataTable.ext.errMode = 'none';
     reportDataTable = $('#salaryReportTable').DataTable({
         pageLength: 10,
         responsive: true,
@@ -324,7 +326,7 @@ function exportTableToExcel() {
 
 <!-- Filters & Table Card -->
 <div class="card border-0 shadow-sm rounded-4">
-  <div class="card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
+  <div class="report-toolbar card-body d-flex gap-2 align-items-center flex-wrap p-3 border-bottom">
 
     <!-- Collapsible Search -->
     <div class="d-flex align-items-center search-collapse-wrapper" id="search_collapse_wrapper">
@@ -346,8 +348,8 @@ function exportTableToExcel() {
     </div>
 
     <!-- Right side filters -->
-    <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
-      <div class="d-flex align-items-center gap-1 bg-light border rounded px-2 py-1">
+    <div class="report-toolbar-actions d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+      <div class="report-date-range d-flex align-items-center gap-1 bg-light border rounded px-2 py-1">
         <small class="text-muted fw-semibold me-1"><i class="ri-calendar-line"></i> Date:</small>
         <input type="date" id="startDate" class="form-control form-control-sm border-0 bg-transparent" style="width: 125px;">
         <span class="text-muted small">to</span>

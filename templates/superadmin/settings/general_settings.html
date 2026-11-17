@@ -62,6 +62,7 @@ document.addEventListener("DOMContentLoaded", function () {
         var countryId = $(this).val();
         $('#id_state').empty().append('<option value="">Select State</option>');
         $('#id_city').empty().append('<option value="">Select City</option>');
+        $('#id_taluk').empty().append('<option value="">Select Taluk</option>');
         
         if (countryId) {
             $.ajax({
@@ -79,6 +80,7 @@ document.addEventListener("DOMContentLoaded", function () {
     $('#id_state').on('change', function() {
         var stateId = $(this).val();
         $('#id_city').empty().append('<option value="">Select City</option>');
+        $('#id_taluk').empty().append('<option value="">Select Taluk</option>');
         
         if (stateId) {
             $.ajax({
@@ -87,6 +89,23 @@ document.addEventListener("DOMContentLoaded", function () {
                 success: function(data) {
                     $.each(data, function(index, city) {
                         $('#id_city').append('<option value="' + city.id + '">' + city.name + '</option>');
+                    });
+                }
+            });
+        }
+    });
+
+    $('#id_city').on('change', function() {
+        var cityId = $(this).val();
+        $('#id_taluk').empty().append('<option value="">Select Taluk</option>');
+        
+        if (cityId) {
+            $.ajax({
+                url: '{% url "ajax_get_taluks" %}',
+                data: { 'city_id': cityId },
+                success: function(data) {
+                    $.each(data, function(index, taluk) {
+                        $('#id_taluk').append('<option value="' + taluk.id + '">' + taluk.name + '</option>');
                     });
                 }
             });
@@ -238,11 +257,21 @@ document.addEventListener("DOMContentLoaded", function () {
         </div>
         <!-- City -->
         <div class="col-md-4">
-          <label class="form-label">City</label>
+          <label class="form-label">City / District</label>
           <select class="form-select select2" name="city" id="id_city">
-            <option value="">Select City</option>
+            <option value="">Select City / District</option>
             {% for city in cities %}
             <option value="{{ city.id }}" {% if setting.city_id == city.id %}selected{% endif %}>{{ city.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <!-- Taluk -->
+        <div class="col-md-4">
+          <label class="form-label">Taluk</label>
+          <select class="form-select select2" name="taluk" id="id_taluk">
+            <option value="">Select Taluk</option>
+            {% for taluk in taluks %}
+            <option value="{{ taluk.id }}" {% if setting.taluk_id == taluk.id %}selected{% endif %}>{{ taluk.name }}</option>
             {% endfor %}
           </select>
         </div>
@@ -258,8 +287,8 @@ document.addEventListener("DOMContentLoaded", function () {
         </div>
         <!-- Pincode -->
         <div class="col-md-4">
-          <label class="form-label">Pincode</label>
-          <input type="text" name="pincode" class="form-control" value="{{ setting.pincode }}">
+          <label class="form-label">Pincode <span class="text-danger">*</span></label>
+          <input type="text" name="pincode" class="form-control" value="{{ setting.pincode }}" required maxlength="6" pattern="[0-9]{6}" inputmode="numeric">
         </div>
         <!-- GST -->
         <div class="col-md-4">
@@ -275,6 +304,46 @@ document.addEventListener("DOMContentLoaded", function () {
         <div class="col-md-4">
           <label class="form-label">Weather API Key</label>
           <input type="text" name="weather_api_key" class="form-control" value="{{ setting.weather_api_key|default:'' }}">
+        </div>
+
+        <!-- Payment Gateway Section -->
+        <div class="col-12 mt-4">
+          <div class="p-3 rounded border" style="background-color: #fbfcf8; border-color: #eef2e6 !important;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="d-flex align-items-center gap-2">
+                <i class="ri-bank-card-line fs-5" style="color: #63771F;"></i>
+                <h6 class="mb-0 fw-bold text-dark">Razorpay Payment Gateway</h6>
+                {% if setting.razorpay_enabled %}
+                <span class="badge bg-label-success ms-2">Active</span>
+                {% else %}
+                <span class="badge bg-label-secondary ms-2">Disabled</span>
+                {% endif %}
+              </div>
+              <a href="{% url 'payment_integrations' %}" class="btn btn-sm btn-outline-primary">
+                <i class="ri-external-link-line me-1"></i> Open Integrations Page
+              </a>
+            </div>
+
+            <input type="hidden" name="has_razorpay_section" value="1">
+            <div class="row g-3">
+              <div class="col-md-5">
+                <label class="form-label">Razorpay Key ID</label>
+                <input type="text" name="razorpay_key_id" class="form-control font-monospace" value="{{ setting.razorpay_key_id|default:'rzp_test_Trc3reEy8k4YoJ' }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Razorpay Key Secret</label>
+                <input type="password" name="razorpay_key_secret" class="form-control font-monospace" value="{{ setting.razorpay_key_secret|default:'0ofru9WKnCbUgDoiCkH5mAlY' }}">
+              </div>
+              <div class="col-md-3 d-flex align-items-center pt-3">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="gen_razorpay_auto_renew" name="razorpay_auto_renew" {% if setting.razorpay_auto_renew %}checked{% endif %} style="cursor: pointer;">
+                  <label class="form-check-label fw-semibold" for="gen_razorpay_auto_renew" style="cursor: pointer;">
+                    Auto-Renewal Enabled
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

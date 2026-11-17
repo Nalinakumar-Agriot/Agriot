@@ -1,0 +1,302 @@
+{% extends "layout/layout_vertical.html" %}
+{% load static %}
+{% load i18n %}
+{% block menu %}
+    {% include "layout/partials/menu/superadmin/vertical_menu.html" %}
+{% endblock %}
+{% block title %}State Settings{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/select2/select2.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/jquery/jquery.js' %}"></script>
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/select2/select2.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+$(document).ready(function () {
+
+    // Populate Edit Modal
+    $(document).on('click', '.edit-btn', function () {
+        let id = $(this).attr('data-id');
+        let name = $(this).attr('data-name');
+        let country = $(this).attr('data-country');
+        let status = $(this).attr('data-status');
+
+        $('#edit_id').val(id);
+        $('#edit_name').val(name);
+        $('#edit_country_id').val(country);
+        $('#edit_status').val(status);
+    });
+
+    // Populate Delete Modal
+    $(document).on('click', '.delete-btn', function () {
+        let id = $(this).attr('data-id');
+        let name = $(this).attr('data-name');
+
+        $('#delete_id').val(id);
+        $('#deleteStateName').text(name);
+    });
+});
+</script>
+{% endblock page_js %}
+
+{% block page_css %}
+{{ block.super }}
+{% include "layout/partials/admin_search_styles.html" %}
+{% endblock page_css %}
+
+{% block content %}
+<!-- Location Navigation Tabs -->
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-body p-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <a href="{% url 'state_settings' %}" class="btn btn-sm btn-primary">
+                <i class="ri-map-2-line me-1"></i> States
+            </a>
+            <a href="{% url 'city_settings' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="ri-building-line me-1"></i> Cities / Districts
+            </a>
+            <a href="{% url 'taluk_settings' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="ri-community-line me-1"></i> Taluks
+            </a>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-primary-subtle text-primary border border-primary px-3 py-2 rounded-pill">
+                Total States: {{ page_obj.paginator.count }}
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Header -->
+<div class="card mb-2 border-0 shadow-sm">
+    <div class="card-body d-flex justify-content-between align-items-center py-3">
+        <div>
+            <h4 class="mb-1 text-dark fw-bold">
+                <i class="ri-map-2-line me-2 text-primary"></i> State Settings
+            </h4>
+            <small class="text-muted">Manage states available across Farmer profiles, farms, and partner registries</small>
+        </div>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#add_state_modal">
+            <i class="ri-add-line me-1"></i> Add State
+        </button>
+    </div>
+</div>
+
+<!-- Search Bar -->
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-body py-2 px-3">
+        <div class="input-group admin-list-search" style="max-width: 400px;">
+            <span class="input-group-text bg-white border-end-0">
+                <i class="ri-search-line text-muted"></i>
+            </span>
+            <input type="text" class="form-control custom-search border-start-0" data-server-search value="{{ query }}" placeholder="Search State name...">
+        </div>
+    </div>
+</div>
+
+<!-- Table Card -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr class="text-uppercase fs-8 text-muted">
+                        <th style="width: 70px;">#</th>
+                        <th>State Name</th>
+                        <th>Country</th>
+                        <th>Cities / Districts</th>
+                        <th>Status</th>
+                        <th class="text-end" style="width: 120px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for state in states %}
+                    <tr>
+                        <td class="text-muted small">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="avatar avatar-xs rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center">
+                                    <i class="ri-map-pin-line"></i>
+                                </span>
+                                <span class="fw-semibold text-dark">{{ state.name }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark border">{{ state.country.name|default:"India" }}</span>
+                        </td>
+                        <td>
+                            <a href="{% url 'city_settings' %}?state={{ state.id }}" class="badge bg-info-subtle text-info border border-info text-decoration-none">
+                                <i class="ri-building-line me-1"></i> {{ state.cities_count|default:"0" }} Districts
+                            </a>
+                        </td>
+                        <td>
+                            {% if state.status == "1" or state.status == "Active" %}
+                            <span class="badge bg-success-subtle text-success border border-success">Active</span>
+                            {% else %}
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-icon btn-outline-primary edit-btn"
+                                data-bs-toggle="modal"
+                                data-bs-target="#edit_state_modal"
+                                data-id="{{ state.id }}"
+                                data-name="{{ state.name }}"
+                                data-country="{{ state.country_id }}"
+                                data-status="{{ state.status }}"
+                                title="Edit State">
+                                <i class="ri-pencil-line"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-icon btn-outline-danger delete-btn"
+                                data-bs-toggle="modal"
+                                data-bs-target="#delete_state_modal"
+                                data-id="{{ state.id }}"
+                                data-name="{{ state.name }}"
+                                title="Delete State">
+                                <i class="ri-delete-bin-line"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            <i class="ri-map-2-line fs-2 d-block mb-2 text-secondary"></i>
+                            No states found. Click "Add State" to create one.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "layout/partials/location_pagination.html" %}
+    </div>
+</div>
+
+<!-- Add State Modal -->
+<div class="modal fade" id="add_state_modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form method="POST" action="{% url 'state_settings' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add">
+                <div class="modal-header border-bottom">
+                    <h5 class="modal-title fw-bold">
+                        <i class="ri-add-circle-line me-1 text-primary"></i> Add State
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Country <span class="text-danger">*</span></label>
+                        <select name="country_id" class="form-select" required>
+                            {% for c in countries %}
+                            <option value="{{ c.id }}" {% if c.name == 'India' %}selected{% endif %}>{{ c.name }}</option>
+                            {% empty %}
+                            <option value="">India</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">State Name <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" placeholder="e.g. Tamil Nadu, Karnataka..." required autofocus>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Status</label>
+                        <select name="status" class="form-select">
+                            <option value="1" selected>Active</option>
+                            <option value="0">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary px-4"><i class="ri-check-line me-1"></i> Save State</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit State Modal -->
+<div class="modal fade" id="edit_state_modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form method="POST" action="{% url 'state_settings' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="id" id="edit_id">
+                <div class="modal-header border-bottom">
+                    <h5 class="modal-title fw-bold">
+                        <i class="ri-pencil-line me-1 text-primary"></i> Edit State
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Country</label>
+                        <select name="country_id" id="edit_country_id" class="form-select">
+                            {% for c in countries %}
+                            <option value="{{ c.id }}">{{ c.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">State Name <span class="text-danger">*</span></label>
+                        <input type="text" name="name" id="edit_name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Status</label>
+                        <select name="status" id="edit_status" class="form-select">
+                            <option value="1">Active</option>
+                            <option value="0">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary px-4"><i class="ri-check-line me-1"></i> Update State</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete State Modal -->
+<div class="modal fade" id="delete_state_modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form method="POST" action="{% url 'state_settings' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="id" id="delete_id">
+                <div class="modal-header border-bottom">
+                    <h5 class="modal-title text-danger fw-bold">
+                        <i class="ri-alert-line me-1"></i> Delete State
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center py-4">
+                    <p class="mb-1 text-muted">Are you sure you want to delete this state?</p>
+                    <h6 class="fw-bold text-dark" id="deleteStateName"></h6>
+                    <small class="text-danger d-block mt-2">Notice: Child cities and taluks associated with this state may also be affected.</small>
+                </div>
+                <div class="modal-footer border-top-0 d-flex justify-content-center gap-2">
+                    <button type="button" class="btn btn-light px-3" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger px-3"><i class="ri-delete-bin-line me-1"></i> Confirm Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock content %}

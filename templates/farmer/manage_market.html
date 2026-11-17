@@ -28,6 +28,58 @@
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
 <style>
+.farmer-filter-toolbar.market-filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+.market-filter-toolbar .farmer-filter-search {
+  flex: 1 1 auto;
+  min-width: 280px;
+  height: 38px;
+}
+.market-filter-toolbar .farmer-filter-controls {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 8px;
+  width: min(620px, 48%);
+}
+.market-filter-toolbar .farmer-filter-controls > .form-select,
+.market-filter-toolbar .farmer-filter-controls > .select2-container {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+.market-filter-toolbar .form-control,
+.market-filter-toolbar .input-group-text,
+.market-filter-toolbar .form-select,
+.market-filter-toolbar .select2-selection--single {
+  min-height: 38px !important;
+}
+.market-filter-toolbar .select2-selection__rendered {
+  line-height: 36px !important;
+}
+.market-filter-toolbar .select2-selection__arrow {
+  height: 36px !important;
+}
+@media (max-width: 1199.98px) {
+  .farmer-filter-toolbar.market-filter-toolbar {
+    flex-wrap: wrap;
+  }
+  .market-filter-toolbar .farmer-filter-search,
+  .market-filter-toolbar .farmer-filter-controls {
+    width: 100%;
+  }
+}
+@media (max-width: 767.98px) {
+  .market-filter-toolbar .farmer-filter-controls {
+    grid-template-columns: 1fr;
+  }
+  .market-filter-toolbar .farmer-filter-search {
+    min-width: 0;
+  }
+}
 .clamp-3 {
   font-size: 0.8125rem;
   line-height: 1.625;
@@ -396,6 +448,9 @@ document.querySelectorAll('.agri-card').forEach(btn => {
 </script>
 <script>
 $(document).ready(function () {
+    if ($.fn.dataTable) {
+        $.fn.dataTable.ext.errMode = 'none';
+    }
 
     $('.datatable').each(function () {
 
@@ -566,33 +621,8 @@ document.querySelectorAll('.role-filter').forEach(item => {
   }
 
   // Hub Buyer (Trading Mandis) filter — runs after DOM is ready inside jQuery context
-  function filterCards() {
-      const cropSearchInput = document.getElementById('hubSearchInput');
-      const cropFilter = document.getElementById('cropFilter');
-      const demandFilter = document.getElementById('demandFilter');
-
-      const term = cropSearchInput ? cropSearchInput.value.toLowerCase() : '';
-      const crop = cropFilter ? cropFilter.value.toLowerCase() : 'all';
-      const demand = demandFilter ? demandFilter.value.toLowerCase() : 'all';
-
-      document.querySelectorAll('.hub-buyer-card').forEach(card => {
-          const text = card.innerText.toLowerCase();
-          const cardDemand = (card.getAttribute('data-demand') || '').toLowerCase();
-          const cardCrops = (card.getAttribute('data-crops') || '').toLowerCase();
-
-          let show = true;
-          if (term && !text.includes(term)) show = false;
-          if (demand !== 'all' && demand !== cardDemand) show = false;
-          if (crop !== 'all' && !cardCrops.includes(crop)) show = false;
-
-          card.style.display = show ? '' : 'none';
-      });
-  }
-
-  const hubSearchInput = document.getElementById('hubSearchInput');
-  if (hubSearchInput) hubSearchInput.addEventListener('input', filterCards);
-
-  $('#cropFilter, #demandFilter').on('change', filterCards);
+  // filterHubBuyers below owns all four controls. A second filter using inline
+  // display styles prevented the main filter from showing matching cards again.
 
   $(document).ready(function() {
       // Handle tab switching on load based on hash
@@ -880,8 +910,8 @@ document.querySelectorAll('.role-filter').forEach(item => {
         });
     }
 
-    function deleteFarmerQuickServiceClass(name, id) {
-        if (!confirm('Are you sure you want to delete location type "' + name + '"?')) return;
+    async function deleteFarmerQuickServiceClass(name, id) {
+        if (!(await window.confirmQuickDelete(name, 'location type'))) return;
 
         var formData = new FormData();
         if (id) formData.append('item_id', id);
@@ -1064,7 +1094,7 @@ document.querySelectorAll('.role-filter').forEach(item => {
         var designation = btn.getAttribute('data-designation') || '';
         var skill = btn.getAttribute('data-skill') || '';
         var wage = btn.getAttribute('data-wage') || '';
-        var wageUnit = btn.getAttribute('data-wage_unit') || 'Day';
+        var wageUnit = btn.getAttribute('data-wage_unit');
         var phone = btn.getAttribute('data-phone') || '';
         var status = btn.getAttribute('data-status') || 'Available';
         var state = btn.getAttribute('data-state') || '';
@@ -1239,7 +1269,7 @@ document.querySelectorAll('.role-filter').forEach(item => {
         document.getElementById('farmer_edit_designation_select').value = btn.getAttribute('data-designation') || '';
         document.getElementById('farmer_edit_skill_select').value = btn.getAttribute('data-skill') || '';
         document.getElementById('farmer_edit_wage_rate').value = btn.getAttribute('data-wage') || '';
-        document.getElementById('farmer_edit_wage_unit_select').value = btn.getAttribute('data-wage_unit') || 'Day';
+        document.getElementById('farmer_edit_wage_unit_select').value = btn.getAttribute('data-wage_unit');
         document.getElementById('farmer_edit_contact_phone').value = btn.getAttribute('data-phone') || '';
         document.getElementById('farmer_edit_status').value = btn.getAttribute('data-status') || 'Available';
         document.getElementById('farmer_edit_address').value = btn.getAttribute('data-address') || '';
@@ -1326,7 +1356,7 @@ document.querySelectorAll('.role-filter').forEach(item => {
         var formData = new FormData();
         formData.append('name', name);
 
-        fetch("{% url 'ajax_quick_add_designation' %}", {
+        fetch("{% url 'farmer_quick_add_designation' %}", {
             method: 'POST',
             body: formData,
             headers: {
@@ -1381,12 +1411,12 @@ document.querySelectorAll('.role-filter').forEach(item => {
         });
     }
 
-    function deleteFarmerQuickDesignation(name) {
-        if (!confirm(`Are you sure you want to delete designation "${name}"?`)) return;
+    async function deleteFarmerQuickDesignation(name) {
+        if (!(await window.confirmQuickDelete(name, 'designation'))) return;
         var formData = new FormData();
         formData.append('name', name);
 
-        fetch("{% url 'ajax_quick_delete_designation' %}", {
+        fetch("{% url 'farmer_quick_delete_designation' %}", {
             method: 'POST',
             body: formData,
             headers: {
@@ -1485,7 +1515,7 @@ document.querySelectorAll('.role-filter').forEach(item => {
         var formData = new FormData();
         formData.append('name', name);
 
-        fetch("{% url 'ajax_quick_add_worker_skill' %}", {
+        fetch("{% url 'farmer_quick_add_worker_skill' %}", {
             method: 'POST',
             body: formData,
             headers: {
@@ -1540,12 +1570,12 @@ document.querySelectorAll('.role-filter').forEach(item => {
         });
     }
 
-    function deleteFarmerQuickSkill(name) {
-        if (!confirm(`Are you sure you want to delete skill "${name}"?`)) return;
+    async function deleteFarmerQuickSkill(name) {
+        if (!(await window.confirmQuickDelete(name, 'skill'))) return;
         var formData = new FormData();
         formData.append('name', name);
 
-        fetch("{% url 'ajax_quick_delete_worker_skill' %}", {
+        fetch("{% url 'farmer_quick_delete_worker_skill' %}", {
             method: 'POST',
             body: formData,
             headers: {
@@ -1644,7 +1674,7 @@ document.querySelectorAll('.role-filter').forEach(item => {
         var formData = new FormData();
         formData.append('name', name);
 
-        fetch("{% url 'ajax_quick_add_wage_unit' %}", {
+        fetch("{% url 'farmer_quick_add_wage_unit' %}", {
             method: 'POST',
             body: formData,
             headers: {
@@ -1699,12 +1729,12 @@ document.querySelectorAll('.role-filter').forEach(item => {
         });
     }
 
-    function deleteFarmerQuickWageUnit(name) {
-        if (!confirm(`Are you sure you want to delete unit "${name}"?`)) return;
+    async function deleteFarmerQuickWageUnit(name) {
+        if (!(await window.confirmQuickDelete(name, 'unit'))) return;
         var formData = new FormData();
         formData.append('name', name);
 
-        fetch("{% url 'ajax_quick_delete_wage_unit' %}", {
+        fetch("{% url 'farmer_quick_delete_wage_unit' %}", {
             method: 'POST',
             body: formData,
             headers: {
@@ -2113,8 +2143,8 @@ let priceAnalysisChart;
     <!-- View 1: Terminal / Trading Mandis List -->
     <div id="terminalListView">
       <div class="card mb-2">
-        <div class="card-body d-flex gap-2 flex-wrap p-2">
-            <div class="input-group w-50">
+        <div class="card-body farmer-filter-toolbar market-filter-toolbar p-2">
+            <div class="input-group farmer-filter-search">
                 <span class="input-group-text bg-white">
                     <i class="ri-search-line"></i>
                 </span>
@@ -2123,8 +2153,8 @@ let priceAnalysisChart;
                     class="form-control"
                     placeholder="Search by buyer name, location or crops...">
             </div>
-            <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
-                <select class="form-select select3" id="locationFilter" data-placeholder="Select Location" style="width: 200px !important;">
+            <div class="farmer-filter-controls market-filter-controls">
+                <select class="form-select select3" id="locationFilter" data-placeholder="Select Location">
                     <option value="All">Location: All Mandis</option>
                     {% if farmer_city %}
                     <option value="{{ farmer_city }}" selected>📍 My City: {{ farmer_city }}</option>
@@ -2134,14 +2164,14 @@ let priceAnalysisChart;
                     {% endif %}
                 </select>
 
-                <select class="form-select select3" id="cropFilter" data-placeholder="Select Crops" style="width: 200px !important;">
+                <select class="form-select select3" id="cropFilter" data-placeholder="Select Crops">
                     <option value="All">Sell Crop: All</option>
                     {% for crop in all_crops %}
                     <option value="{{ crop.name }}">{{ crop.name }}</option>
                     {% endfor %}
                 </select>
 
-                <select class="form-select select3" id="demandFilter" data-placeholder="Select Demand Level" style="width: 200px !important;">
+                <select class="form-select select3" id="demandFilter" data-placeholder="Select Demand Level">
                     <option value="All">Demand Level: All</option>
                     <option value="High">High Demand</option>
                     <option value="Medium">Medium Demand</option>
@@ -2880,7 +2910,7 @@ let priceAnalysisChart;
               <div class="d-flex ms-auto align-items-center flex-wrap gap-4 me-0">
                 <div class="text-end px-2">
                   <small class="text-muted d-block" style="font-size: 11px;">WAGE RATE</small>
-                  <strong class="fs-6 text-dark">₹{{ worker.wage }} <small class="text-muted fw-normal">/{{ worker.wage_unit|default:'Day' }}</small></strong>
+                  <strong class="fs-6 text-dark">₹{{ worker.wage }} <small class="text-muted fw-normal">/{{ worker.wage_unit }}</small></strong>
                 </div>
 
                 {% if worker.phone %}
@@ -3017,22 +3047,44 @@ let priceAnalysisChart;
                   {% endif %}
                 </div>
                 <div class="d-flex flex-column">
-                  <label class="text-bold text-black fs-6 farmer-rental-name">{{ rental.name }}</label>
-                  <label class="text-dark farmer-rental-owner">
-                    <small class="text-light">Owner: </small>{{ rental.owner }}
+                  <div class="d-flex align-items-center gap-2">
+                    <label class="text-bold text-black fs-6 farmer-rental-name mb-0">{{ rental.name }}</label>
+                    {% if rental.is_own %}
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2 py-0.5" style="font-size: 10px; font-weight: 600;">
+                      <i class="ri-user-star-line me-1"></i>Own
+                    </span>
+                    {% elif rental.is_farmer %}
+                    <span class="badge bg-info-subtle text-info border border-info-subtle rounded-pill px-2 py-0.5" style="font-size: 10px; font-weight: 500;">
+                      <i class="ri-user-smile-line me-1"></i>Farmer Asset
+                    </span>
+                    {% else %}
+                    <span class="badge bg-secondary-subtle text-secondary border rounded-pill px-2 py-0.5" style="font-size: 10px; font-weight: 500;">
+                      <i class="ri-shield-check-line me-1"></i>Fleet
+                    </span>
+                    {% endif %}
+                  </div>
+                  <label class="text-dark farmer-rental-owner mt-1 mb-0">
+                    <small class="text-muted">Owner: </small>
+                    {% if rental.is_own %}
+                    <strong class="text-primary">{{ rental.owner }}</strong>
+                    {% else %}
+                    <strong class="text-dark">{{ rental.owner }}</strong>
+                    {% endif %}
                   </label>
                 </div>
               </div>
 
               <div class="d-flex align-items-center gap-4">
                 <div class="d-flex flex-column" style="min-width: 90px;">
-                  <small class="text-muted d-block">WAGE RATE</small>
-                  <strong>₹{{ rental.price }}<small class="text-muted">/day</small></strong>
+                  <small class="text-muted d-block">RENTAL RATE</small>
+                  <strong>₹{{ rental.price }}<small class="text-muted">/{{ rental.unit_short|default:'day' }}</small></strong>
                 </div>
                 <div>
-                  <button class="btn btn-light border rounded-pill px-3 py-1" style="font-size: 11px;">
-                    <i class="ri-phone-line me-1"></i> {{ rental.phone }}
-                  </button>
+                  {% if rental.phone %}
+                  <a href="tel:{{ rental.phone }}" class="btn btn-light border rounded-pill px-3 py-1 text-decoration-none" style="font-size: 11px;">
+                    <i class="ri-phone-line me-1 text-success"></i> {{ rental.phone }}
+                  </a>
+                  {% endif %}
                 </div>
                 <div>
                   {% if rental.status == 'Available' %}
@@ -3415,7 +3467,7 @@ $(document).ready(function() {
             <!-- Daily Wage Rate -->
             <div class="col-md-3">
               <label class="form-label fw-medium small mb-1">Daily Wage Rate (₹) <span class="text-danger">*</span></label>
-              <input type="number" name="wage_rate" step="0.01" class="form-control" placeholder="120.00" value="120" required>
+              <input type="number" min="0" name="wage_rate" step="0.01" class="form-control" placeholder="120.00" required>
             </div>
 
             <!-- Unit with Quick Add -->
@@ -3427,16 +3479,8 @@ $(document).ready(function() {
                 </a>
               </div>
               <select name="wage_unit" id="farmer_add_wage_unit_select" class="form-select">
-                <option value="Day" selected>Day</option>
                 {% for u in wage_units %}
-                {% if u.name != 'Day' %}
                 <option value="{{ u.name }}">{{ u.name }}</option>
-                {% endif %}
-                {% empty %}
-                <option value="Hour">Hour</option>
-                <option value="Month">Month</option>
-                <option value="Shift">Shift</option>
-                <option value="Acre">Acre</option>
                 {% endfor %}
               </select>
             </div>
@@ -3444,7 +3488,7 @@ $(document).ready(function() {
             <!-- Contact Phone -->
             <div class="col-md-6">
               <label class="form-label fw-medium small mb-1">Contact Phone</label>
-              <input type="text" name="contact_phone" class="form-control" placeholder="+91 98765 43210">
+              <input type="number" min="0" maxlength="13" name="contact_phone" class="form-control" placeholder="+91 98765 43210">
             </div>
 
             <!-- Worker State (Status) -->
@@ -3571,7 +3615,7 @@ $(document).ready(function() {
             <!-- Daily Wage Rate -->
             <div class="col-md-3">
               <label class="form-label fw-medium small mb-1">Daily Wage Rate (₹) <span class="text-danger">*</span></label>
-              <input type="number" name="wage_rate" id="farmer_edit_wage_rate" step="0.01" class="form-control" required>
+              <input type="number" min="0" name="wage_rate" id="farmer_edit_wage_rate" step="0.01" class="form-control" required>
             </div>
 
             <!-- Unit with Quick Add -->
@@ -3583,16 +3627,8 @@ $(document).ready(function() {
                 </a>
               </div>
               <select name="wage_unit" id="farmer_edit_wage_unit_select" class="form-select">
-                <option value="Day">Day</option>
                 {% for u in wage_units %}
-                {% if u.name != 'Day' %}
                 <option value="{{ u.name }}">{{ u.name }}</option>
-                {% endif %}
-                {% empty %}
-                <option value="Hour">Hour</option>
-                <option value="Month">Month</option>
-                <option value="Shift">Shift</option>
-                <option value="Acre">Acre</option>
                 {% endfor %}
               </select>
             </div>
@@ -3600,7 +3636,7 @@ $(document).ready(function() {
             <!-- Contact Phone -->
             <div class="col-md-6">
               <label class="form-label fw-medium small mb-1">Contact Phone</label>
-              <input type="text" name="contact_phone" id="farmer_edit_contact_phone" class="form-control">
+              <input type="number" min="0" maxlength="13" name="contact_phone" id="farmer_edit_contact_phone" class="form-control">
             </div>
 
             <!-- Worker State (Status) -->

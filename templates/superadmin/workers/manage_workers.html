@@ -311,8 +311,8 @@ function submitQuickDesignationModal() {
     });
 }
 
-function deleteQuickDesignation(name) {
-    if (!confirm(`Are you sure you want to delete designation "${name}"?`)) return;
+async function deleteQuickDesignation(name) {
+    if (!(await window.confirmQuickDelete(name, 'designation'))) return;
     var formData = new FormData();
     formData.append('name', name);
 
@@ -472,8 +472,8 @@ function submitQuickSkillModal() {
     });
 }
 
-function deleteQuickSkill(name) {
-    if (!confirm(`Are you sure you want to delete skill "${name}"?`)) return;
+async function deleteQuickSkill(name) {
+    if (!(await window.confirmQuickDelete(name, 'skill'))) return;
     var formData = new FormData();
     formData.append('name', name);
 
@@ -633,8 +633,8 @@ function submitQuickUnitModal() {
     });
 }
 
-function deleteQuickUnit(name) {
-    if (!confirm(`Are you sure you want to delete unit "${name}"?`)) return;
+async function deleteQuickUnit(name) {
+    if (!(await window.confirmQuickDelete(name, 'unit'))) return;
     var formData = new FormData();
     formData.append('name', name);
 
@@ -716,26 +716,82 @@ function deleteQuickUnit(name) {
 
     <input type="hidden" id="workerStatusFilter" value="">
     <div class="dropdown">
-      <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" id="workerStatusBtn">
-        All Status
+      <button class="btn dropdown-toggle d-flex align-items-center gap-2 px-3 rounded-3 fw-semibold filter-dropdown-btn" 
+              type="button" 
+              data-bs-toggle="dropdown" 
+              id="workerStatusBtn">
+        <i class="ri-user-follow-line" style="color: #F69C55;"></i>
+        <span id="workerStatusBtnLabel">All Status</span>
       </button>
-      <ul class="dropdown-menu">
-        <li><a class="dropdown-item worker-status-opt" data-val="" href="#">All Status</a></li>
-        <li><a class="dropdown-item worker-status-opt" data-val="Available" href="#">Available</a></li>
-        <li><a class="dropdown-item worker-status-opt" data-val="Booked" href="#">Booked</a></li>
-        <li><a class="dropdown-item worker-status-opt" data-val="On Leave" href="#">On Leave</a></li>
+      <ul class="dropdown-menu shadow-lg border-0 py-1 rounded-3" style="min-width: 170px;">
+        <li>
+          <a class="dropdown-item filter-dropdown-opt worker-status-opt d-flex align-items-center justify-content-between active" data-val="" href="#">
+            <span class="d-flex align-items-center gap-2">
+              <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #94a3b8;"></span>
+              <span class="w-status-text">All Status</span>
+            </span>
+            <i class="ri-check-line check-mark"></i>
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item filter-dropdown-opt worker-status-opt d-flex align-items-center justify-content-between" data-val="Available" href="#">
+            <span class="d-flex align-items-center gap-2 text-success">
+              <span class="rounded-circle bg-success" style="width: 8px; height: 8px;"></span>
+              <span class="w-status-text">Available</span>
+            </span>
+            <i class="ri-check-line check-mark d-none"></i>
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item filter-dropdown-opt worker-status-opt d-flex align-items-center justify-content-between" data-val="Booked" href="#">
+            <span class="d-flex align-items-center gap-2 text-warning">
+              <span class="rounded-circle bg-warning" style="width: 8px; height: 8px;"></span>
+              <span class="w-status-text">Booked</span>
+            </span>
+            <i class="ri-check-line check-mark d-none"></i>
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item filter-dropdown-opt worker-status-opt d-flex align-items-center justify-content-between" data-val="On Leave" href="#">
+            <span class="d-flex align-items-center gap-2 text-secondary">
+              <span class="rounded-circle bg-secondary" style="width: 8px; height: 8px;"></span>
+              <span class="w-status-text">On Leave</span>
+            </span>
+            <i class="ri-check-line check-mark d-none"></i>
+          </a>
+        </li>
       </ul>
     </div>
 
     <input type="hidden" id="workerDesignationFilter" value="">
     <div class="dropdown">
-      <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" id="workerDesignationBtn">
-        All Designations
+      <button class="btn dropdown-toggle d-flex align-items-center gap-2 px-3 rounded-3 fw-semibold filter-dropdown-btn" 
+              type="button" 
+              data-bs-toggle="dropdown" 
+              id="workerDesignationBtn">
+        <i class="ri-briefcase-line" style="color: #F69C55;"></i>
+        <span id="workerDesignationBtnLabel">All Designations</span>
       </button>
-      <ul class="dropdown-menu" style="max-height: 250px; overflow-y: auto;">
-        <li><a class="dropdown-item worker-desig-opt" data-val="" href="#">All Designations</a></li>
+      <ul class="dropdown-menu shadow-lg border-0 py-1 rounded-3" style="min-width: 190px; max-height: 250px; overflow-y: auto;">
+        <li>
+          <a class="dropdown-item filter-dropdown-opt worker-desig-opt d-flex align-items-center justify-content-between active" data-val="" href="#">
+            <span class="d-flex align-items-center gap-2">
+              <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #94a3b8;"></span>
+              <span class="w-desig-text">All Designations</span>
+            </span>
+            <i class="ri-check-line check-mark"></i>
+          </a>
+        </li>
         {% for d in designations %}
-        <li><a class="dropdown-item worker-desig-opt" data-val="{{ d.name }}" href="#">{{ d.name }}</a></li>
+        <li>
+          <a class="dropdown-item filter-dropdown-opt worker-desig-opt d-flex align-items-center justify-content-between" data-val="{{ d.name }}" href="#">
+            <span class="d-flex align-items-center gap-2">
+              <span class="rounded-circle" style="width: 8px; height: 8px; background-color: #F69C55;"></span>
+              <span class="w-desig-text">{{ d.name }}</span>
+            </span>
+            <i class="ri-check-line check-mark d-none"></i>
+          </a>
+        </li>
         {% endfor %}
       </ul>
     </div>
@@ -812,7 +868,7 @@ function deleteQuickUnit(name) {
         <div class="d-flex ms-auto align-items-center flex-wrap gap-4 me-0">
           <div class="text-end px-2">
             <small class="text-muted d-block" style="font-size: 11px;">WAGE RATE</small>
-            <strong class="fs-6 text-dark">₹{{ worker.wage }} <small class="text-muted fw-normal">/{{ worker.wage_unit|default:'Day' }}</small></strong>
+            <strong class="fs-6 text-dark">₹{{ worker.wage }} <small class="text-muted fw-normal">/{{ worker.wage_unit }}</small></strong>
           </div>
 
           {% if worker.phone %}
@@ -958,16 +1014,8 @@ function deleteQuickUnit(name) {
                 </a>
               </div>
               <select name="wage_unit" id="add_wage_unit_select" class="form-select">
-                <option value="Day" selected>Day</option>
                 {% for u in wage_units %}
-                {% if u.name != 'Day' %}
                 <option value="{{ u.name }}">{{ u.name }}</option>
-                {% endif %}
-                {% empty %}
-                <option value="Hour">Hour</option>
-                <option value="Month">Month</option>
-                <option value="Shift">Shift</option>
-                <option value="Acre">Acre</option>
                 {% endfor %}
               </select>
             </div>
@@ -1116,16 +1164,8 @@ function deleteQuickUnit(name) {
                 </a>
               </div>
               <select name="wage_unit" id="edit_wage_unit_select" class="form-select">
-                <option value="Day">Day</option>
                 {% for u in wage_units %}
-                {% if u.name != 'Day' %}
                 <option value="{{ u.name }}">{{ u.name }}</option>
-                {% endif %}
-                {% empty %}
-                <option value="Hour">Hour</option>
-                <option value="Month">Month</option>
-                <option value="Shift">Shift</option>
-                <option value="Acre">Acre</option>
                 {% endfor %}
               </select>
             </div>
@@ -1365,7 +1405,7 @@ function deleteQuickUnit(name) {
       document.getElementById('edit_designation_select').value = btn.getAttribute('data-designation') || '';
       document.getElementById('edit_skill_select').value = btn.getAttribute('data-skill') || '';
       document.getElementById('edit_wage_rate').value = btn.getAttribute('data-wage') || '';
-      document.getElementById('edit_wage_unit_select').value = btn.getAttribute('data-wage_unit') || 'Day';
+      document.getElementById('edit_wage_unit_select').value = btn.getAttribute('data-wage_unit');
       document.getElementById('edit_contact_phone').value = btn.getAttribute('data-phone') || '';
       document.getElementById('edit_status').value = btn.getAttribute('data-status') || 'Available';
       document.getElementById('edit_address').value = btn.getAttribute('data-address') || '';
@@ -1427,8 +1467,17 @@ function deleteQuickUnit(name) {
   document.querySelectorAll('.worker-status-opt').forEach(item => {
       item.addEventListener('click', function (e) {
           e.preventDefault();
-          document.getElementById('workerStatusBtn').innerText = this.innerText;
+          let text = this.querySelector('.w-status-text') ? this.querySelector('.w-status-text').innerText.trim() : this.innerText.trim();
+          document.getElementById('workerStatusBtnLabel').innerText = text;
           document.getElementById('workerStatusFilter').value = this.getAttribute('data-val');
+          document.querySelectorAll('.worker-status-opt').forEach(opt => {
+              opt.classList.remove('active');
+              let cm = opt.querySelector('.check-mark');
+              if (cm) cm.classList.add('d-none');
+          });
+          this.classList.add('active');
+          let cm = this.querySelector('.check-mark');
+          if (cm) cm.classList.remove('d-none');
           filterWorkers();
       });
   });
@@ -1436,8 +1485,17 @@ function deleteQuickUnit(name) {
   document.querySelectorAll('.worker-desig-opt').forEach(item => {
       item.addEventListener('click', function (e) {
           e.preventDefault();
-          document.getElementById('workerDesignationBtn').innerText = this.innerText;
+          let text = this.querySelector('.w-desig-text') ? this.querySelector('.w-desig-text').innerText.trim() : this.innerText.trim();
+          document.getElementById('workerDesignationBtnLabel').innerText = text;
           document.getElementById('workerDesignationFilter').value = this.getAttribute('data-val');
+          document.querySelectorAll('.worker-desig-opt').forEach(opt => {
+              opt.classList.remove('active');
+              let cm = opt.querySelector('.check-mark');
+              if (cm) cm.classList.add('d-none');
+          });
+          this.classList.add('active');
+          let cm = this.querySelector('.check-mark');
+          if (cm) cm.classList.remove('d-none');
           filterWorkers();
       });
   });

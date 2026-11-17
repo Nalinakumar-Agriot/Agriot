@@ -1,8 +1,11 @@
 # Ignoring src and assets folders
-venv
 
 # Exclude everything from vendors
 /src/assets/vendor
+
+.env
+venv
+
 
 # Ignoring static/assets folders
 ./assets/

@@ -210,9 +210,9 @@
               <div class="col-md-6">
                 <label class="form-label fw-semibold">Farm</label>
                 <select class="form-select" name="farm_id" id="farmSelect" onchange="onFarmChange()">
-                  <option value="" {% if not is_edit or not sale.farm_id %}selected{% endif %}>All Farms (Optional)</option>
+                  <option value="" {% if not is_edit and not pre_farm_id or is_edit and not sale.farm_id %}selected{% endif %}>All Farms (Optional)</option>
                   {% for f in farms %}
-                  <option value="{{ f.id }}" {% if is_edit and sale.farm_id == f.id %}selected{% endif %}>
+                  <option value="{{ f.id }}" {% if is_edit and sale.farm_id == f.id %}selected{% elif pre_farm_id and pre_farm_id == f.id|stringformat:"s" %}selected{% endif %}>
                     {{ f.land_name }} ({{ f.total_area }} Ac)
                   </option>
                   {% endfor %}
@@ -225,14 +225,17 @@
                   Items <span class="text-danger">*</span>
                 </label>
                 <select class="form-select" name="category" id="cropSelect" onchange="onCropChange()" required>
-                  <option value="" disabled {% if not is_edit %}selected{% endif %} data-price="0" data-available="0">Select Items</option>
+                  <option value="" disabled {% if not is_edit and not pre_crop %}selected{% endif %} data-price="0" data-available="0">Select Items</option>
                   {% for crop in farmer_crops %}
                   <option value="{{ crop.crop__name }}"
                     data-farm-id="{{ crop.farm__id|default:'' }}"
+                    data-base-crop="{{ crop.base_crop_name }}"
+                    data-grade="{{ crop.grade }}"
                     data-available="{{ crop.available }}"
                     data-price="{{ crop.price }}"
-                    {% if is_edit and not is_other_category and sale.category == crop.crop__name %}selected{% endif %}>
-                    {{ crop.crop__name }} ({{ crop.available }} Tons - ₹{{ crop.price }}/Ton)
+                    data-unit="{{ crop.unit }}"
+                    {% if crop.is_selected %}selected{% endif %}>
+                    {{ crop.display_name }} ({{ crop.available }} {{ crop.unit }} - ₹{{ crop.price }}/{{ crop.unit }})
                   </option>
                   {% empty %}
                   <option disabled>No harvested crops found in inventory</option>
@@ -607,7 +610,7 @@
 </div>
 
 <!-- ================= QUICK ADD CUSTOMER TYPE MODAL ================= -->
-<div class="modal fade" id="quick_add_customer_type_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;">
+<div class="modal fade" id="quick_add_customer_type_modal" tabindex="-1" aria-hidden="true" style="z-index: 10950 !important;">
   <div class="modal-dialog modal-dialog-centered modal-sm">
     <div class="modal-content border-0 shadow-lg rounded-4">
       <div class="modal-header border-bottom">
@@ -633,7 +636,7 @@
 </div>
 
 <!-- ================= QUICK ADD CUSTOMER MODAL ================= -->
-<div class="modal fade" id="quick_add_customer_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;">
+<div class="modal fade" id="quick_add_customer_modal" tabindex="-1" aria-hidden="true" style="z-index: 10950 !important;">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow-lg rounded-4">
       <div class="modal-header border-bottom">
@@ -729,8 +732,23 @@
         customInput.required = false;
         let price = parseFloat(selectedOption.getAttribute('data-price') || '0');
         let available = parseFloat(selectedOption.getAttribute('data-available') || '0');
+        let unit = selectedOption.getAttribute('data-unit') || 'Tons';
+        let farmId = selectedOption.getAttribute('data-farm-id');
+        let farmSelect = document.getElementById('farmSelect');
+        if (farmSelect && !farmSelect.value && farmId) {
+          farmSelect.value = farmId;
+        }
+        let unitSelect = document.getElementById('unitSelect');
+        if (unitSelect && unit) {
+          for (let u = 0; u < unitSelect.options.length; u++) {
+            if (unitSelect.options[u].value.toLowerCase() === unit.toLowerCase()) {
+              unitSelect.selectedIndex = u;
+              break;
+            }
+          }
+        }
         if (available > 0) {
-          if (helpText) helpText.textContent = available + " Tons available. Rate: ₹" + price + " / Ton";
+          if (helpText) helpText.textContent = available + " " + unit + " available. Rate: ₹" + price + " / " + unit;
         } else {
           if (helpText) helpText.textContent = '';
         }
@@ -809,8 +827,10 @@
       let available = isOther ? 999999 : parseFloat(selectedOption.getAttribute('data-available') || '0');
       let price = parseFloat(selectedOption.getAttribute('data-price') || '0');
 
+      let unit = selectedOption.getAttribute('data-unit') || 'Tons';
+
       if (!isOther && available > 0 && loadWeight > available) {
-        errorMsg.textContent = "Exceeds available crop inventory (" + available + " Tons available)";
+        errorMsg.textContent = "Exceeds available crop inventory (" + available + " " + unit + " available)";
         errorMsg.classList.remove('d-none');
         weightInput.classList.add('is-invalid');
         if (saveBtn) saveBtn.disabled = true;
@@ -1380,6 +1400,9 @@
     }
     {% endif %}
 
+    {% if pre_farm_id %}
+    onFarmChange();
+    {% endif %}
     onCropChange();
     recalculateTotals();
   });

@@ -81,6 +81,8 @@
 <script>
 $(document).ready(function () {
 
+    $.fn.dataTable.ext.errMode = 'none';
+
     $('.datatable').each(function () {
 
         // 🔥 prevent double init
@@ -91,7 +93,10 @@ $(document).ready(function () {
         $(this).DataTable({
             pageLength: $(this).data('page-length') || 5,
             lengthMenu: [5, 10, 25, 50],
-            responsive: true
+            responsive: true,
+            language: {
+                emptyTable: "<div class='py-4 text-center text-muted'><i class='ri-store-2-line display-4 text-muted opacity-50 mb-3 d-block'></i>No vendors found. Add one to get started.</div>"
+            }
         });
     });
 });
@@ -264,13 +269,6 @@ document.addEventListener('click', function (e) {
                             </div>
                         </td>
                     </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="5" class="text-center text-muted py-5">
-                            <i class="ri-store-2-line display-4 text-muted opacity-50 mb-3 d-block"></i>
-                            {% trans "No vendors found. Add one to get started." %}
-                        </td>
-                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -347,25 +345,31 @@ document.addEventListener('click', function (e) {
                 <input type="text" name="shop_name" class="form-control"
                     placeholder="e.g. Kumar Stores">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label fw-semibold">State</label>
-                <select name="state" class="form-select" onchange="loadDistricts(this.value, 'addDistrictSelect')">
-                    <option selected disabled>Select State</option>
+                <select name="state" id="addVendorState" class="form-select" onchange="loadDistricts(this.value, 'addVendorDistrict', 'addVendorTaluk')">
+                    <option selected disabled value="">Select State</option>
                     {% for state in states %}
                     <option value="{{ state.id }}">{{ state.name }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label fw-semibold">District</label>
-                <select name="district" id="addDistrictSelect" class="form-select">
-                    <option selected disabled>Select District</option>
+                <select name="district" id="addVendorDistrict" class="form-select" onchange="loadTaluks(this.value, 'addVendorTaluk')">
+                    <option selected disabled value="">Select District</option>
                 </select>
             </div>
-            <div class="col-md-4">
-                <label class="form-label fw-semibold">Pincode</label>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Taluk</label>
+                <select name="taluk" id="addVendorTaluk" class="form-select">
+                    <option selected disabled value="">Select Taluk</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Pincode <span class="text-danger">*</span></label>
                 <input type="text" name="pincode" class="form-control"
-                    placeholder="e.g. 6874512">
+                    placeholder="e.g. 624204" required maxlength="6" pattern="[0-9]{6}" inputmode="numeric">
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">GST Number</label>
@@ -375,12 +379,10 @@ document.addEventListener('click', function (e) {
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Document Type</label>
                 <select name="document_type" class="form-select">
-                    <option value="GST Certificate">GST Certificate</option>
-                    <option value="ID Proof">ID Proof (Aadhaar / PAN)</option>
-                    <option value="Trade License">Trade License</option>
-                    <option value="Business Card">Business Card</option>
-                    <option value="Agreement">Agreement / Contract</option>
-                    <option value="Other" selected>Other Document</option>
+                    <option value="">Select Document Type</option>
+                    {% for dt in document_types %}
+                    <option value="{{ dt.name }}">{{ dt.name }}</option>
+                    {% endfor %}
                 </select>
             </div>
             <div class="col-md-6">
@@ -446,28 +448,47 @@ document.addEventListener('click', function (e) {
                 <input type="text" name="shop_name" class="form-control" value="{{ vendor.shop_name|default:'' }}"
                     placeholder="e.g. Kumar Stores">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label fw-semibold">State</label>
-                <select name="state" class="form-select" onchange="loadDistricts(this.value, 'editDistrictSelect_{{ vendor.id }}')">
-                    <option disabled {% if not vendor.state %}selected{% endif %}>Select State</option>
+                <select name="state" id="editStateSelect_{{ vendor.id }}" class="form-select" onchange="loadDistricts(this.value, 'editDistrictSelect_{{ vendor.id }}', 'editTalukSelect_{{ vendor.id }}')">
+                    <option disabled value="" {% if not vendor.state %}selected{% endif %}>Select State</option>
                     {% for state in states %}
-                    <option value="{{ state.id }}" {% if vendor.state == state.name %}selected{% endif %}>{{ state.name }}</option>
+                    <option value="{{ state.id }}" {% if vendor.state == state.name or vendor.state_id == state.id|stringformat:"s" %}selected{% endif %}>{{ state.name }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label fw-semibold">District</label>
-                <select name="district" id="editDistrictSelect_{{ vendor.id }}" class="form-select">
-                    <option disabled {% if not vendor.district %}selected{% endif %}>Select District</option>
-                    {% if vendor.district %}
-                    <option value="{{ vendor.district }}" selected>{{ vendor.district }}</option>
+                <select name="district" id="editDistrictSelect_{{ vendor.id }}" class="form-select" onchange="loadTaluks(this.value, 'editTalukSelect_{{ vendor.id }}')">
+                    <option disabled value="" {% if not vendor.district %}selected{% endif %}>Select District</option>
+                    {% if vendor.districts %}
+                        {% for d in vendor.districts %}
+                            <option value="{{ d.id }}" {% if vendor.district == d.name or vendor.district_id == d.id|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>
+                        {% endfor %}
+                    {% elif vendor.district %}
+                        <option value="{{ vendor.district }}" selected>{{ vendor.district }}</option>
                     {% endif %}
                 </select>
             </div>
-            <div class="col-md-4">
-                <label class="form-label fw-semibold">Pincode</label>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Taluk</label>
+                <select name="taluk" id="editTalukSelect_{{ vendor.id }}" class="form-select">
+                    <option disabled value="" {% if not vendor.taluk %}selected{% endif %}>Select Taluk</option>
+                    {% if vendor.taluks %}
+                        {% for t in vendor.taluks %}
+                            <option value="{{ t.name }}" {% if vendor.taluk == t.name %}selected{% endif %}>{{ t.name }}</option>
+                        {% endfor %}
+                    {% elif vendor.taluk %}
+                        <option value="{{ vendor.taluk }}" selected>{{ vendor.taluk }}</option>
+                    {% else %}
+                        <option value="" selected>Select District First</option>
+                    {% endif %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Pincode <span class="text-danger">*</span></label>
                 <input type="text" name="pincode" class="form-control" value="{{ vendor.pincode|default:'' }}"
-                    placeholder="e.g. 6874512">
+                    placeholder="e.g. 624204" required maxlength="6" pattern="[0-9]{6}" inputmode="numeric">
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">GST Number</label>
@@ -477,12 +498,10 @@ document.addEventListener('click', function (e) {
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Document Type</label>
                 <select name="document_type" class="form-select">
-                    <option value="GST Certificate" {% if vendor.document and vendor.document.category == 'GST Certificate' %}selected{% endif %}>GST Certificate</option>
-                    <option value="ID Proof" {% if vendor.document and vendor.document.category == 'ID Proof' %}selected{% endif %}>ID Proof (Aadhaar / PAN)</option>
-                    <option value="Trade License" {% if vendor.document and vendor.document.category == 'Trade License' %}selected{% endif %}>Trade License</option>
-                    <option value="Business Card" {% if vendor.document and vendor.document.category == 'Business Card' %}selected{% endif %}>Business Card</option>
-                    <option value="Agreement" {% if vendor.document and vendor.document.category == 'Agreement' %}selected{% endif %}>Agreement / Contract</option>
-                    <option value="Other" {% if not vendor.document or vendor.document.category == 'Other' %}selected{% endif %}>Other Document</option>
+                    <option value="">Select Document Type</option>
+                    {% for dt in document_types %}
+                    <option value="{{ dt.name }}" {% if vendor.document and vendor.document.category == dt.name %}selected{% endif %}>{{ dt.name }}</option>
+                    {% endfor %}
                 </select>
             </div>
             <div class="col-md-6">
@@ -799,6 +818,60 @@ function loadDistricts(stateId, targetSelectId) {
           }
       }
       return cookieValue;
+  }
+
+  function loadDistricts(stateId, targetSelectId, talukSelectId) {
+      const select = document.getElementById(targetSelectId);
+      if (!select) return;
+
+      if (talukSelectId) {
+          const talukSelect = document.getElementById(talukSelectId);
+          if (talukSelect) {
+              talukSelect.innerHTML = '<option disabled selected value="">Select District First</option>';
+          }
+      }
+
+      if (!stateId) {
+          select.innerHTML = '<option disabled selected value="">Select State First</option>';
+          return;
+      }
+
+      select.innerHTML = '<option disabled selected value="">Loading...</option>';
+      fetch(`{% url 'get_districts' %}?state_id=${stateId}`)
+          .then(res => res.json())
+          .then(data => {
+              select.innerHTML = '<option disabled selected value="">Select District</option>';
+              data.districts.forEach(d => {
+                  select.innerHTML += `<option value="${d.id}">${d.name}</option>`;
+              });
+          })
+          .catch(() => {
+              select.innerHTML = '<option disabled selected>Error loading</option>';
+          });
+  }
+
+  function loadTaluks(districtId, targetSelectId, selectedTaluk = '') {
+      const select = document.getElementById(targetSelectId);
+      if (!select) return;
+
+      if (!districtId) {
+          select.innerHTML = '<option disabled selected value="">Select District First</option>';
+          return;
+      }
+
+      select.innerHTML = '<option disabled selected value="">Loading...</option>';
+      fetch(`{% url 'get_taluks' %}?district_id=${districtId}`)
+          .then(res => res.json())
+          .then(data => {
+              select.innerHTML = '<option disabled selected value="">Select Taluk</option>';
+              data.taluks.forEach(t => {
+                  const isSel = (selectedTaluk && selectedTaluk === t.name) ? 'selected' : '';
+                  select.innerHTML += `<option value="${t.name}" ${isSel}>${t.name}</option>`;
+              });
+          })
+          .catch(() => {
+              select.innerHTML = '<option disabled selected>Error loading</option>';
+          });
   }
 
   if (document.getElementById('outflow_date')) {

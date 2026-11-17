@@ -25,6 +25,7 @@
 {% endblock vendor_js %}
 
 {% block page_css %}
+{% include "layout/partials/admin_search_styles.html" %}
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
 {% endblock page_css %}
@@ -103,6 +104,11 @@ $(document).ready(function () {
     </a>
     </div>
 </div>
+<div class="card mb-2"><div class="card-body p-2">
+    <div class="input-group admin-list-search"><span class="input-group-text"><i class="ri-search-line"></i></span>
+      <input type="text" class="form-control custom-search" placeholder="Search..." aria-label="Search list">
+    </div>
+</div></div>
 <div class="card p-2">
     <div class="card-body py-0 px-0">
         <div class="table-responsive">

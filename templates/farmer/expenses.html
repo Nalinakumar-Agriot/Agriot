@@ -118,6 +118,41 @@
       width: 220px;
     }
   }
+  .filter-toolbar-btn {
+    height: 38px;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 13px;
+    border: 1px solid #d9dee3;
+    color: #566a7f;
+    background-color: #fff;
+    transition: all 0.2s ease;
+  }
+  .expense-filter-controls .filter-toolbar-btn {
+    min-width: 140px;
+    justify-content: space-between;
+    gap: 10px;
+    white-space: nowrap;
+  }
+  .expense-filter-controls #dateFilterBtn { min-width: 110px; }
+  .filter-toolbar-btn:hover,
+  .filter-toolbar-btn:focus,
+  .filter-toolbar-btn.show {
+    background-color: #f8f9fa;
+    border-color: #f69c55 !important;
+    color: #f69c55 !important;
+    box-shadow: 0 0 0 0.15rem rgba(246, 156, 85, 0.2) !important;
+  }
+  .dropdown-menu .dropdown-item:hover {
+    background-color: #f8f9fa;
+    color: #F69C55;
+  }
+  .dropdown-menu .dropdown-item.active,
+  .dropdown-menu .dropdown-item.active:hover {
+    background-color: #fcebd9 !important;
+    color: #c0622e !important;
+    font-weight: 600;
+  }
 </style>
 {% endblock page_css %}
 
@@ -125,6 +160,8 @@
 {{ block.super }}
 <script>
 $(document).ready(function () {
+    $.fn.dataTable.ext.errMode = 'none';
+
     // Initialize DataTables
     var dtExpenses = $('#tableExpenses').DataTable({
         destroy: true,
@@ -132,6 +169,9 @@ $(document).ready(function () {
         lengthMenu: [5, 10, 25, 50],
         responsive: true,
         order: [],
+        language: {
+            emptyTable: "<div class='py-4 text-center text-muted'><i class='ri-money-dollar-circle-line fs-2 d-block mb-1 text-secondary opacity-50'></i>No expenses logged yet. Click 'Log New Expense' to get started.</div>"
+        },
         dom: 't<"bottom d-flex align-items-center justify-content-between mt-3"ip>',
     });
 
@@ -254,6 +294,8 @@ $(document).ready(function () {
 
     window.openQuickUnitModal = function() {
         document.getElementById('quick_unit_name').value = '';
+        var slugEl = document.getElementById('quick_unit_slug');
+        if (slugEl) slugEl.value = '';
         var myModal = new bootstrap.Modal(document.getElementById('quick_add_unit_modal'));
         myModal.show();
     };
@@ -265,8 +307,14 @@ $(document).ready(function () {
             return;
         }
 
+        var slugEl = document.getElementById('quick_unit_slug');
+        var slug = slugEl ? slugEl.value.trim() : '';
+
         var formData = new FormData();
         formData.append('name', name);
+        if (slug) {
+            formData.append('slug', slug);
+        }
 
         fetch("{% url 'quick_add_expense_unit' %}", {
             method: 'POST',
@@ -481,12 +529,14 @@ $(document).ready(function () {
             if (isRecurring) {
                 document.getElementById('expense_repeat_cycle').value = repeatCycle;
                 document.getElementById('expense_reminder_type').value = reminderType;
-                document.querySelectorAll('.expense-repeat-btn').forEach(b => {
-                    b.classList.toggle('active-selection', b.textContent.trim() === repeatCycle);
-                });
-                document.querySelectorAll('.expense-reminder-btn').forEach(b => {
-                    b.classList.toggle('active-selection', b.textContent.trim() === reminderType);
-                });
+                var repeatBtn = Array.from(document.querySelectorAll('.expense-repeat-btn')).find(b => b.textContent.trim().toLowerCase() === (repeatCycle || 'Monthly').toLowerCase());
+                if (repeatBtn) {
+                    selectExpenseRepeatCycle(repeatBtn, repeatCycle);
+                }
+                var remBtn = Array.from(document.querySelectorAll('.expense-reminder-btn')).find(b => b.textContent.trim().toLowerCase() === (reminderType || 'On Due Date').toLowerCase());
+                if (remBtn) {
+                    remBtn.click();
+                }
                 if (reminderType === 'Custom Date' && reminderDate && reminderDate !== 'None') {
                     document.getElementById('expense_custom_reminder_wrap').style.display = 'block';
                     if (form.querySelector('[name="reminder_custom_date"]')) {
@@ -587,6 +637,32 @@ function selectExpenseOption(groupClass, btn, hiddenId, value) {
     if (value !== 'Custom Date') {
         var wrap = document.getElementById('expense_custom_reminder_wrap');
         if (wrap) wrap.style.display = 'none';
+    }
+}
+
+function selectExpenseRepeatCycle(btn, cycle) {
+    document.querySelectorAll('.expense-repeat-btn').forEach(function(b) {
+        b.classList.remove('active-selection');
+    });
+    btn.classList.add('active-selection');
+    var hiddenEl = document.getElementById('expense_repeat_cycle');
+    if (hiddenEl) hiddenEl.value = cycle;
+
+    var dayGroup = document.getElementById('expense_day_reminders_group');
+    var hourGroup = document.getElementById('expense_hour_reminders_group');
+    var customWrap = document.getElementById('expense_custom_reminder_wrap');
+
+    if (cycle === 'Daily') {
+        if (dayGroup) dayGroup.style.setProperty('display', 'none', 'important');
+        if (hourGroup) hourGroup.style.removeProperty('display');
+        if (customWrap) customWrap.style.display = 'none';
+        var defaultHour = hourGroup ? (hourGroup.querySelector('[onclick*="Every 2 Hours"]') || hourGroup.querySelector('.expense-reminder-btn')) : null;
+        if (defaultHour) defaultHour.click();
+    } else {
+        if (hourGroup) hourGroup.style.setProperty('display', 'none', 'important');
+        if (dayGroup) dayGroup.style.removeProperty('display');
+        var defaultDay = dayGroup ? (dayGroup.querySelector('[onclick*="On Due Date"]') || dayGroup.querySelector('.expense-reminder-btn')) : null;
+        if (defaultDay) defaultDay.click();
     }
 }
 
@@ -822,8 +898,34 @@ document.addEventListener('click', function (e) {
   }
 });
 
-function updateDateBtnText(text) {
-    document.getElementById('dateFilterBtn').innerHTML = '<i class="ri-filter-3-line"></i> ' + text;
+window.applyFarmFilter = function(val, text, el) {
+    document.getElementById('farmFilterBtnText').innerText = text;
+    $('#farmFilterBtn').closest('.dropdown').find('.dropdown-item').removeClass('active');
+    if (el) {
+        $(el).addClass('active');
+    }
+    var dt = $('#tableExpenses').DataTable();
+    var searchVal = (val === 'all') ? '' : val;
+    dt.column(1).search(searchVal).draw();
+};
+
+window.applyCategoryFilter = function(val, text, el) {
+    document.getElementById('categoryFilterBtnText').innerText = text;
+    $('#categoryFilterBtn').closest('.dropdown').find('.dropdown-item').removeClass('active');
+    if (el) {
+        $(el).addClass('active');
+    }
+    var dt = $('#tableExpenses').DataTable();
+    var searchVal = (val === 'all') ? '' : val;
+    dt.column(2).search(searchVal).draw();
+};
+
+function updateDateBtnText(text, el) {
+    document.getElementById('dateFilterBtnText').innerText = text;
+    $('#dateFilterBtn').closest('.dropdown').find('.dropdown-item').removeClass('active');
+    if (el) {
+        $(el).addClass('active');
+    }
 }
 
 function clearExpenseSearch() {
@@ -857,21 +959,29 @@ function applyDateFilter(val) {
     $('#tableExpenses').DataTable().draw();
 }
 
-function populateExpenseDetails(date, farm, category, description, vendor, amount, balance, docUrl, paymentMethod, quantity, unit, isRecurring, repeatCycle, remType, remDate, docType) {
+function populateExpenseDetails(date, farm, category, description, vendor, actualPriceRaw, balanceDueRaw, docUrl, paymentMethod, quantity, unit, isRecurring, repeatCycle, remType, remDate, docType) {
     document.getElementById('offcanvasDate').innerText = date;
     document.getElementById('offcanvasFarm').innerText = farm;
     document.getElementById('offcanvasCategory').innerText = category;
     document.getElementById('offcanvasDescription').innerText = description;
     document.getElementById('offcanvasVendor').innerText = vendor;
     
-    var amtPaid = Math.abs(parseFloat(amount || 0));
-    var balDue = Math.abs(parseFloat(balance || 0));
-    document.getElementById('offcanvasAmount').innerText = '₹' + amtPaid.toFixed(2);
-    document.getElementById('offcanvasBalance').innerText = '₹' + balDue.toFixed(2);
+    var actualPrice = Math.abs(parseFloat(actualPriceRaw || 0));
+    var balDue = Math.abs(parseFloat(balanceDueRaw || 0));
+    var amtPaid = Math.max(0, actualPrice - balDue);
+
+    var topEl = document.getElementById('offcanvasTopAmount') || document.getElementById('offcanvasAmount');
+    if (topEl) topEl.innerText = '₹' + actualPrice.toFixed(2);
+
+    var actualPriceEl = document.getElementById('offcanvasActualPrice');
+    if (actualPriceEl) actualPriceEl.innerText = '₹' + actualPrice.toFixed(2);
+
+    var paidEl = document.getElementById('offcanvasPaidAmount') || document.getElementById('offcanvasAmount');
+    if (paidEl) paidEl.innerText = '₹' + amtPaid.toFixed(2);
+
+    var balEl = document.getElementById('offcanvasBalance');
+    if (balEl) balEl.innerText = '₹' + balDue.toFixed(2);
     
-    // Extra fields
-    var actualPrice = amtPaid + balDue;
-    document.getElementById('offcanvasActualPrice').innerText = '₹' + actualPrice.toFixed(2);
     document.getElementById('offcanvasPaymentMethod').innerText = paymentMethod || '—';
     
     var qtyStr = quantity ? (quantity + ' ' + (unit || '')) : '—';
@@ -901,21 +1011,23 @@ function populateExpenseDetails(date, farm, category, description, vendor, amoun
 }
 
 // ── Inventory items list (from Django context) ─────────────────────────
-const _inventoryItems = [{% for item in inventory_items %}"{{ item|escapejs }}",{% endfor %}];
+const _inventoryItems = [
+    {% for item in inventory_items %}
+    {
+        name: "{{ item.name|default:item|escapejs }}",
+        unit: "{{ item.unit|default:''|escapejs }}",
+        category: "{{ item.category|default:''|escapejs }}",
+        stock: "{{ item.quantity|default:''|escapejs }}",
+        is_existing: {% if item.is_existing %}true{% else %}false{% endif %}
+    },
+    {% endfor %}
+];
 
 function checkInventoryMatch(inputEl) {
     const badge = document.getElementById('inventory_match_badge');
     const checkbox = document.getElementById('farm_add_to_inventory');
     const dropdown = document.getElementById('inv_dropdown');
-    if (!badge || !dropdown) return;
-
-    // Only show dropdown when the "Add to inventory" checkbox is checked
-    if (!checkbox || !checkbox.checked) {
-        dropdown.style.display = 'none';
-        badge.classList.add('d-none');
-        inputEl.classList.remove('is-valid');
-        return;
-    }
+    if (!dropdown) return;
 
     const query = inputEl.value.trim().toLowerCase();
     
@@ -924,49 +1036,102 @@ function checkInventoryMatch(inputEl) {
 
     if (query === '') {
         dropdown.style.display = 'none';
-        badge.classList.add('d-none');
+        if (badge) badge.classList.add('d-none');
         inputEl.classList.remove('is-valid');
         return;
     }
 
     // Filter matching inventory items
-    const matches = _inventoryItems.filter(item => item.toLowerCase().includes(query));
+    const matches = _inventoryItems.filter(item => item.name && item.name.toLowerCase().includes(query));
 
     if (matches.length > 0) {
         matches.forEach(function(item) {
-            const isExact = item.toLowerCase() === query;
             const row = document.createElement('div');
-            row.style.cssText = 'padding:9px 14px; cursor:pointer; font-size:13.5px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #f0f0f0;';
-            row.innerHTML = '<i class="ri-archive-drawer-line text-success" style="font-size:15px;"></i> '
-                           + '<span style="flex:1">' + item + '</span>'
-                           + '<span class="badge bg-success-subtle text-success" style="font-size:11px;">Update Stock</span>';
+            row.style.cssText = 'padding:10px 14px; cursor:pointer; font-size:13.5px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f0f0f0;';
+            
+            let stockHtml = '';
+            if (item.stock && item.is_existing && item.stock !== '0') {
+                stockHtml = `<span class="badge bg-light text-muted border me-2" style="font-size:11px;">Current: ${item.stock} ${item.unit || ''}</span>`;
+            }
+            
+            row.innerHTML = `
+                <div class="d-flex align-items-center gap-2">
+                    <i class="ri-archive-drawer-line text-success" style="font-size:16px;"></i>
+                    <span class="fw-medium text-dark">${item.name}</span>
+                </div>
+                <div class="d-flex align-items-center">
+                    ${stockHtml}
+                    <span class="badge bg-success-subtle text-success" style="font-size:11px;">
+                        <i class="ri-add-line"></i> Update Stock
+                    </span>
+                </div>
+            `;
+            
             row.onmouseenter = function() { this.style.background = '#f0fdf4'; };
             row.onmouseleave = function() { this.style.background = ''; };
-            row.onmousedown = function() {
-                inputEl.value = item;
+            
+            row.onmousedown = function(e) {
+                e.preventDefault(); // Prevent blur before input value is updated
+                inputEl.value = item.name;
                 dropdown.style.display = 'none';
-                badge.classList.remove('d-none');
+                if (badge) {
+                    badge.classList.remove('d-none');
+                    badge.innerHTML = '<i class="ri-checkbox-circle-fill me-1"></i> Stock Update';
+                }
                 inputEl.classList.add('is-valid');
-                if (checkbox && !checkbox.checked) checkbox.checked = true;
+                
+                // Auto-check the Add to Inventory checkbox
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+                
+                // Auto-select Unit if present
+                if (item.unit) {
+                    const unitSelect = document.getElementById('farm_unit_select');
+                    if (unitSelect) {
+                        for (let opt of unitSelect.options) {
+                            if (opt.value.toLowerCase() === item.unit.toLowerCase() || 
+                                opt.textContent.toLowerCase().includes(item.unit.toLowerCase())) {
+                                unitSelect.value = opt.value;
+                                break;
+                            }
+                        }
+                    }
+                }
             };
             dropdown.appendChild(row);
         });
         
+        dropdown.style.display = 'block';
+
         // Check if exact match for badge
-        const exactMatch = _inventoryItems.some(i => i.toLowerCase() === query);
+        const exactMatch = _inventoryItems.find(i => i.name && i.name.toLowerCase() === query);
         if (exactMatch) {
-            badge.classList.remove('d-none');
+            if (badge) {
+                badge.classList.remove('d-none');
+                badge.innerHTML = '<i class="ri-checkbox-circle-fill me-1"></i> Stock Update';
+            }
             inputEl.classList.add('is-valid');
             if (checkbox && !checkbox.checked) checkbox.checked = true;
+            if (exactMatch.unit) {
+                const unitSelect = document.getElementById('farm_unit_select');
+                if (unitSelect && (!unitSelect.value || unitSelect.value === '')) {
+                    for (let opt of unitSelect.options) {
+                        if (opt.value.toLowerCase() === exactMatch.unit.toLowerCase() || 
+                            opt.textContent.toLowerCase().includes(exactMatch.unit.toLowerCase())) {
+                            unitSelect.value = opt.value;
+                            break;
+                        }
+                    }
+                }
+            }
         } else {
-            badge.classList.add('d-none');
+            if (badge) badge.classList.add('d-none');
             inputEl.classList.remove('is-valid');
         }
-
-        dropdown.style.display = 'block';
     } else {
         dropdown.style.display = 'none';
-        badge.classList.add('d-none');
+        if (badge) badge.classList.add('d-none');
         inputEl.classList.remove('is-valid');
     }
 }
@@ -1086,48 +1251,62 @@ function checkInventoryMatch(inputEl) {
 
     <!-- Collapsible Search -->
     <div class="d-flex align-items-center search-collapse-wrapper" id="search_collapse_wrapper">
-      <button type="button" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" id="search_toggle_btn" onclick="toggleSearchBox()">
-        <i class="ri-search-line"></i>
+      <button type="button" class="btn filter-toolbar-btn d-flex align-items-center justify-content-center p-0" id="search_toggle_btn" onclick="toggleSearchBox()" style="width: 38px; height: 38px;">
+        <i class="ri-search-line fs-5"></i>
       </button>
-      <div class="input-group search-input-group d-none" id="search_input_group">
+      <div class="input-group search-input-group d-none" id="search_input_group" style="height: 38px;">
         <span class="input-group-text bg-white border-end-0">
           <i class="ri-search-line text-muted"></i>
         </span>
         <input type="text"
             id="expenseSearch"
             class="form-control border-start-0"
+            style="height: 38px; font-size: 13px;"
             placeholder="Search description, vendor...">
-        <button class="btn btn-outline-secondary border-start-0" type="button" id="search_close_btn" onclick="closeSearchBox()">
+        <button class="btn btn-outline-secondary border-start-0" type="button" id="search_close_btn" onclick="closeSearchBox()" style="height: 38px;">
           <i class="ri-close-line"></i>
         </button>
       </div>
     </div>
 
     <!-- Right side filters -->
-    <div class="d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
-      <select id="farmFilter" class="form-select w-auto">
-        <option value="all">All Farm Lands</option>
-        {% for farm in farms %}
-        <option value="{{ farm.land_name }}">{{ farm.land_name }}</option>
-        {% endfor %}
-      </select>
-
-      <select id="categoryFilter" class="form-select w-auto">
-        <option value="all">All Categories</option>
-        {% for et in expense_types %}
-        <option value="{{ et.name }}">{{ et.name }}</option>
-        {% endfor %}
-      </select>
-
+    <div class="expense-filter-controls d-flex align-items-center justify-content-end gap-2 ms-auto flex-wrap">
+      <!-- Farm Land Filter -->
       <div class="dropdown">
-        <button class="btn btn-outline-secondary dropdown-toggle d-flex align-items-center gap-1" type="button" data-bs-toggle="dropdown" id="dateFilterBtn">
-          <i class="ri-filter-3-line"></i> Filter
+        <button class="btn filter-toolbar-btn dropdown-toggle d-flex align-items-center gap-1.5 px-3" type="button" data-bs-toggle="dropdown" id="farmFilterBtn">
+          <span id="farmFilterBtnText">All Farm Lands</span>
         </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyDateFilter('all'); updateDateBtnText('All Time');">All Time</a></li>
-          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyDateFilter('this_month'); updateDateBtnText('This Month');">This Month</a></li>
-          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyDateFilter('last_month'); updateDateBtnText('Last Month');">Last Month</a></li>
-          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyDateFilter('this_year'); updateDateBtnText('This Year');">This Year</a></li>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1" style="max-height: 280px; overflow-y: auto; border-radius: 8px;">
+          <li><a class="dropdown-item active" href="javascript:void(0);" onclick="applyFarmFilter('all', 'All Farm Lands', this)">All Farm Lands</a></li>
+          {% for farm in farms %}
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyFarmFilter('{{ farm.land_name|escapejs }}', '{{ farm.land_name|escapejs }}', this)">📍 {{ farm.land_name }}</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <!-- Category Filter -->
+      <div class="dropdown">
+        <button class="btn filter-toolbar-btn dropdown-toggle d-flex align-items-center gap-1.5 px-3" type="button" data-bs-toggle="dropdown" id="categoryFilterBtn">
+          <span id="categoryFilterBtnText">All Categories</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1" style="max-height: 280px; overflow-y: auto; border-radius: 8px;">
+          <li><a class="dropdown-item active" href="javascript:void(0);" onclick="applyCategoryFilter('all', 'All Categories', this)">All Categories</a></li>
+          {% for et in expense_types %}
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyCategoryFilter('{{ et.name|escapejs }}', '{{ et.name|escapejs }}', this)">{{ et.name }}</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <!-- Date Filter -->
+      <div class="dropdown">
+        <button class="btn filter-toolbar-btn dropdown-toggle d-flex align-items-center gap-1.5 px-3" type="button" data-bs-toggle="dropdown" id="dateFilterBtn">
+          <i class="ri-filter-3-line"></i> <span id="dateFilterBtnText">Filter</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm border py-1" style="border-radius: 8px;">
+          <li><a class="dropdown-item active" href="javascript:void(0);" onclick="applyDateFilter('all'); updateDateBtnText('All Time', this);">All Time</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyDateFilter('this_month'); updateDateBtnText('This Month', this);">This Month</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyDateFilter('last_month'); updateDateBtnText('Last Month', this);">Last Month</a></li>
+          <li><a class="dropdown-item" href="javascript:void(0);" onclick="applyDateFilter('this_year'); updateDateBtnText('This Year', this);">This Year</a></li>
         </ul>
       </div>
     </div>
@@ -1171,7 +1350,19 @@ function checkInventoryMatch(inputEl) {
                         {% endif %}
                     </td>
                     <td>
-                        <span class="fw-bold text-danger fs-6">-₹{{ exp.amount|stringformat:".2f"|cut:"-" }}</span>
+                        <div class="d-flex flex-column">
+                            <span class="fw-bold text-dark fs-6">₹{{ exp.actual_price|floatformat:2 }}</span>
+                            {% if exp.balance_due and exp.balance_due > 0 %}
+                            <div class="d-flex align-items-center gap-1 mt-1" style="font-size: 11px;">
+                                <span class="badge bg-success-subtle text-success border px-1.5 py-0.5 fw-semibold"><i class="ri-check-line me-0.5"></i>Paid: ₹{{ exp.paid_amount|floatformat:2 }}</span>
+                                <span class="badge bg-danger-subtle text-danger border px-1.5 py-0.5 fw-semibold"><i class="ri-error-warning-line me-0.5"></i>Due: ₹{{ exp.balance_due|floatformat:2 }}</span>
+                            </div>
+                            {% else %}
+                            <div class="mt-1" style="font-size: 11px;">
+                                <span class="badge bg-success-subtle text-success border px-1.5 py-0.5 fw-semibold"><i class="ri-check-double-line me-0.5"></i>Fully Paid</span>
+                            </div>
+                            {% endif %}
+                        </div>
                     </td>
                     <td>
                         <div class="d-flex align-items-center gap-1">
@@ -1216,13 +1407,6 @@ function checkInventoryMatch(inputEl) {
                         </div>
                     </td>
                 </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="7" class="text-center text-muted py-5">
-                        <i class="ri-money-dollar-circle-line display-4 text-muted opacity-50 mb-3 d-block"></i>
-                        {% trans "No expenses logged yet. Click 'Log New Expense' to get started." %}
-                    </td>
-                </tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -1241,7 +1425,7 @@ function checkInventoryMatch(inputEl) {
         <i class="ri-money-dollar-circle-line fs-3"></i>
       </div>
       <div>
-        <h4 class="mb-0 text-dark fw-bold" id="offcanvasAmount">₹0.00</h4>
+        <h4 class="mb-0 text-dark fw-bold" id="offcanvasTopAmount">₹0.00</h4>
         <small class="text-muted" id="offcanvasDate">Date</small>
       </div>
     </div>
@@ -1250,9 +1434,9 @@ function checkInventoryMatch(inputEl) {
         <span class="text-muted small">Actual Price (Base)</span>
         <span class="fw-semibold text-dark" id="offcanvasActualPrice">₹0.00</span>
       </li>
-      <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 bg-light rounded px-2 mb-1">
-        <span class="text-muted small fw-bold">Amount Paid Right Now</span>
-        <span class="fw-bold text-success" id="offcanvasAmount">₹0.00</span>
+      <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 bg-success-subtle rounded px-2 mb-1">
+        <span class="text-muted small fw-bold text-success">Amount Paid Right Now</span>
+        <span class="fw-bold text-success" id="offcanvasPaidAmount">₹0.00</span>
       </li>
       <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 bg-danger-subtle rounded px-2 mb-2">
         <span class="text-muted small fw-bold text-danger">Outstanding Balance Due</span>
@@ -1391,25 +1575,28 @@ function checkInventoryMatch(inputEl) {
                 </div>
               </div>
             <!-- Description -->
-              <div class="col-md-6 position-relative">
+              <div class="col-md-6">
                 <div class="d-flex justify-content-between align-items-center mb-1">
                   <label class="form-label fw-semibold mb-0">Description <span class="text-danger">*</span></label>
                   <span id="inventory_match_badge" class="badge bg-success-subtle text-success d-none"><i class="ri-checkbox-circle-fill me-1"></i> Stock Update</span>
                 </div>
-                <input type="text" name="description" id="farm_expense_description" class="form-control" required
-                  autocomplete="off"
-                  data-error-msg="Description is required."
-                  placeholder="Type to search inventory..."
-                  oninput="window.checkInventoryMatch(this)"
-                  onblur="setTimeout(()=>document.getElementById('inv_dropdown').style.display='none',200)">
-                <!-- Custom Inventory Autocomplete Dropdown -->
-                <div id="inv_dropdown" style="display:none; position:absolute; left:0; right:0; top:100%; z-index:9999; background:#fff; border:1px solid #d0d5dd; border-top:none; border-radius:0 0 8px 8px; max-height:200px; overflow-y:auto; box-shadow:0 8px 20px rgba(0,0,0,0.1);">
+                <div class="position-relative">
+                  <input type="text" name="description" id="farm_expense_description" class="form-control" required
+                    autocomplete="off"
+                    data-error-msg="Description is required."
+                    placeholder="Type to search inventory..."
+                    oninput="window.checkInventoryMatch(this)"
+                    onfocus="window.checkInventoryMatch(this)"
+                    onblur="setTimeout(()=>document.getElementById('inv_dropdown').style.display='none',250)">
+                  <!-- Custom Inventory Autocomplete Dropdown -->
+                  <div id="inv_dropdown" style="display:none; position:absolute; left:0; right:0; top:100%; z-index:9999; background:#fff; border:1px solid #d0d5dd; border-top:none; border-radius:0 0 8px 8px; max-height:220px; overflow-y:auto; box-shadow:0 10px 25px rgba(0,0,0,0.15);">
+                  </div>
                 </div>
                 <div class="invalid-feedback"></div>
               </div>
               <div class="col-md-2">
                 <label class="form-label fw-semibold">Quantity</label>
-                <input type="number" name="quantity" class="form-control" placeholder="1" value="1">
+                <input type="number" min="0" name="quantity" class="form-control" placeholder="1" value="1">
               </div>
               <div class="col-md-4">
                 <div class="d-flex justify-content-between align-items-center mb-1">
@@ -1479,19 +1666,27 @@ function checkInventoryMatch(inputEl) {
               <div class="border rounded-3 p-3 mb-3 bg-light">
                 <label class="form-label fw-semibold mb-2 d-block">Repeat Cycle Interval</label>
                 <div class="d-flex flex-wrap gap-2">
-                  <button type="button" class="custom-pill-btn expense-repeat-btn" onclick="selectExpenseOption('expense-repeat-btn', this, 'expense_repeat_cycle', 'Weekly')">Weekly</button>
-                  <button type="button" class="custom-pill-btn expense-repeat-btn active-selection" onclick="selectExpenseOption('expense-repeat-btn', this, 'expense_repeat_cycle', 'Monthly')">Monthly</button>
-                  <button type="button" class="custom-pill-btn expense-repeat-btn" onclick="selectExpenseOption('expense-repeat-btn', this, 'expense_repeat_cycle', 'Yearly')">Yearly</button>
+                  <button type="button" class="custom-pill-btn expense-repeat-btn" onclick="selectExpenseRepeatCycle(this, 'Daily')">Daily</button>
+                  <button type="button" class="custom-pill-btn expense-repeat-btn" onclick="selectExpenseRepeatCycle(this, 'Weekly')">Weekly</button>
+                  <button type="button" class="custom-pill-btn expense-repeat-btn active-selection" onclick="selectExpenseRepeatCycle(this, 'Monthly')">Monthly</button>
+                  <button type="button" class="custom-pill-btn expense-repeat-btn" onclick="selectExpenseRepeatCycle(this, 'Yearly')">Yearly</button>
                 </div>
               </div>
 
-              <!-- Outstanding Expense Reminders -->
+              <!-- Expense Reminders -->
               <div class="border rounded-3 p-3 bg-light">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                  <i class="ri-notification-4-line text-warning"></i>
-                  <label class="fw-semibold text-warning mb-0">Outstanding Expense Reminders</label>
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="ri-notification-4-line text-warning"></i>
+                    <label class="fw-semibold text-warning mb-0">Expense Reminders</label>
+                  </div>
+                  <span class="badge bg-info-subtle text-info border px-2 py-0.5" style="font-size: 11px;">
+                    <i class="ri-mail-line me-1"></i>Email Reminder Enabled
+                  </span>
                 </div>
-                <div class="d-flex flex-wrap gap-2">
+
+                <!-- Day-based reminders (Weekly, Monthly, Yearly) -->
+                <div id="expense_day_reminders_group" class="d-flex flex-wrap gap-2">
                   <button type="button" class="custom-pill-btn expense-reminder-btn active-selection" onclick="selectExpenseOption('expense-reminder-btn', this, 'expense_reminder_type', 'On Due Date')">On Due Date</button>
                   <button type="button" class="custom-pill-btn expense-reminder-btn" onclick="selectExpenseOption('expense-reminder-btn', this, 'expense_reminder_type', '1 Day Before')">1 Day Before</button>
                   <button type="button" class="custom-pill-btn expense-reminder-btn" onclick="selectExpenseOption('expense-reminder-btn', this, 'expense_reminder_type', '3 Days Before')">3 Days Before</button>
@@ -1501,6 +1696,16 @@ function checkInventoryMatch(inputEl) {
                     Custom Alarm Date..
                   </button>
                 </div>
+
+                <!-- Hours-based reminders (Daily) -->
+                <div id="expense_hour_reminders_group" class="d-flex flex-wrap gap-2" style="display: none !important;">
+                  <button type="button" class="custom-pill-btn expense-reminder-btn" onclick="selectExpenseOption('expense-reminder-btn', this, 'expense_reminder_type', 'Every 1 Hour')">Every 1 Hour</button>
+                  <button type="button" class="custom-pill-btn expense-reminder-btn active-selection" onclick="selectExpenseOption('expense-reminder-btn', this, 'expense_reminder_type', 'Every 2 Hours')">Every 2 Hours</button>
+                  <button type="button" class="custom-pill-btn expense-reminder-btn" onclick="selectExpenseOption('expense-reminder-btn', this, 'expense_reminder_type', 'Every 4 Hours')">Every 4 Hours</button>
+                  <button type="button" class="custom-pill-btn expense-reminder-btn" onclick="selectExpenseOption('expense-reminder-btn', this, 'expense_reminder_type', 'Every 6 Hours')">Every 6 Hours</button>
+                  <button type="button" class="custom-pill-btn expense-reminder-btn" onclick="selectExpenseOption('expense-reminder-btn', this, 'expense_reminder_type', 'Every 12 Hours')">Every 12 Hours</button>
+                </div>
+
                 <div id="expense_custom_reminder_wrap" class="mt-2" style="display:none;">
                   <label class="form-label small fw-semibold mt-1">Choose Alarm Reminder Date</label>
                   <input type="date" name="reminder_custom_date" class="form-control form-control-sm" style="max-width:220px;">
@@ -1517,9 +1722,9 @@ function checkInventoryMatch(inputEl) {
               <div class="col-md-6">
                 <label class="form-label fw-semibold">Document Type</label>
                 <select name="document_type" class="form-select">
-                  <option value="My Expenses">My Expenses (Default)</option>
-                  {% for dc in document_categories %}
-                  <option value="{{ dc.name }}">{{ dc.name }}</option>
+                  <option value="">Select Document Type</option>
+                  {% for dt in document_types %}
+                  <option value="{{ dt.name }}">{{ dt.name }}</option>
                   {% endfor %}
                 </select>
               </div>
@@ -1568,7 +1773,7 @@ function checkInventoryMatch(inputEl) {
 </div>
 
 <!-- Quick Add Expense Type Modal -->
-<div class="modal fade" id="quick_add_expense_type_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;">
+<div class="modal fade" id="quick_add_expense_type_modal" tabindex="-1" aria-hidden="true" style="z-index: 10950 !important;">
   <div class="modal-dialog modal-sm modal-dialog-centered">
     <div class="modal-content border-0 shadow-lg rounded-3">
       <div class="modal-header border-bottom py-2">
@@ -1598,7 +1803,7 @@ function checkInventoryMatch(inputEl) {
 </div>
 
 <!-- Quick Add Vendor Modal -->
-<div class="modal fade" id="quick_add_vendor_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;">
+<div class="modal fade" id="quick_add_vendor_modal" tabindex="-1" aria-hidden="true" style="z-index: 10950 !important;">
   <div class="modal-dialog modal-sm modal-dialog-centered">
     <div class="modal-content border-0 shadow-lg rounded-3">
       <div class="modal-header border-bottom py-2">
@@ -1616,7 +1821,7 @@ function checkInventoryMatch(inputEl) {
         </div>
         <div class="mb-1">
           <label class="form-label small fw-semibold">Contact Mobile</label>
-          <input type="text" id="quick_vendor_mobile" class="form-control form-control-sm" placeholder="+91 9876543210">
+          <input type="tel" maxlength="13" id="quick_vendor_mobile" class="form-control form-control-sm" placeholder="+91 9876543210" oninput="this.value = this.value.replace(/[^0-9+]/g, '').slice(0, 13);">
         </div>
       </div>
       <div class="modal-footer border-top py-2 d-flex justify-content-end">
@@ -1625,13 +1830,12 @@ function checkInventoryMatch(inputEl) {
           <i class="ri-check-line me-1"></i> Add Vendor
         </button>
       </div>
-      </div>
     </div>
   </div>
 </div>
 
 <!-- Quick Add Unit Modal -->
-<div class="modal fade" id="quick_add_unit_modal" tabindex="-1" aria-hidden="true" style="z-index: 10700 !important;">
+<div class="modal fade" id="quick_add_unit_modal" tabindex="-1" aria-hidden="true" style="z-index: 10950 !important;">
   <div class="modal-dialog modal-sm modal-dialog-centered">
     <div class="modal-content border-0 shadow-lg rounded-3">
       <div class="modal-header border-bottom py-2">
@@ -1641,7 +1845,12 @@ function checkInventoryMatch(inputEl) {
       <div class="modal-body py-3">
         <div class="mb-2">
           <label class="form-label small fw-semibold">Unit Name <span class="text-danger">*</span></label>
-          <input type="text" id="quick_unit_name" class="form-control form-control-sm" placeholder="e.g. Kg, Litre, Box">
+          <input type="text" id="quick_unit_name" class="form-control form-control-sm" placeholder="e.g. Kilogram, Litre, Box">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Unit Code / Slug</label>
+          <input type="text" id="quick_unit_slug" class="form-control form-control-sm" placeholder="e.g. kg, l, box">
+          <small class="text-muted" style="font-size: 11px;">Optional short code or symbol</small>
         </div>
       </div>
       <div class="modal-footer border-top py-2 d-flex justify-content-end">

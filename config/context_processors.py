@@ -2,7 +2,8 @@ from django.conf import settings
 import json, os
 
 def my_setting(request):
-    return {'MY_SETTING': settings}
+    from auth.portals import is_admin_user
+    return {'MY_SETTING': settings, 'is_admin_portal_user': is_admin_user(request.user)}
 
 def language_code(request):
     return {"LANGUAGE_CODE": request.LANGUAGE_CODE}
@@ -21,29 +22,20 @@ def menu_data(request):
     Loads the correct vertical_menu.json based on the current URL prefix.
 
     URL prefix rules:
-      /farmer/*   → farmer menu JSON
-      /admin-panel/* or /dashboard/* or anything else → superadmin menu JSON
+      /admin/* or /admin-panel/* → superadmin menu JSON
+      baseurl / or /farmer/* or anything else → farmer menu JSON
 
     We use request.path instead of user.role because:
     - At login the user may not be authenticated yet.
     - The farmer app and superadmin app are served on separate URL namespaces.
     """
 
-    path = request.path  # e.g. "/farmer/dashboard/" or "/dashboard/"
+    path = request.path  # e.g. "/admin/dashboard/" or "/dashboard/"
     base_dir = str(settings.BASE_DIR)
 
-    if path.startswith('/farmer/'):
-        json_path = os.path.join(
-            base_dir,
-            'templates',
-            'layout',
-            'partials',
-            'menu',
-            'farmer',
-            'json',
-            'vertical_menu.json',
-        )
-    else:
+    is_admin_path = path.startswith('/admin/') or path.startswith('/admin-panel/')
+
+    if is_admin_path:
         json_path = os.path.join(
             base_dir,
             'templates',
@@ -54,23 +46,31 @@ def menu_data(request):
             'json',
             'vertical_menu.json',
         )
+    else:
+        json_path = os.path.join(
+            base_dir,
+            'templates',
+            'layout',
+            'partials',
+            'menu',
+            'farmer',
+            'json',
+            'vertical_menu.json',
+        )
 
     try:
         with open(json_path, 'r', encoding='utf-8') as f:
             menu = json.load(f)
 
-        if path.startswith('/farmer/') and request.user.is_authenticated:
+        if not is_admin_path and request.user.is_authenticated:
             from apps.superadmin.models import Subscription
             try:
                 # Determine effective farmer profile (Direct Farmer or Manager/Staff under Farmer)
                 farmer_profile = None
                 staff_profile = None
 
-                if hasattr(request.user, 'staff_profile') and request.user.staff_profile:
-                    staff_profile = request.user.staff_profile
-                    farmer_profile = staff_profile.farmer
-                elif hasattr(request.user, 'profile') and request.user.profile.role == 'farmer':
-                    farmer_profile = request.user.profile
+                from apps.farmer.workspaces import resolve_workspace
+                farmer_profile, staff_profile = resolve_workspace(request)
 
                 if farmer_profile:
                     active_sub = Subscription.objects.filter(
@@ -91,14 +91,17 @@ def menu_data(request):
                             'Sales Records (Legacy)': [],
                             
                             # New package names (matching menu exactly)
-                            'Dashboards': ['Dashboards'],
+                            'Dashboard': ['Dashboard', 'Dashboards'],
+                            'Dashboards': ['Dashboard', 'Dashboards'],
                             'Farms': ['Farms'],
                             'Market & Resources Hub': ['Market & Resources Hub'],
                             'Task': ['Task', 'Task Management', 'Tasks'],
                             'Tasks': ['Task', 'Task Management', 'Tasks'],
                             'Task Management': ['Task', 'Task Management', 'Tasks'],
+                            # The legacy combined module grants both pages. New
+                            # package modules grant only the menu named in the package.
                             'Financials & Sales': ['Sales', 'Financials & Sales', 'Expenses', 'Expense'],
-                            'Sales': ['Sales', 'Financials & Sales', 'Expenses', 'Expense'],
+                            'Sales': ['Sales', 'Financials & Sales'],
                             'Inventory': ['Inventory'],
                             'Outstanding': ['Outstanding', 'Expenses', 'Expense'],
                             'Expenses': ['Expenses', 'Expense'],
@@ -113,8 +116,9 @@ def menu_data(request):
                             'Reports': ['Reports']
                         }
 
-                        allowed_menu_names = set(['Market & Resources Hub', 'Task Management', 'Task', 'Tasks', 'Reports'])
+                        allowed_menu_names = set()
                         for mod in allowed_modules:
+                            allowed_menu_names.add(mod)
                             if mod in MODULE_MAPPING:
                                 allowed_menu_names.update(MODULE_MAPPING[mod])
 
@@ -132,6 +136,8 @@ def menu_data(request):
                     perms = staff_profile.permissions or []
                     # Standardize permission mapping aliases
                     ALIAS_MAP = {
+                        'Dashboard': 'Dashboards',
+                        'Dashboards': 'Dashboard',
                         'Finance': 'Sales',
                         'Financials & Sales': 'Sales',
                         'Sales': 'Financials & Sales',
@@ -148,6 +154,8 @@ def menu_data(request):
                         'Task': 'Task Management',
                         'Tasks': 'Task',
                         'Task Management': 'Task',
+                        'Expenses': 'Outstanding',
+                        'Outstanding': 'Expenses',
                         'Reports': 'Reports',
                     }
                     expanded_perms = set(perms)
@@ -155,9 +163,12 @@ def menu_data(request):
                         if p in ALIAS_MAP:
                             expanded_perms.add(ALIAS_MAP[p])
 
-                    if 'Financials & Sales' in expanded_perms or 'Finance' in expanded_perms:
+                    if 'Financials & Sales' in expanded_perms or 'Finance' in expanded_perms or 'Sales' in expanded_perms:
+                        expanded_perms.add('Sales')
+
+                    if 'Expenses' in expanded_perms or 'Expense' in expanded_perms:
                         expanded_perms.add('Expenses')
-                        expanded_perms.add('Expense')
+                        expanded_perms.add('Outstanding')
 
                     if 'Employee Management' in expanded_perms or 'Employee' in expanded_perms:
                         expanded_perms.add('Employee')
@@ -172,7 +183,7 @@ def menu_data(request):
                                 staff_filtered_menu.append(item)
                             else:
                                 item_name = item.get('name')
-                                if item_name in expanded_perms or item_name in ['Dashboards', 'Reports']:
+                                if item_name in expanded_perms or item_name in ['Dashboards', 'Dashboard']:
                                     staff_filtered_menu.append(item)
                         menu['menu'] = staff_filtered_menu
             except Exception as e:
@@ -180,10 +191,11 @@ def menu_data(request):
         else:
             if request.user.is_authenticated and hasattr(request.user, 'profile'):
                 profile = request.user.profile
-                is_primary_admin = request.user.is_superuser or request.user.email == 'admin@agriot.com' or profile.role == 'superadmin'
-                if not is_primary_admin:
+                from auth.portals import is_primary_admin
+                primary_admin = is_primary_admin(request.user)
+                if not primary_admin:
                     perms = profile.permissions or []
-                    if "ALL" not in perms and perms:
+                    if "ALL" not in perms:
                         admin_filtered_menu = []
                         for item in menu.get('menu', []):
                             if 'menu_header' in item:
@@ -235,3 +247,59 @@ def notifications_data(request):
         'notifications': notifications,
         'unread_notifications_count': unread_count,
     }
+
+def farmer_subscription_context(request):
+    """
+    Supplies active farmer subscription status, expiry warnings, and view-only state
+    to all templates when a farmer is logged in.
+    """
+    from auth.portals import is_admin_user
+    if not request.user.is_authenticated or is_admin_user(request.user):
+        return {'farmer_subscription_info': None}
+
+    profile = getattr(request.user, 'profile', None)
+    if not profile or getattr(profile, 'role', '') != 'farmer':
+        return {'farmer_subscription_info': None}
+
+    from apps.superadmin.subscription_utils import get_farmer_subscription_details
+    details = get_farmer_subscription_details(profile)
+    return {'farmer_subscription_info': details}
+
+
+def workspace_context(request):
+    """
+    Supplies active workspace context and all available workspaces
+    for dual-role users (Farmer & Farm Manager) to templates.
+    """
+    from auth.portals import is_admin_user
+    if not request.user.is_authenticated or is_admin_user(request.user):
+        return {
+            'current_workspace': None,
+            'user_workspaces': [],
+            'has_multiple_workspaces': False,
+            'can_register_own_farm': False,
+        }
+
+    from apps.farmer.views import get_user_workspaces
+
+    workspaces = get_user_workspaces(request.user)
+    active_role = request.session.get('active_role')
+    active_target_id = request.session.get('active_staff_id') if active_role == 'manager' else request.session.get('active_farmer_id')
+
+    current_ws = None
+    for ws in workspaces:
+        is_active = (ws['type'] == active_role and ws['target_id'] == active_target_id)
+        ws['is_active'] = is_active
+        if is_active:
+            current_ws = ws
+
+
+    can_register_own_farm = not any(w['type'] == 'farmer' for w in workspaces)
+
+    return {
+        'current_workspace': current_ws,
+        'user_workspaces': workspaces,
+        'has_multiple_workspaces': len(workspaces) > 1,
+        'can_register_own_farm': can_register_own_farm,
+    }
+

@@ -48,12 +48,20 @@ def has_permission(user, permission):
         return False
     if user.is_superuser:
         return True
-    if hasattr(user, 'staff_profile') and user.staff_profile:
-        staff = user.staff_profile
+    from auth.portals import admin_can_access, is_admin_user
+    if is_admin_user(user):
+        return admin_can_access(user, permission)
+    from apps.farmer.workspaces import resolve_workspace
+    profile, staff = resolve_workspace(user)
+    if profile is None:
+        return False
+    if staff is not None:
         perms = staff.permissions or []
         if "ALL" in perms or (staff.is_role_manager and not perms):
             return True
         ALIAS_MAP = {
+            'Dashboard': 'Dashboards',
+            'Dashboards': 'Dashboard',
             'Finance': 'Sales',
             'Financials & Sales': 'Sales',
             'Sales': 'Financials & Sales',
@@ -62,15 +70,19 @@ def has_permission(user, permission):
             'Guidelines': 'Smart Farming Guide',
             'Smart Farming Guide': 'Guidelines',
             'IOT Admin': 'Dashboards',
-            'Dashboards': 'IOT Admin',
             'Documents': 'My Documents',
             'My Documents': 'Documents',
+            'Employee': 'Employee Management',
+            'Employee Management': 'Employee',
+            'Expenses': 'Outstanding',
+            'Outstanding': 'Expenses',
+            'Reports': 'Reports',
         }
         expanded_perms = set(perms)
         for p in perms:
             if p in ALIAS_MAP:
                 expanded_perms.add(ALIAS_MAP[p])
-        return permission in expanded_perms or permission == "Dashboards"
+        return permission in expanded_perms or permission in ["Dashboards", "Dashboard"]
     if user.has_perm(permission):
         return True
     return True
