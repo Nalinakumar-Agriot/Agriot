@@ -592,7 +592,7 @@ private fun settleAction(row: JSONObject) = Screen.Action("Record invoice paymen
                             require(out.size()+n<=10*1024*1024) { "Choose a file smaller than 10 MB" }
                             out.write(buffer,0,n)
                         };out.toByteArray()
-                    } ?: error("Unable to open this file")
+                    } ?: throw IllegalArgumentException("Unable to open this file")
                     Triple(name,mime,bytes)
                 }
                 model.uploadDocument(mapOf("title" to title.trim(),"category" to category.trim()),data.first,data.second,data.third)
