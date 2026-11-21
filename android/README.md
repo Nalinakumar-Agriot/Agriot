@@ -6,18 +6,18 @@ This is an initial review build, not a production release or a claim of complete
 ## Build
 
 Use JDK 17, Android SDK 35, Build Tools 35.0.0 and Gradle 8.13.
-Open this directory in Android Studio or install Gradle 8.13 and run:
+Open this directory in Android Studio, or use the included Gradle 8.13 wrapper:
 
 ```sh
-gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
-gradle :app:connectedDebugAndroidTest
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+./gradlew :app:connectedDebugAndroidTest
 ```
 
 The GitHub Actions **Android review build** creates the debug APK and reports.
 Download the **AgriOT-Android-review** artifact from a successful run and extract
 `app-debug.apk`. It installs alongside the vendor app under a separate application ID.
 The signing key is a debug key; this APK cannot replace an existing signed production installation.
-A Gradle wrapper can be generated with `gradle wrapper --gradle-version 8.13`.
+The wrapper launchers/JAR are copied from the official Gradle v8.13.0 source tag. The distribution SHA-256 is pinned to Gradle's published checksum. CI verification for the supplied APK used installed Gradle 8.13; the newly included launcher has not been executed in this workspace.
 No production credentials, OTPs, payment keys or Firebase configuration are included.
 
 ## Server and account
@@ -62,6 +62,13 @@ payroll execution, vendor settlements, full recurring expense editing and produc
 are not finished. The client must not present those functions as verified.
 Existing backend accounting/concurrency/permission gaps need server-side remediation and tests.
 Do not merge or deploy until the review and device acceptance checks pass.
+
+## Verified review build
+
+[Download APK and reports](https://github.com/Nalinakumar-Agriot/Agriot/actions/runs/44897833701/artifacts/14704542752). Extract `outputs/apk/debug/app-debug.apk`.
+
+[CI run 44897833701](https://github.com/Nalinakumar-Agriot/Agriot/actions/runs/44897833701) passed compilation, lint, all 14 unit/HTTP tests and 2 Android 10 emulator smoke tests for app source commit `5c28b7dfe8f257b052984cbd61732da704da9ce5`.
+Live OTP, farm-data changes and complete device acceptance are still not run. [Install/test guide](../AGRIOT_ANDROID_REVIEW.md).
 
 ## Test coverage
 

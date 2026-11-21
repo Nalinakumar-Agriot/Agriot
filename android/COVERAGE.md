@@ -46,3 +46,7 @@ Build/unit/lint/emulator results are recorded by GitHub Actions, never inferred 
 
 These findings were derived from `apps/farmer/api_views.py` at the pinned base commit.
 The existing deployed server and farm data were not changed by this branch.
+
+## Verification recorded on 21 November 2026
+
+App code commit `5c28b7dfe8f257b052984cbd61732da704da9ce5` passed debug APK/instrumentation compilation, Android lint, 14 unit/HTTP tests and 2 Android 10 emulator smoke tests in [run 44897833701](https://github.com/Nalinakumar-Agriot/Agriot/actions/runs/44897833701). This does not verify live farmer data, OTP delivery, financial reconciliation or the remaining release blockers above.
