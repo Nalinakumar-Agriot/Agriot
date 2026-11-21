@@ -12,7 +12,7 @@ Build/unit/lint/emulator results are recorded by GitHub Actions, never inferred 
 | Farm CRUD | Implemented | Farm/acre limits, concurrent allocation, relation preservation |
 | Crop setup / manager assignment | Implemented | Tenant scope, acreage races, full master data |
 | Crop stages / first harvest / sale | Implemented | Units, stock deductions, grade matching, customer ledger reconciliation |
-| Multiple harvest batches / next flush | Partial | Dedicated flush controls and multiple grade rows |
+| Multiple harvest batches / next flush | Partial | Next-flush control implemented; multiple grade rows remain |
 | Task list / dates / assignment | Implemented | Generated task dates and calendar parity; no month-grid calendar yet |
 | Consumption / inventory | Implemented | Atomic stock decrement and audit log; editing consumption disabled |
 | Expenses / customers / vendors | Implemented core forms | Recurring rules, documents, add-to-stock path, vendor bill links |

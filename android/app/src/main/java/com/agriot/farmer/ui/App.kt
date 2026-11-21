@@ -192,6 +192,17 @@ private fun iconFor(key: String) = when(key) {
             if(module.create) FilledTonalButton(onClick={model.edit(module)},enabled=!model.busy&&model.writable) { Text("Add") }
             if(module.key=="documents") FilledTonalButton(onClick={upload=true},enabled=!model.busy&&model.writable) { Text("Upload") }
         }
+        if(module.key=="tasks") Row {
+            val context=LocalContext.current
+            TextButton(onClick={
+                val today=LocalDate.now()
+                DatePickerDialog(context,{_,y,m,d->
+                    val day=LocalDate.of(y,m+1,d).toString()
+                    model.records(module,"?date_from="+day+"&date_to="+day)
+                },today.year,today.monthValue-1,today.dayOfMonth).show()
+            },enabled=!model.busy) { Text("Choose task date") }
+            if(screen.filter.isNotBlank()) TextButton(onClick={model.records(module)},enabled=!model.busy) { Text("All dates") }
+        }
         OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(vertical=8.dp),
             label={Text("Search loaded records")},singleLine=true,leadingIcon={Icon(Icons.Default.Search,null)})
         LazyColumn(verticalArrangement=Arrangement.spacedBy(10.dp),contentPadding=PaddingValues(bottom=20.dp)) {
@@ -232,7 +243,15 @@ private fun iconFor(key: String) = when(key) {
                     Button(onClick={model.action(Screen.Action("Advance growth stage","crop-splits/"+row.get("id")+"/advance/",emptyList(),"advance",row))},
                         enabled=model.writable&&!model.busy) { Text("Advance stage") }
                 if(stage=="Yield") Button(onClick={model.action(harvestAction(row))},enabled=model.writable&&!model.busy) { Text("Record harvest") }
-                if(stage=="Harvested") Button(onClick={model.action(saleAction(row))},enabled=model.writable&&!model.busy&&model.allowed("Sales")) { Text("Sell harvested crop") }
+                if(stage in listOf("Harvested","Partially Sold") && row.optString("yield_tons","0").toBigDecimalOrNull()?.signum()==1) Button(onClick={model.action(saleAction(row))},enabled=model.writable&&!model.busy&&model.allowed("Sales")) { Text("Sell harvested crop") }
+                val multiple=row.optString("harvest_type").lowercase() in setOf("multiple","multiple harvest")
+                if(multiple && stage in listOf("Harvested","Partially Sold","Sold") &&
+                    row.optInt("current_flush",1)<row.optInt("total_flushes",1)) {
+                    OutlinedButton(onClick={model.action(Screen.Action("Start next harvest flush",
+                        "crop-splits/"+row.get("id")+"/advance/",
+                        emptyList(),
+                        "next-flush",row))},enabled=model.writable&&!model.busy) { Text("Start next flush") }
+                }
                 OutlinedButton(onClick={model.read("Crop overview","crop-splits/"+row.get("id")+"/profile/")},enabled=!model.busy) { Text("Crop overview") }
             }
             if(module.key=="outstanding" && row.optString("status")!="Paid") {
@@ -275,7 +294,7 @@ private val hiddenKeys=setOf("farmer","user","token","otp","fcm_token","uuid_tok
                         if(depth<3) DataBlock(v,depth+1)
                     } else {
                         Column { Text(label(key),style=MaterialTheme.typography.labelMedium,color=green)
-                            Text(Html.fromHtml(Validation.display(v),Html.FROM_HTML_MODE_LEGACY).toString()) }
+                            Text(if(key=="detailed_content") Html.fromHtml(Validation.display(v),Html.FROM_HTML_MODE_LEGACY).toString() else Validation.display(v)) }
                     }
                 }
             }
@@ -324,6 +343,7 @@ private fun openLink(context: android.content.Context,url: String) {
     }
 }
 @Composable private fun ActionEditor(model: AppModel,screen: Screen.Action) {
+    if(screen.type=="next-flush") Notice("Confirm to start the next harvest flush at the Sown stage.")
     if(screen.type=="advance") Notice("Current stage: "+screen.row?.optString("stage")+". Confirm to move to the next growth stage.")
     if(screen.type=="settle" || screen.type=="vendor-settle") Notice("This records a payment in the farm accounts. Review the invoice and amount before confirming.")
     EntryForm(model,screen.fields,Validation.initial(screen.fields,null),"Review and confirm",screen.path) { model.submitAction(screen,it) }
@@ -343,7 +363,13 @@ private fun openLink(context: android.content.Context,url: String) {
                 fun clearChildren(parent: String) {
                     fields.filter{it.parent==parent}.forEach { child -> changed[child.key]="";clearChildren(child.key) }
                 }
-                if(values[field.key]!=newValue) clearChildren(field.key)
+                if(values[field.key]!=newValue) {
+                    clearChildren(field.key)
+                    if(field.key=="harvest_type") {
+                        if(newValue=="single") changed["total_flushes"]="1"
+                        else if(changed["total_flushes"]=="1") changed["total_flushes"]="3"
+                    }
+                }
                 values=changed
             }
         }
@@ -542,7 +568,7 @@ private fun harvestAction(row: JSONObject) = Screen.Action("Record harvest",
 private fun saleAction(row: JSONObject) = Screen.Action("Record crop sale","sales/create/",listOf(
     rel("customer_id","Customer","customers/",true),
     d("load_weight","Quantity sold",true,true),
-    choice("unit","Quantity unit","Kg","Ton","Quintal",default=row.optString("expected_yield_unit","Kg")),
+    Field("unit","Quantity unit",Kind.CHOICE,true,options=listOf(row.optString("expected_yield_unit","Kg")),default=row.optString("expected_yield_unit","Kg")),
     t("grade","Harvest quality grade",true).copy(default="Grade 1"),
     d("unit_rate","Price per selected unit (INR)",true,true),
     d("gst_rate","GST (%)",true,default="0"),d("discount","Discount (INR)",true,default="0"),

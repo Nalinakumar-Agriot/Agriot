@@ -199,11 +199,15 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             body.optString("amount").toBigDecimalOrNull()?.let { body.put("amount",it.abs().negate().toPlainString()) }
             if(row==null) body.put("status","Cost")
         }
+        if(module.key=="inventory" && row==null && body.has("vendor")) {
+            body.put("vendor_id",body.get("vendor"));body.remove("vendor")
+        }
         if(module.key=="consumption") {
             val item=api.read("inventory/"+values.getValue("inventory_item")+"/",false).value as JSONObject
             val quantity=values.getValue("quantity").toBigDecimal()
             require(quantity<=BigDecimal(item.optString("quantity","0"))) { "Not enough stock for this consumption" }
-            body.put("asset_name",item.getString("item_name"))
+            body.put("amount",(quantity*BigDecimal(item.optString("unit_price","0"))).toPlainString())
+                .put("asset_name",item.getString("item_name"))
                 .put("quantity_metric",quantity.toPlainString()+" "+item.optString("unit"))
                 .put("activity_type","Resource Consumption")
         }
@@ -249,7 +253,20 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         require(writable) { "Refresh online before saving" }
         require(Validation.errors(action.fields,values).isEmpty()) { "Correct the highlighted fields" }
         val body=Validation.payload(action.fields,values)
+        if(action.type in setOf("advance","harvest","next-flush") && action.row!=null) {
+            val current=api.read("crop-splits/"+action.row.get("id")+"/",false).value as JSONObject
+            require(current.optString("stage")==action.row.optString("stage") &&
+                current.optInt("current_flush",1)==action.row.optInt("current_flush",1)) {
+                "This crop has changed. Refresh it before continuing."
+            }
+            if(action.type=="harvest" && (current.optJSONArray("harvest_batches")?.length() ?: 0)>0) {
+                require(values["unit"]==current.optString("expected_yield_unit")) {
+                    "Use the same unit as the existing harvest batches."
+                }
+            }
+        }
         when(action.type) {
+            "next-flush" -> body.put("action","next_flush")
             "switch" -> {
                 val result=api.write(action.path,body) as JSONObject
                 api.acceptToken(result.getString("token"))
@@ -278,6 +295,11 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 val net=Validation.saleTotal(subtotal,values.getValue("gst_rate").toBigDecimal(),
                     values.getValue("discount").toBigDecimal(),values.getValue("commission").toBigDecimal())
                 val paid=values.getValue("paid_amount").toBigDecimal()
+                require(values.getValue("gst_rate").toBigDecimal()<=BigDecimal("100")) { "GST cannot exceed 100%" }
+                action.row?.let { row ->
+                    val current=api.read("crop-splits/"+row.get("id")+"/",false).value as JSONObject
+                    require(values["unit"]==current.optString("expected_yield_unit")) { "The crop unit has changed. Refresh this crop before selling." }
+                }
                 require(net>BigDecimal.ZERO && paid<=net) { "The total must be positive; paid amount cannot exceed the total" }
                 val customer=api.read("customers/"+values.getValue("customer_id")+"/",false).value as JSONObject
                 body.put("description",customer.getString("name")).put("amount",subtotal.toPlainString())
@@ -291,7 +313,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         }
         api.write(action.path,body)
         when(action.type) {
-            "harvest","advance" -> {
+            "harvest","advance","next-flush" -> {
                 val row=api.read("crop-splits/"+action.row!!.get("id")+"/",false).value as JSONObject
                 screen=Screen.Detail(Catalog.module("crop-splits"),row)
             }

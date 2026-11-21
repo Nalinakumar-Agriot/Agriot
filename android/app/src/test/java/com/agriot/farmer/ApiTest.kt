@@ -65,6 +65,18 @@ class ApiTest {
         server.enqueue(MockResponse().setResponseCode(403).setBody("""{"detail":"No access"}"""))
         try { api.read("farms/");fail("Expected permission failure") } catch(e: ApiFailure) { assertEquals(403,e.status) }
     }
+    @Test fun serverFailureAfterWriteIsAlsoAnUncertainOutcome() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"Unable to finish response"}"""))
+        try { api.write("expenses/",JSONObject().put("amount","-100"));fail("Expected uncertain result") }
+        catch(e: ApiFailure) { assertEquals(500,e.status);assertTrue(e.uncertain) }
+        assertEquals(1,server.requestCount)
+    }
+    @Test fun notificationIdentifiersAreNormalizedForPaginationAndReadActions() {
+        val page=FarmerApi.page(JSONObject("""{"notifications":[{"notification_id":51,"name":"Task reminder"},{"notification_id":52,"name":"New task"}],"next":null}"""))
+        assertEquals(2,page.rows.size)
+        assertEquals(51,page.rows[0].getInt("id"))
+        assertEquals(52,page.rows[1].getInt("id"))
+    }
     @Test fun paginatedResultsKeepNextLinkAndRows() {
         val page=FarmerApi.page(JSONObject("""{"results":[{"id":14},{"id":15}],"next":"/api/farmer/farms/?page=2"}"""))
         assertEquals(2,page.rows.size);assertEquals("/api/farmer/farms/?page=2",page.next)

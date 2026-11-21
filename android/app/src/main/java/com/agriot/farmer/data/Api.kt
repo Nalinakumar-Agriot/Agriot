@@ -174,12 +174,12 @@ class FarmerApi(
                         try {
                             val text = it.body?.string().orEmpty()
                             val data = try { if (text.isBlank()) JSONObject() else JSONTokener(text).nextValue() }
-                                catch (_: Exception) { throw ApiFailure(it.code, "The server returned an unreadable response. Please try again later.") }
+                                catch (_: Exception) { throw ApiFailure(it.code, if(method=="GET") "The server returned an unreadable response. Please try again later." else "The server confirmation could not be read. Refresh the records before submitting again.",method!="GET") }
                             if (!it.isSuccessful) {
                                 if (it.code == 401) vault.clear()
                                 throw ApiFailure(it.code, if (it.code == 401) "Your session has ended. Sign in again."
                                     else if (it.code in 300..399) "The API redirected this request. Please check the configured server."
-                                    else errorText(data, "Request failed (" + it.code + ")"))
+                                    else errorText(data, "Request failed (" + it.code + ")"),method!="GET" && it.code>=500)
                             }
                             if (data is JSONObject && (data.opt("success") == false || data.has("error")))
                                 throw ApiFailure(it.code, errorText(data, "The server could not save this change."))
@@ -205,7 +205,10 @@ class FarmerApi(
             if (value is JSONArray) return Page((0 until value.length()).mapNotNull { value.optJSONObject(it) }, null)
             val obj = value as? JSONObject ?: return Page(emptyList(), null)
             val arr = obj.optJSONArray("results") ?: obj.optJSONArray("data") ?: obj.optJSONArray("notifications") ?: JSONArray()
-            return Page((0 until arr.length()).mapNotNull { arr.optJSONObject(it) },
+            return Page((0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map { row ->
+                if (!row.has("id") && row.has("notification_id")) row.put("id",row.get("notification_id"))
+                row
+            },
                 obj.optString("next").takeIf { it.isNotBlank() && it != "null" })
         }
     }

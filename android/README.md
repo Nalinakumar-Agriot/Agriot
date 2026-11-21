@@ -57,7 +57,7 @@ reconciliation must still be verified on a device with an authorized test accoun
 
 See [COVERAGE.md](COVERAGE.md) and [QA_TRACKER.csv](QA_TRACKER.csv).
 Paid subscriptions/checkout, Firebase push, an embedded boundary editor, richer farm
-water/electricity/document rows, multi-grade harvest entry, subsequent harvest flush controls,
+water/electricity/document rows, multi-grade harvest entry,
 payroll execution, vendor settlements, full recurring expense editing and production signing
 are not finished. The client must not present those functions as verified.
 Existing backend accounting/concurrency/permission gaps need server-side remediation and tests.

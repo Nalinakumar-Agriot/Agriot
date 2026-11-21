@@ -3,8 +3,6 @@ on:
   push:
     branches: ["codex/agriot-android-rebuild"]
     paths: ["android/**", ".github/workflows/android-review.yml"]
-  pull_request:
-    paths: ["android/**", ".github/workflows/android-review.yml"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -34,6 +32,9 @@ jobs:
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Unit tests, Android lint and debug APK
         run: gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Print test results
+        if: always()
+        run: python3 tools/report_results.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
